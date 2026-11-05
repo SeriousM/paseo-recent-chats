@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "types": ["node", "vitest/globals"], "noUncheckedIndexedAccess": true },
+  "include": ["tests/**/*.ts", "shared/**/*.ts", "client/triage.ts", "client/overlay.ts", "client/format.ts", "client/row-layout.ts", "client/prefs.ts", "client/fuzzy.ts", "client/drag-target.ts"]
+}

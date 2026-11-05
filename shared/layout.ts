@@ -1,0 +1,36 @@
+import { z } from "zod";
+
+/** Everything a list row can show. Order, visibility, line and length are user settings. */
+export const ROW_TOKEN_IDS = ["host", "led", "project", "workspace", "title", "branch", "agent"] as const;
+export type RowTokenId = (typeof ROW_TOKEN_IDS)[number];
+
+/** Upper bound that only keeps stored data sane; a row can have as many lines as it has items. */
+export const MAX_LINES = 99;
+
+/** Longest cut a user can ask for; 0 means unlimited. */
+export const MAX_TOKEN_CHARS = 200;
+
+export const rowTokenSchema = z.object({
+  id: z.enum(ROW_TOKEN_IDS),
+  enabled: z.boolean(),
+  /** 1-based line of the row. Lines are renumbered without gaps when the layout is normalised. */
+  line: z.number().int().min(1).max(MAX_LINES),
+  /** Characters kept before an ellipsis. 0 = unlimited. Ignored for the status light. */
+  maxChars: z.number().int().min(0).max(MAX_TOKEN_CHARS),
+});
+
+export type RowToken = z.output<typeof rowTokenSchema>;
+
+/**
+ * [host] [status light] [project 10] [workspace 10] [tab name]
+ * [branch 24] [agent name]
+ */
+export const DEFAULT_LAYOUT: readonly RowToken[] = [
+  { id: "host", enabled: true, line: 1, maxChars: 6 },
+  { id: "led", enabled: true, line: 1, maxChars: 0 },
+  { id: "project", enabled: true, line: 1, maxChars: 10 },
+  { id: "workspace", enabled: true, line: 1, maxChars: 10 },
+  { id: "title", enabled: true, line: 1, maxChars: 0 },
+  { id: "branch", enabled: true, line: 2, maxChars: 24 },
+  { id: "agent", enabled: true, line: 2, maxChars: 0 },
+];

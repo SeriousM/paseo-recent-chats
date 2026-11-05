@@ -1,0 +1,10 @@
+node_modules/
+*.log
+.vitest
+.DS_Store
+Thumbs.db
+coverage/
+dist/
+*.tgz
+# Working notes from the design sessions; not part of the published plugin.
+PLAN.md

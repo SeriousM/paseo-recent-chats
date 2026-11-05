@@ -1,0 +1,47 @@
+{
+  "name": "paseo-recent-chats",
+  "private": true,
+  "version": "0.1.0",
+  "files": [
+    "paseo-plugin.json",
+    "OVERVIEW.md",
+    "README.md",
+    "LICENSE",
+    "index.client.tsx",
+    "index.server.ts",
+    "client/",
+    "shared/",
+    "assets/"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@getpaseo/client": "0.14.0",
+    "@getpaseo/plugin": "0.14.0",
+    "@getpaseo/protocol": "0.14.0",
+    "@tanstack/react-query": "^5.90.11",
+    "@types/node": "^24.13.3",
+    "@types/react": "~19.2.0",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11",
+    "zod": "^4.4.3"
+  },
+  "description": "Triage inbox for Paseo chats: what needs you, what is running, what you touched last",
+  "license": "MIT",
+  "author": "Bernhard Millauer",
+  "keywords": [
+    "paseo",
+    "paseo-plugin",
+    "chats",
+    "inbox"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SeriousM/paseo-recent-chats.git"
+  },
+  "homepage": "https://github.com/SeriousM/paseo-recent-chats"
+}

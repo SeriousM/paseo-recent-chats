@@ -1,0 +1,19 @@
+Recent Chats is a triage inbox for your chats. It answers one question: what should I look at next?
+
+It lists chats from every connected host as one row each. By default a row shows the host (in the colour you gave it in Paseo), a status light, the project and workspace names cut to 10 characters each and the chat title, with the git branch and the agent's model on a second line. Hover a row, or long-press it on a touch screen, to see the full names; the card can be switched off and made more transparent in the settings. Sub-agents are not listed. Rows are ordered by what needs you most: unread chats oldest first, then running chats oldest first, then the most recently used inactive chats. Each group has a size limit, and chips show how many more are hidden.
+
+A search box above the list finds chats by fuzzy match across title, project, workspace, branch, agent and host. A cog next to the list opens the settings. Open it from the sidebar, from the Inbox pill next to the composer, or from the Command Center. Opening a chat marks it read. The Later pill marks the chat you are in as unread and opens the next one in the list. A pin button on every row keeps a chat at the top, in a Pinned section, whatever its state (a pinned chat still shows its own light, ignores the list limits and the inactive window, and stays until you unpin it). A check button on an unread row marks it read without opening it, a clock button on an inactive row marks it unread (Later), and "Mark all read" clears the whole backlog.
+
+## How unread works
+
+A chat is unread when Paseo flags it as needing attention (finished, failed or waiting for a permission) and you have not opened or dismissed it since. A running chat that is waiting for a permission counts as unread. Unread chats waiting longer than the expiry (7 days by default) fall back to inactive. Chats you mark with Later stay unread until you open them again.
+
+Paseo does not let plugins change its own read state, so Later and "mark read without opening" are stored by the plugin on the host it runs on. They are not reflected by Paseo's own status indicators.
+
+## Settings
+
+On web and desktop the settings are saved on the device you are using, so a phone, a laptop and a second host's copy of the plugin can each look different without affecting each other. Phones cannot store them locally and keep theirs on the host. Settings, Recent Chats starts with the row layout. Each item (host, status light, project, workspace, tab name, branch, agent name) can be switched on or off, dragged (or moved with arrow buttons) to any position on any line, put on a line of its own, and given its own length in characters (0 means unlimited). A row can have as many lines as you like. Layout changes apply after you press Save. A live preview above the editor shows every change. "Group rows by host" shows one heading per host and applies the list limits to each host separately. When two or more hosts are connected, a chip per host in the list switches that host's chats on or off; all hosts start on. The rest: how many unread, running and inactive chats are shown, how old an inactive chat can be, the unread expiry, group headings, whether the sidebar list starts expanded, the Inbox and Later pills, and whether Later opens the next chat or stays put.
+
+## Requirements and limits
+
+Needs Paseo 0.14.0 or later on the daemon and the app. The plugin reads chats and workspaces from each connected host and sends nothing elsewhere. Host colours are read from the app's saved host list, so they show on web and desktop only; on phones the host tag is neutral. Keyboard shortcuts are not available because plugins cannot register them.

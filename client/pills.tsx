@@ -1,0 +1,202 @@
+import type {
+  PluginButtonContentProps,
+  PluginButtonIconProps,
+  PluginButtonRegistration,
+  PluginClientContext,
+} from "@getpaseo/plugin/client";
+import { Icon } from "@getpaseo/plugin/client/ui";
+import { useEffect } from "react";
+import { getStore } from "./runtime";
+import { ledColor, TriageList } from "./triage-list";
+import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
+import { limitsOf, openChat, useRecents } from "./use-recents";
+import { RECENT_SCREEN_ID } from "./sidebar-item";
+
+const INBOX_PILL_ID = "inbox";
+const LATER_PILL_ID = "later";
+const PILL_AGENT_LIMIT = 200;
+
+// Host that owns this installation's pills, learned from the first pill icon that renders.
+let pillHostId: string | null = null;
+
+function inboxLabel(result: TriageResult): string {
+  const parts: string[] = [];
+  if (result.counts.unread) parts.push(String(result.counts.unread));
+  if (result.counts.running) parts.push(`${result.counts.running}\u25B6`);
+  return parts.length ? `Inbox ${parts.join(" \u00B7 ")}` : "Inbox";
+}
+
+function InboxIcon({ theme, size, host }: PluginButtonIconProps) {
+  const { result } = useRecents();
+  useEffect(() => {
+    pillHostId = host.id;
+  }, [host.id]);
+  const color = result.worstUnread
+    ? ledColor(theme, result.worstUnread)
+    : result.counts.running
+      ? ledColor(theme, "running")
+      : theme.colors.foregroundMuted;
+  return <Icon name="Inbox" size={size} color={color} />;
+}
+
+function LaterIcon({ theme, size, host }: PluginButtonIconProps) {
+  useRecents();
+  useEffect(() => {
+    pillHostId = host.id;
+  }, [host.id]);
+  return <Icon name="Clock" size={size} color={theme.colors.foregroundMuted} />;
+}
+
+function createInboxContent(client: PluginClientContext) {
+  return function InboxContent(props: PluginButtonContentProps) {
+    const { theme, layout, host, close } = props;
+    const { store, snapshot, result } = useRecents();
+    return (
+      <TriageList
+        theme={theme}
+        compact={layout.compact}
+        result={result}
+        snapshot={snapshot}
+        onToggleHost={store.toggleHost}
+        onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
+        currentKey={props.context === "agent" ? chatKey(host.id, props.agentId) : null}
+        onOpen={(row) => {
+          close();
+          openChat(store, row, { openScreen: (input) => client.openScreen(input) });
+        }}
+        onMarkRead={store.markRead}
+        onMarkUnread={store.markUnread}
+        onSetPinned={store.setPinned}
+        footerFirst
+        showSettingsButton
+        onShowAll={() => {
+          close();
+          client.openScreen({ screenId: RECENT_SCREEN_ID });
+        }}
+      />
+    );
+  };
+}
+
+/** Registers the inbox and Later pills on every chat of the selected host and keeps them current. */
+export function registerPills(client: PluginClientContext): () => void {
+  const store = getStore();
+  const lifetime = new AbortController();
+  const InboxContent = createInboxContent(client);
+  const registered = new Map<
+    string,
+    { workspaceId: string; inbox: PluginButtonRegistration; later: PluginButtonRegistration }
+  >();
+  let lastLabel = "Inbox";
+  let lastInboxVisible = true;
+  let lastLaterVisible = true;
+  let release: (() => Promise<void>) | null = null;
+
+  async function later(agentId: string): Promise<void> {
+    if (!pillHostId) return;
+    const key = chatKey(pillHostId, agentId);
+    store.markUnread(key);
+    const snapshot = store.getSnapshot();
+    if (snapshot.prefs.laterBehavior !== "jump") return;
+    const next = nextUp(
+      buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now()),
+      key,
+    );
+    if (next) openChat(store, next, { openScreen: (input) => client.openScreen(input) });
+  }
+
+  function register(agent: { id: string; workspaceId?: string | null }) {
+    if (lifetime.signal.aborted || !agent.workspaceId) return;
+    const existing = registered.get(agent.id);
+    if (existing?.workspaceId === agent.workspaceId) return;
+    existing?.inbox.remove();
+    existing?.later.remove();
+    const workspaceId = agent.workspaceId;
+    const agentId = agent.id;
+    registered.set(agentId, {
+      workspaceId,
+      inbox: client.addComposerPill({
+        id: INBOX_PILL_ID,
+        workspaceId,
+        agentId,
+        button: {
+          title: "Recent Chats inbox",
+          icon: InboxIcon,
+          label: lastLabel,
+          visible: lastInboxVisible,
+          behavior: { kind: "popover", Content: InboxContent },
+        },
+      }),
+      later: client.addComposerPill({
+        id: LATER_PILL_ID,
+        workspaceId,
+        agentId,
+        button: {
+          title: "Mark this chat unread and open the next one",
+          icon: LaterIcon,
+          label: "Later",
+          visible: lastLaterVisible,
+          behavior: { kind: "action", onPress: () => later(agentId) },
+        },
+      }),
+    });
+  }
+
+  function unregister(agentId: string) {
+    const entry = registered.get(agentId);
+    entry?.inbox.remove();
+    entry?.later.remove();
+    registered.delete(agentId);
+  }
+
+  const unsubscribe = store.subscribe(() => {
+    const snapshot = store.getSnapshot();
+    const label = inboxLabel(buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now()));
+    const inboxVisible = snapshot.prefs.showInboxPill;
+    const laterVisible = snapshot.prefs.showLaterPill;
+    if (label === lastLabel && inboxVisible === lastInboxVisible && laterVisible === lastLaterVisible) return;
+    lastLabel = label;
+    lastInboxVisible = inboxVisible;
+    lastLaterVisible = laterVisible;
+    for (const entry of registered.values()) {
+      entry.inbox.update({ label, visible: inboxVisible });
+      entry.later.update({ visible: laterVisible });
+    }
+  });
+
+  client.paseo.agents
+    .list({
+      filter: { includeArchived: false },
+      sort: [{ key: "updated_at", direction: "desc" }],
+      page: { limit: PILL_AGENT_LIMIT },
+      subscribe: {},
+      signal: lifetime.signal,
+    })
+    .then(({ subscription }) => {
+      release = () => subscription.release();
+      if (lifetime.signal.aborted) return release();
+      subscription.subscribe({
+        snapshot: ({ entries }) => {
+          const present = new Set(entries.map(({ agent }) => agent.id));
+          for (const id of [...registered.keys()]) if (!present.has(id)) unregister(id);
+          for (const { agent } of entries) register(agent);
+        },
+        update: (message) => {
+          if (message.type !== "agent_update") return;
+          const update = message.payload;
+          if (update.kind === "upsert" && !update.agent.archivedAt) register(update.agent);
+          else unregister(update.kind === "remove" ? update.agentId : update.agent.id);
+        },
+      });
+    })
+    .catch((error) => {
+      if (!lifetime.signal.aborted) console.error("Recent Chats: pill observation failed", error);
+    });
+
+  return () => {
+    lifetime.abort();
+    unsubscribe();
+    for (const id of [...registered.keys()]) unregister(id);
+    void release?.().catch(() => {});
+  };
+}

@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "types": ["react", "react-native"], "noUncheckedIndexedAccess": true },
+  "include": ["index.client.tsx", "client/**/*.ts", "client/**/*.tsx", "shared/**/*.ts"]
+}
