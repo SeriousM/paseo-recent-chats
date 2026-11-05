@@ -6,6 +6,7 @@ import type {
 } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/ui";
 import { useEffect } from "react";
+import type { PaseoAgentListResult } from "./paseo-types";
 import { getStore } from "./runtime";
 import { ledColor, TriageList } from "./triage-list";
 import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
@@ -14,7 +15,8 @@ import { RECENT_SCREEN_ID } from "./sidebar-item";
 
 const INBOX_PILL_ID = "inbox";
 const LATER_PILL_ID = "later";
-const PILL_AGENT_LIMIT = 200;
+const PILL_PAGE_SIZE = 200;
+const PILL_MAX_PAGES = 25;
 
 // Host that owns this installation's pills, learned from the first pill icon that renders.
 let pillHostId: string | null = null;
@@ -98,8 +100,12 @@ export function registerPills(client: PluginClientContext): () => void {
     store.markUnread(key);
     const snapshot = store.getSnapshot();
     if (snapshot.prefs.laterBehavior !== "jump") return;
+    // Same view as the lists: grouped by host the top of the list is the first host's.
     const next = nextUp(
-      buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now()),
+      buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), {
+        groupByHost: snapshot.prefs.groupByHost,
+        hostOrder: snapshot.hosts.map((host) => host.id),
+      }),
       key,
     );
     if (next) openChat(store, next, { openScreen: (input) => client.openScreen(input) });
@@ -164,22 +170,42 @@ export function registerPills(client: PluginClientContext): () => void {
     }
   });
 
+  const directory = { filter: { includeArchived: false }, sort: [{ key: "updated_at" as const, direction: "desc" as const }] };
+
+  /** Every chat of the host, page after page, so older chats get their pills too. */
+  async function allAgents(first: PaseoAgentListResult) {
+    const agents = first.entries.map(({ agent }) => agent);
+    let page = first;
+    const seen = new Set<string>();
+    for (let count = 1; page.pageInfo.hasMore && count < PILL_MAX_PAGES; count++) {
+      const cursor = page.pageInfo.nextCursor;
+      if (!cursor || seen.has(cursor)) break;
+      seen.add(cursor);
+      page = await client.paseo.agents.list({ ...directory, page: { limit: PILL_PAGE_SIZE, cursor }, signal: lifetime.signal });
+      agents.push(...page.entries.map(({ agent }) => agent));
+    }
+    return agents;
+  }
+
+  let generation = 0;
   client.paseo.agents
-    .list({
-      filter: { includeArchived: false },
-      sort: [{ key: "updated_at", direction: "desc" }],
-      page: { limit: PILL_AGENT_LIMIT },
-      subscribe: {},
-      signal: lifetime.signal,
-    })
+    .list({ ...directory, page: { limit: PILL_PAGE_SIZE }, subscribe: {}, signal: lifetime.signal })
     .then(({ subscription }) => {
       release = () => subscription.release();
       if (lifetime.signal.aborted) return release();
       subscription.subscribe({
-        snapshot: ({ entries }) => {
-          const present = new Set(entries.map(({ agent }) => agent.id));
-          for (const id of [...registered.keys()]) if (!present.has(id)) unregister(id);
-          for (const { agent } of entries) register(agent);
+        snapshot: (first) => {
+          const current = ++generation;
+          void allAgents(first)
+            .then((agents) => {
+              if (lifetime.signal.aborted || current !== generation) return;
+              const present = new Set(agents.map((agent) => agent.id));
+              for (const id of [...registered.keys()]) if (!present.has(id)) unregister(id);
+              for (const agent of agents) register(agent);
+            })
+            .catch((error) => {
+              if (!lifetime.signal.aborted) console.error("Recent Chats: listing chats for pills failed", error);
+            });
         },
         update: (message) => {
           if (message.type !== "agent_update") return;
@@ -195,6 +221,7 @@ export function registerPills(client: PluginClientContext): () => void {
 
   return () => {
     lifetime.abort();
+    pillHostId = null;
     unsubscribe();
     for (const id of [...registered.keys()]) unregister(id);
     void release?.().catch(() => {});

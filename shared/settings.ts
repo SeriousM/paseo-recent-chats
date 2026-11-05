@@ -5,7 +5,7 @@ import { DEFAULT_LAYOUT, rowTokenSchema } from "./layout";
 /**
  * User-facing view options. On web and desktop they live in this device's own storage (client/web.ts),
  * so every host's copy of the plugin shows the same view. Phones have no such storage, so they keep
- * them in this host document. Written only by the settings screen.
+ * them in this host document. Written through the store, from the settings screen and the host chips.
  */
 export const prefsSettings = defineSettings({
   id: "prefs",

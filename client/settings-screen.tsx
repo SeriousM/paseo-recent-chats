@@ -6,6 +6,7 @@ import type { RowToken } from "../shared/layout";
 import type { Prefs } from "../shared/settings";
 import { LayoutEditor, LayoutPreview, TooltipPreview } from "./layout-editor";
 import { Slider } from "./slider";
+import { sameLayout } from "./row-layout";
 import { useRecents } from "./use-recents";
 
 type NumericPref = "maxUnread" | "maxRunning" | "maxInactive" | "inactiveWindowDays" | "unreadExpiryDays";
@@ -26,10 +27,10 @@ export function SettingsScreen({ theme, layout: screen, host }: PluginSurfacePro
   // until Save is pressed. A layout saved elsewhere replaces the draft only while it has no edits.
   const [draft, setDraft] = useState<RowToken[]>(() => [...prefs.layout]);
   const savedLayout = useRef(prefs.layout);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(prefs.layout);
+  const dirty = !sameLayout(draft, prefs.layout);
   useEffect(() => {
     if (savedLayout.current !== prefs.layout) {
-      const wasClean = JSON.stringify(draft) === JSON.stringify(savedLayout.current);
+      const wasClean = sameLayout(draft, savedLayout.current);
       savedLayout.current = prefs.layout;
       if (wasClean) setDraft([...prefs.layout]);
     }

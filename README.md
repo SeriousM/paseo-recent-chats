@@ -51,6 +51,7 @@ Unread chats older than the expiry (7 days by default) count as inactive.
 
 Plugins cannot change Paseo's own read state, so "Later", "mark read without opening" and pins are stored
 by the plugin on the host it runs on. Paseo's own status indicators do not show them.
+A "Later" mark clears when you open the chat from this plugin; opening it from Paseo's own sidebar does not clear it.
 
 ## Where settings live
 

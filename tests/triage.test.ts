@@ -227,6 +227,19 @@ describe("overlay", () => {
     expect(result.rows.find((row) => row.agentId === "stale-run")?.bucket).toBe("running");
   });
 
+  it("Later on a chat whose attention expired makes it unread again, and the old flag does not hide it", () => {
+    const stale = chat("stale", { attention: attention(9 * 24 * 60) });
+    expect(buildTriage([stale], {}, limits, NOW).rows[0]?.bucket).toBe("inactive");
+    const later = markUnread({}, "h1:stale", ago(2 * MIN));
+    const row = buildTriage([stale], later, limits, NOW).rows[0];
+    expect(row).toMatchObject({ bucket: "unread", sortAt: ago(2 * MIN) });
+  });
+
+  it("a Later mark expires like any other unread", () => {
+    const later = markUnread({}, "h1:a", ago(8 * DAY));
+    expect(buildTriage([chat("a")], later, limits, NOW).rows[0]?.bucket).toBe("inactive");
+  });
+
   it("markRead covers every key given and keeps unrelated entries", () => {
     const next = markRead({ "h1:keep": { unreadAt: 1 } }, ["h1:a", "h2:b"], 99);
     expect(next).toEqual({ "h1:keep": { unreadAt: 1 }, "h1:a": { dismissedAt: 99 }, "h2:b": { dismissedAt: 99 } });

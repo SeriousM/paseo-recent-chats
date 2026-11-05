@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { agentLabel } from "../client/format";
 import {
   columnChars,
-  lineCount,
+  linesOf,
   moveToken,
   normalizeLayout,
   placeToken,
@@ -11,16 +11,18 @@ import {
   resetLayout,
   setEnabled,
   setMaxChars,
+  sameLayout,
   setMono,
   tokenMono,
   tokenText,
-  tokensOfLine,
   visibleLines,
 } from "../client/row-layout";
 import type { TriageRow } from "../client/triage";
 import { DEFAULT_LAYOUT, MAX_TOKEN_CHARS, type RowToken } from "../shared/layout";
 
 const ids = (tokens: readonly RowToken[]) => tokens.map((token) => token.id);
+const tokensOfLine = (layout: readonly RowToken[], line: number) => layout.filter((token) => token.line === line);
+const lineCount = (layout: readonly RowToken[]) => linesOf(layout).length;
 
 function row(patch: Partial<TriageRow> = {}): TriageRow {
   return {
@@ -283,5 +285,23 @@ describe("monospace option", () => {
     layout = normalizeLayout(moveToken(layout, "title", 1));
     expect(tokenMono(layout.find((token) => token.id === "title")!)).toBe(true);
     expect(tokenMono(layout.find((token) => token.id === "workspace")!)).toBe(false);
+  });
+});
+
+describe("sameLayout", () => {
+  it("is true for equal layouts whatever the key order or an unset mono", () => {
+    const a: RowToken[] = [{ id: "branch", enabled: true, line: 1, maxChars: 24 }];
+    const b: RowToken[] = [{ mono: true, maxChars: 24, line: 1, enabled: true, id: "branch" }];
+    expect(sameLayout(a, b)).toBe(true);
+    expect(sameLayout(resetLayout(), resetLayout())).toBe(true);
+  });
+
+  it("notices every kind of change", () => {
+    const base = resetLayout();
+    expect(sameLayout(base, setEnabled(base, "host", false))).toBe(false);
+    expect(sameLayout(base, setMaxChars(base, "host", 7))).toBe(false);
+    expect(sameLayout(base, setMono(base, "title", true))).toBe(false);
+    expect(sameLayout(base, moveToken(base, "host", 1))).toBe(false);
+    expect(sameLayout(base, base.slice(1))).toBe(false);
   });
 });

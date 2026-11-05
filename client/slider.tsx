@@ -29,18 +29,21 @@ export function Slider({ theme, compact, label, value, min, max, step, display, 
   live.current = { width, value, min, max, step, onChange };
 
   const pan = useMemo(() => {
-    const at = (x: number) => {
-      const { width: w, min: lo, max: hi, step: st, onChange: emit } = live.current;
-      if (w <= 0) return;
-      emit(clamp(snap(lo + (clamp(x, 0, w) / w) * (hi - lo), lo, st), lo, hi));
+    /** Value under pointer position `x` along the track, or null before the track is measured. */
+    const valueAt = (x: number): number | null => {
+      const { width: w, min: lo, max: hi, step: st } = live.current;
+      if (w <= 0) return null;
+      return clamp(snap(lo + (clamp(x, 0, w) / w) * (hi - lo), lo, st), lo, hi);
     };
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (event) => {
-        start.current = live.current.value;
-        at(event.nativeEvent.locationX);
+        // A press off the thumb sets the value there; dragging continues from that value, not the old one.
+        const tapped = valueAt(event.nativeEvent.locationX);
+        start.current = tapped ?? live.current.value;
+        if (tapped !== null) live.current.onChange(tapped);
       },
       onPanResponderMove: (_event, gesture) => {
         const { width: w, min: lo, max: hi, step: st, onChange: emit } = live.current;

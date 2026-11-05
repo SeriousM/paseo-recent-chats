@@ -120,6 +120,11 @@ export function createStore(rpc: Rpc): RecentsStore {
   const prefsStorage: "device" | "host" = deviceStorageAvailable() ? "device" : "host";
   let prefsRevision: string | null = null;
   let prefsEdited = false;
+  /** The stored copy has been read (or the user has chosen settings), so defaults may not overwrite it. */
+  let prefsLoaded = false;
+  let prefsLoading = false;
+  /** Edits made before the stored copy could be read; applied on top of it once it is. */
+  let unsavedPatch: Partial<Prefs> = {};
   let prefsSaving = false;
   let prefsDirty = false;
   let prefsError: string | null = null;
@@ -128,7 +133,10 @@ export function createStore(rpc: Rpc): RecentsStore {
   let remote: { revision: string; entries: Overlay } | null = null;
   let hostColors: Record<string, string> = {};
   let pendingOps: ((overlay: Overlay) => Overlay)[] = [];
+  /** The batch being written; still shown as applied until the write is done. */
+  let inFlight: ((overlay: Overlay) => Overlay)[] = [];
   let flushing = false;
+  let started = false;
   let overlayError: string | null = null;
   let consumers = 0;
   let reconcileTimer: ReturnType<typeof setInterval> | undefined;
@@ -206,8 +214,10 @@ export function createStore(rpc: Rpc): RecentsStore {
   function observeHost(hostId: string) {
     try {
       const api = getPaseoClient(hostId);
-      if (observers.get(hostId)?.api === api) return;
-      observers.get(hostId)?.observer.stop();
+      const existing = observers.get(hostId);
+      // A host whose subscription failed is started again on the next reconcile.
+      if (existing?.api === api && !hostData.get(hostId)?.error) return;
+      existing?.observer.stop();
       const observer = createHostObserver(api, (data) => {
         if (observers.get(hostId)?.observer !== observer) return;
         hostData.set(hostId, data);
@@ -232,7 +242,9 @@ export function createStore(rpc: Rpc): RecentsStore {
     }
     for (const host of hosts) {
       if (host.status === "online") observeHost(host.serverId);
+      else hostErrors.delete(host.serverId);
     }
+    if (!prefsLoaded) void loadPrefs();
     emitNow();
   }
 
@@ -250,9 +262,12 @@ export function createStore(rpc: Rpc): RecentsStore {
     return live;
   }
 
-  const applyPending = (base: Overlay): Overlay => pendingOps.reduce((current, op) => op(current), base);
+  const applyPending = (base: Overlay): Overlay =>
+    [...inFlight, ...pendingOps].reduce((current, op) => op(current), base);
 
-  async function readOverlay(): Promise<void> {
+  /** Reads the host's copy. While a write is under way the periodic read waits (`force` is for the write itself). */
+  async function readOverlay(force = false): Promise<void> {
+    if (flushing && !force) return;
     try {
       const result = await rpc(overlayContracts.read, {});
       if (result.status !== "ready") throw new Error(result.error);
@@ -272,10 +287,11 @@ export function createStore(rpc: Rpc): RecentsStore {
     try {
       while (pendingOps.length) {
         const batch = pendingOps;
+        inFlight = batch;
         pendingOps = [];
         let saved = false;
         for (let attempt = 0; attempt < WRITE_ATTEMPTS && !saved; attempt++) {
-          if (!remote) await readOverlay();
+          if (!remote) await readOverlay(true);
           if (!remote) break;
           const merged = pruneOverlay(
             batch.reduce((current, op) => op(current), remote.entries),
@@ -296,15 +312,15 @@ export function createStore(rpc: Rpc): RecentsStore {
         }
         if (!saved) {
           overlayError ??= "could not save";
-          pendingOps = [];
           remote = null;
         }
+        inFlight = [];
         overlay = applyPending(remote?.entries ?? overlay);
         emitNow();
       }
     } catch (error) {
       overlayError = error instanceof Error ? error.message : String(error);
-      pendingOps = [];
+      inFlight = [];
       remote = null;
       emitNow();
     } finally {
@@ -333,25 +349,49 @@ export function createStore(rpc: Rpc): RecentsStore {
   }
 
   async function loadPrefs(): Promise<void> {
-    let loaded: Prefs | null = null;
-    if (prefsStorage === "device") {
-      loaded = parseStoredPrefs(readDevicePrefs());
-      if (!loaded) {
-        // First run on this device: adopt what the host already had, so earlier choices are not lost.
-        loaded = (await readHostPrefs()) ?? DEFAULT_PREFS;
-        writeDevicePrefs(JSON.stringify(loaded));
+    if (prefsLoading || prefsLoaded) return;
+    prefsLoading = true;
+    try {
+      let loaded: Prefs | null = null;
+      if (prefsStorage === "device") {
+        const raw = readDevicePrefs();
+        loaded = parseStoredPrefs(raw);
+        if (!loaded && raw === null) {
+          // First run on this device: adopt what the host already had, so earlier choices are not lost.
+          loaded = await readHostPrefs();
+        }
+        // A stored copy that exists but cannot be read stays untouched until the user changes a setting.
+        prefsLoaded = loaded !== null || raw !== null;
+      } else {
+        loaded = await readHostPrefs();
+        prefsLoaded = loaded !== null;
       }
-    } else {
-      loaded = (await readHostPrefs()) ?? DEFAULT_PREFS;
+      // Edits made while loading win over the stored copy; if nothing could be read, defaults are shown
+      // but not saved, and the next reconcile tries again.
+      if (loaded) prefs = withNormalizedLayout({ ...loaded, ...unsavedPatch });
+      else if (!prefsEdited) prefs = DEFAULT_PREFS;
+      if (prefsLoaded) unsavedPatch = {};
+      // The adopted host copy (or an edit merged into it) becomes this device's stored copy.
+      if (loaded && prefsStorage === "device" && (prefsEdited || readDevicePrefs() === null)) {
+        writeDevicePrefs(JSON.stringify(prefs));
+      }
+    } finally {
+      prefsLoading = false;
     }
-    // An edit made while loading wins over the stored copy.
-    if (!prefsEdited) prefs = loaded;
     emitNow();
   }
 
   async function saveHostPrefsOnce(): Promise<void> {
     for (let attempt = 0; attempt < WRITE_ATTEMPTS; attempt++) {
-      if (prefsRevision === null) await readHostPrefs();
+      if (prefsRevision === null) {
+        const current = await readHostPrefs();
+        if (current && !prefsLoaded) {
+          // Settings could not be read at start-up: build on the host's copy instead of overwriting it with defaults.
+          prefs = withNormalizedLayout({ ...current, ...unsavedPatch });
+          unsavedPatch = {};
+          prefsLoaded = true;
+        }
+      }
       if (prefsRevision === null) throw new Error("the host did not answer");
       const result = await rpc(prefsContracts.write, { revision: prefsRevision, values: { ...prefs } });
       if (result.status === "saved") {
@@ -389,6 +429,8 @@ export function createStore(rpc: Rpc): RecentsStore {
   function persistPrefs() {
     if (prefsStorage === "device") {
       prefsError = writeDevicePrefs(JSON.stringify(prefs)) ? null : "this browser blocked saving";
+      // The user's own settings now exist on this device; later reads must not replace them with the host's.
+      prefsLoaded = true;
       return;
     }
     if (prefsTimer !== undefined) clearTimeout(prefsTimer);
@@ -397,12 +439,14 @@ export function createStore(rpc: Rpc): RecentsStore {
 
   function updatePrefs(patch: Partial<Prefs>) {
     prefsEdited = true;
+    if (!prefsLoaded) unsavedPatch = { ...unsavedPatch, ...patch };
     prefs = withNormalizedLayout({ ...prefs, ...patch });
     persistPrefs();
     emitNow();
   }
 
   function start() {
+    started = true;
     reconcile();
     reconcileTimer = setInterval(reconcile, RECONCILE_MS);
     overlayTimer = setInterval(() => void readOverlay(), OVERLAY_REFRESH_MS);
@@ -422,6 +466,7 @@ export function createStore(rpc: Rpc): RecentsStore {
     for (const entry of observers.values()) entry.observer.stop();
     observers.clear();
     hostData.clear();
+    started = false;
   }
 
   return {
@@ -435,7 +480,8 @@ export function createStore(rpc: Rpc): RecentsStore {
         clearTimeout(stopTimer);
         stopTimer = undefined;
       }
-      if (++consumers === 1) start();
+      // Re-retained inside the grace period: the observers and timers are still running.
+      if (++consumers === 1 && !started) start();
       let released = false;
       return () => {
         if (released) return;

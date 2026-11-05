@@ -52,13 +52,6 @@ export function resetLayout(): RowToken[] {
   return DEFAULT_LAYOUT.map((token) => ({ ...token }));
 }
 
-/** All tokens of a line, shown or not, in order. */
-export function tokensOfLine(layout: readonly RowToken[], line: number): RowToken[] {
-  return layout.filter((token) => token.line === line);
-}
-
-export const lineCount = (layout: readonly RowToken[]): number => linesOf(layout).length;
-
 /** Switched-on tokens per line, in order. Lines with nothing switched on are left out. */
 export function visibleLines(layout: readonly RowToken[]): RowToken[][] {
   return linesOf(layout)
@@ -72,6 +65,24 @@ function replace(layout: readonly RowToken[], id: RowTokenId, change: Partial<Ro
 
 export const setEnabled = (layout: readonly RowToken[], id: RowTokenId, enabled: boolean): RowToken[] =>
   replace(layout, id, { enabled });
+
+/** True when two layouts have the same tokens in the same order with the same settings. */
+export function sameLayout(a: readonly RowToken[], b: readonly RowToken[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((token, i) => {
+      const other = b[i];
+      return (
+        other !== undefined &&
+        token.id === other.id &&
+        token.enabled === other.enabled &&
+        token.line === other.line &&
+        token.maxChars === other.maxChars &&
+        tokenMono(token) === tokenMono(other)
+      );
+    })
+  );
+}
 
 export const setMono = (layout: readonly RowToken[], id: RowTokenId, mono: boolean): RowToken[] =>
   replace(layout, id, { mono });

@@ -84,7 +84,8 @@ export const chatKey = (hostId: string, agentId: string): string => `${hostId}:$
 
 /**
  * Unread when the daemon flags attention newer than the last dismissal, or the
- * user marked it Later after the last dismissal. Expired unread chats are not unread.
+ * user marked it Later after the last dismissal. Each source expires on its own: an old
+ * native flag does not hide a fresh Later mark.
  */
 function unreadState(
   chat: ChatInput,
@@ -93,11 +94,12 @@ function unreadState(
   now: number,
 ): { sortAt: number; led: Led } | null {
   const dismissedAt = entry?.dismissedAt ?? 0;
-  const native = chat.attention && chat.attention.at > dismissedAt ? chat.attention : null;
-  const manualAt = entry?.unreadAt !== undefined && entry.unreadAt > dismissedAt ? entry.unreadAt : null;
+  const cutoff = now - limits.unreadExpiryDays * DAY_MS;
+  const fresh = (at: number) => at > dismissedAt && at >= cutoff;
+  const native = chat.attention && fresh(chat.attention.at) ? chat.attention : null;
+  const manualAt = entry?.unreadAt !== undefined && fresh(entry.unreadAt) ? entry.unreadAt : null;
   if (!native && manualAt === null) return null;
   const sortAt = Math.min(native ? native.at : Infinity, manualAt ?? Infinity);
-  if (sortAt < now - limits.unreadExpiryDays * DAY_MS) return null;
   const led: Led = native
     ? native.reason === "permission"
       ? "permission"

@@ -1,6 +1,6 @@
 import type { PluginScreenProps } from "@getpaseo/plugin/client";
 import { Loading } from "@getpaseo/plugin/client/ui";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Text, View } from "react-native";
 
 /**
@@ -10,8 +10,13 @@ import { Text, View } from "react-native";
 export function GoScreen({ theme, navigation, params }: PluginScreenProps) {
   const { agentId, serverId } = params;
   const openAgent = navigation?.openAgent;
+  // `navigation` may be a new object on every render; open each target once.
+  const opened = useRef<string | null>(null);
   useEffect(() => {
-    if (openAgent && agentId) openAgent(serverId ? { agentId, serverId } : { agentId });
+    const target = `${serverId ?? ""}/${agentId ?? ""}`;
+    if (!openAgent || !agentId || opened.current === target) return;
+    opened.current = target;
+    openAgent(serverId ? { agentId, serverId } : { agentId });
   }, [openAgent, agentId, serverId]);
   if (openAgent && agentId) return <Loading />;
   return (

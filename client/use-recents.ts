@@ -49,9 +49,11 @@ export interface OpenTarget {
   openScreen?: (input: { screenId: string; params?: Record<string, string> }) => void;
 }
 
-/** Marks the chat read and opens it. */
+/** Opens the chat and marks it read. A surface that has no way to navigate leaves the chat unread. */
 export function openChat(store: RecentsStore, row: TriageRow, target: OpenTarget): void {
+  const { navigation, openScreen } = target;
+  if (navigation) navigation.openAgent({ agentId: row.agentId, serverId: row.hostId });
+  else if (openScreen) openScreen({ screenId: GO_SCREEN_ID, params: { agentId: row.agentId, serverId: row.hostId } });
+  else return;
   store.markRead([row.key]);
-  if (target.navigation) target.navigation.openAgent({ agentId: row.agentId, serverId: row.hostId });
-  else target.openScreen?.({ screenId: GO_SCREEN_ID, params: { agentId: row.agentId, serverId: row.hostId } });
 }

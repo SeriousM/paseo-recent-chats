@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": { "types": ["node", "vitest/globals"], "noUncheckedIndexedAccess": true },
-  "include": ["tests/**/*.ts", "shared/**/*.ts", "client/triage.ts", "client/overlay.ts", "client/format.ts", "client/row-layout.ts", "client/prefs.ts", "client/fuzzy.ts", "client/drag-target.ts"]
+  "include": ["tests/**/*.ts", "shared/**/*.ts", "client/triage.ts", "client/overlay.ts", "client/format.ts", "client/row-layout.ts", "client/prefs.ts", "client/fuzzy.ts", "client/drag-target.ts", "client/store.ts", "client/host-observer.ts", "client/web.ts", "client/paseo-types.ts", "client/use-recents.ts", "client/runtime.ts"]
 }

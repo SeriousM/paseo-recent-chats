@@ -18,6 +18,9 @@ const HEADINGS: Record<Bucket | "pinned", string> = {
 
 const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "ui-monospace, Menlo, Consolas, monospace" });
 
+/** The native animation driver does not exist on web; react-native-web would warn and fall back anyway. */
+const NATIVE_DRIVER = Platform.OS !== "web";
+
 /** Hex surface colour -> true when it is a dark theme. Unparseable values count as dark. */
 function isDark(hex: string): boolean {
   const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
@@ -51,8 +54,8 @@ export function LedDot({ led, theme, size = 10 }: { led: Led; theme: PluginTheme
     }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.35, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.35, duration: 700, useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: NATIVE_DRIVER }),
       ]),
     );
     loop.start();

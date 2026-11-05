@@ -1,6 +1,6 @@
 import type { PluginScreenProps } from "@getpaseo/plugin/client";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { searchRows } from "./fuzzy";
 import { SearchBox } from "./search-box";
 import { SettingsCog, TriageList } from "./triage-list";
@@ -10,6 +10,8 @@ import { openChat, useRecents } from "./use-recents";
 export function RecentScreen({ theme, layout, navigation, params }: PluginScreenProps) {
   const { store, snapshot, result } = useRecents();
   const [query, setQuery] = useState(params.q ?? "");
+  // Reopened with another query (the sidebar's "more matches" link) while this screen is already showing.
+  useEffect(() => setQuery(params.q ?? ""), [params.q]);
   const searching = query.trim().length > 0;
   const rows = useMemo(() => searchRows(query, result.all), [result, query]);
   const styles = useMemo(
