@@ -24,16 +24,19 @@ const MIN_LIST_HEIGHT = 100;
 
 // Survives the item remounting; the stored preference only decides the first state.
 let userExpanded: boolean | null = null;
+// The search box stays open (or closed) until the search button is pressed again, also across remounts.
+let searchOpen = false;
 
 export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: PluginSidebarItemProps) {
   const { store, snapshot, result } = useRecents();
   const [override, setOverride] = useState(userExpanded);
   const [query, setQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(searchOpen);
   // A phone drawer has little room: the list starts collapsed there, so the projects below stay reachable.
   const expanded = override ?? (layout.compact ? false : snapshot.prefs.sidebarExpanded);
   const { unread, running } = result.counts;
   const { height: windowHeight } = useWindowDimensions();
-  const searching = query.trim().length > 0;
+  const searching = showSearch && query.trim().length > 0;
 
   const matches = useMemo(() => (searching ? searchRows(query, result.all) : []), [searching, query, result]);
 
@@ -65,6 +68,12 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
     </View>
   );
 
+  const toggleSearch = () => {
+    searchOpen = !showSearch;
+    setShowSearch(searchOpen);
+    if (!searchOpen) setQuery("");
+  };
+
   const open = (row: Parameters<typeof openChat>[1]) => {
     setQuery("");
     openChat(store, row, { openScreen });
@@ -86,20 +95,21 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
             showsVerticalScrollIndicator={false}
             style={{ maxHeight: Math.max(MIN_LIST_HEIGHT, Math.round(windowHeight * (layout.compact ? MAX_LIST_SHARE.compact : MAX_LIST_SHARE.wide))) }}
           >
-          {snapshot.hosts.length >= 2 ? (
-            <HostFilter
-              theme={theme}
-              compact={layout.compact}
-              hosts={snapshot.hosts}
-              hostColors={snapshot.hostColors}
-              onToggle={store.toggleHost}
-              groupByHost={snapshot.prefs.groupByHost}
-              onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
-            />
+          <HostFilter
+            theme={theme}
+            compact={layout.compact}
+            hosts={snapshot.hosts}
+            hostColors={snapshot.hostColors}
+            onToggle={store.toggleHost}
+            groupByHost={snapshot.prefs.groupByHost}
+            onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
+            search={{ open: showSearch, onToggle: toggleSearch }}
+          />
+          {showSearch ? (
+            <View style={{ paddingHorizontal: 8, paddingBottom: 4 }}>
+              <SearchBox theme={theme} compact={layout.compact} value={query} onChange={setQuery} autoFocus />
+            </View>
           ) : null}
-          <View style={{ paddingHorizontal: 8, paddingBottom: 4 }}>
-            <SearchBox theme={theme} compact={layout.compact} value={query} onChange={setQuery} />
-          </View>
           <TriageList
             theme={theme}
             compact={layout.compact}

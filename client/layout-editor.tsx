@@ -1,7 +1,7 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/ui";
 import { Fragment, useMemo, useRef, useState, type ReactElement } from "react";
-import { PanResponder, Pressable, Text, TextInput, View, type ViewStyle } from "react-native";
+import { PanResponder, Platform, Pressable, Text, TextInput, View, type ViewStyle } from "react-native";
 import { MAX_TOKEN_CHARS, type RowToken, type RowTokenId } from "../shared/layout";
 import { dropTarget, markerY, type DragGeometry, type Drop } from "./drag-target";
 import { PREVIEW_HOST_COLORS, PREVIEW_ROWS } from "./preview-data";
@@ -14,7 +14,9 @@ import {
   placeTokenOnNewLine,
   resetLayout,
   setEnabled,
+  tokenMono,
   setMaxChars,
+  setMono,
   visibleLines,
 } from "./row-layout";
 import { FullNamesCard, HostHeading, TriageRowView } from "./triage-list";
@@ -38,6 +40,8 @@ const HINTS: Record<RowTokenId, string> = {
   branch: "Git branch of the workspace. Empty for folders that are not a repository.",
   agent: "Model the chat runs on, e.g. opus-5.5.",
 };
+
+const MONO_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "ui-monospace, Menlo, Consolas, monospace" });
 
 // Web-only styles that keep a drag from selecting text or scrolling a touch screen.
 const NO_SELECT_NO_SCROLL = { touchAction: "none", userSelect: "none", cursor: "grab" } as unknown as ViewStyle;
@@ -307,6 +311,28 @@ function TokenRow({
               {token.maxChars === 0 ? "unlimited" : "chars"}
             </Text>
           </View>
+        ) : null}
+        {hasLength ? (
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityLabel={`Show ${LABELS[token.id]} in monospace`}
+            accessibilityState={{ checked: tokenMono(token) }}
+            onPress={() => onChange(setMono(layout, token.id, !tokenMono(token)))}
+            style={{
+              height: compact ? 40 : 30,
+              paddingHorizontal: 10,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: tokenMono(token) ? theme.colors.accent : theme.colors.border,
+              backgroundColor: tokenMono(token) ? theme.colors.surface2 : "transparent",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: tokenMono(token) ? theme.colors.accent : theme.colors.foreground, fontSize: 12, fontFamily: MONO_FONT }}>
+              Mono
+            </Text>
+          </Pressable>
         ) : null}
         <IconButton
           theme={theme}

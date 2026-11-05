@@ -5,6 +5,11 @@ import { DEFAULT_LAYOUT, MAX_LINES, MAX_TOKEN_CHARS, type RowToken, type RowToke
 import { agentLabel, chatTitle, ellipsize } from "./format";
 import type { TriageRow } from "./triage";
 
+/** Whether a token shows in monospace: its own choice, else the default for that item. */
+export function tokenMono(token: RowToken): boolean {
+  return token.mono ?? DEFAULT_LAYOUT.find((fallback) => fallback.id === token.id)?.mono ?? false;
+}
+
 const clampChars = (value: number): number => Math.min(MAX_TOKEN_CHARS, Math.max(0, Math.trunc(value) || 0));
 
 /** Lines as arrays of tokens, in order. Empty lines do not exist. */
@@ -35,7 +40,7 @@ export function normalizeLayout(input: readonly RowToken[]): RowToken[] {
   for (const token of input) {
     if (seen.has(token.id)) continue;
     seen.add(token.id);
-    tokens.push({ ...token, maxChars: clampChars(token.maxChars) });
+    tokens.push({ ...token, maxChars: clampChars(token.maxChars), mono: tokenMono(token) });
   }
   for (const fallback of DEFAULT_LAYOUT) {
     if (!seen.has(fallback.id)) tokens.push({ ...fallback, enabled: false });
@@ -67,6 +72,9 @@ function replace(layout: readonly RowToken[], id: RowTokenId, change: Partial<Ro
 
 export const setEnabled = (layout: readonly RowToken[], id: RowTokenId, enabled: boolean): RowToken[] =>
   replace(layout, id, { enabled });
+
+export const setMono = (layout: readonly RowToken[], id: RowTokenId, mono: boolean): RowToken[] =>
+  replace(layout, id, { mono });
 
 export const setMaxChars = (layout: readonly RowToken[], id: RowTokenId, maxChars: number): RowToken[] =>
   replace(layout, id, { maxChars: clampChars(maxChars) });

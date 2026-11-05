@@ -3,7 +3,7 @@ import { Icon } from "@getpaseo/plugin/client/ui";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Animated, Platform, Pressable, Text, View } from "react-native";
 import { chatTitle, hostColors, withAlpha } from "./format";
-import { columnChars, tokenText, tokenValue, visibleLines } from "./row-layout";
+import { columnChars, tokenMono, tokenText, tokenValue, visibleLines } from "./row-layout";
 import { openPluginSettings } from "./runtime";
 import type { Bucket, Led, TriageResult, TriageRow } from "./triage";
 import type { RowToken, RowTokenId } from "../shared/layout";
@@ -71,24 +71,14 @@ export function LedDot({ led, theme, size = 10 }: { led: Led; theme: PluginTheme
   );
 }
 
-const IS_MONO: Record<RowTokenId, boolean> = {
-  host: false,
-  led: false,
-  project: true,
-  workspace: true,
-  title: false,
-  branch: true,
-  agent: false,
-};
-
 const MIN_FLEX_WIDTH = 56;
 const BRANCH_ICON_SIZE = 11;
 const BRANCH_ICON_GAP = 4;
 const BRANCH_ICON_SPACE = BRANCH_ICON_SIZE + BRANCH_ICON_GAP;
 
 /** Rough pixel width of `chars` characters; monospace tokens are exact, the others an average. */
-function columnPixels(id: RowTokenId, chars: number, fontSize: number): number {
-  return Math.ceil(chars * fontSize * (IS_MONO[id] ? 0.6 : 0.56));
+function columnPixels(mono: boolean, chars: number, fontSize: number): number {
+  return Math.ceil(chars * fontSize * (mono ? 0.6 : 0.56));
 }
 
 /** Card with the untruncated names of a row. Shown under the row while it is hovered or long-pressed. */
@@ -237,6 +227,7 @@ export function TriageRowView({
     if (token.id === "led") return <LedDot key="led" led={row.led} theme={theme} />;
     if (token.id === "host" && !showHost) return null;
     const text = tokenText(row, token);
+    const mono = tokenMono(token);
     const chars = columns[token.id];
     if (chars === 0) return null;
     if (token.id === "host") {
@@ -251,7 +242,10 @@ export function TriageRowView({
             },
           ]}
         >
-          <Text numberOfLines={1} style={[styles.hostText, { color: hostTint?.text ?? theme.colors.foregroundMuted }]}>
+          <Text
+            numberOfLines={1}
+            style={[styles.hostText, { color: hostTint?.text ?? theme.colors.foregroundMuted, fontFamily: mono ? MONO : undefined }]}
+          >
             {text}
           </Text>
         </View>
@@ -262,27 +256,27 @@ export function TriageRowView({
     const fixed =
       chars === undefined
         ? { flexGrow: 1, flexShrink: 1, flexBasis: MIN_FLEX_WIDTH, minWidth: 0 }
-        : { width: columnPixels(token.id, chars, smallFont) };
+        : { width: columnPixels(mono, chars, smallFont) };
     const isTitle = token.id === "title";
     if (token.id === "branch") {
       // No branch: no icon. A capped column keeps its width so the tokens after it stay in column.
       if (text.length === 0) {
         return chars === undefined ? null : (
-          <View key="branch" style={{ width: columnPixels(token.id, chars, smallFont) + BRANCH_ICON_SPACE }} />
+          <View key="branch" style={{ width: columnPixels(mono, chars, smallFont) + BRANCH_ICON_SPACE }} />
         );
       }
       return (
         <View
           key="branch"
           style={[
-            chars === undefined ? fixed : { width: columnPixels(token.id, chars, smallFont) + BRANCH_ICON_SPACE },
+            chars === undefined ? fixed : { width: columnPixels(mono, chars, smallFont) + BRANCH_ICON_SPACE },
             { flexDirection: "row", alignItems: "center", gap: BRANCH_ICON_GAP },
           ]}
         >
           <Icon name="GitBranch" size={BRANCH_ICON_SIZE} color={theme.colors.foregroundMuted} />
           <Text
             numberOfLines={1}
-            style={{ flex: 1, minWidth: 0, fontSize: smallFont, fontFamily: MONO, color: theme.colors.foregroundMuted }}
+            style={{ flex: 1, minWidth: 0, fontSize: smallFont, fontFamily: mono ? MONO : undefined, color: theme.colors.foregroundMuted }}
           >
             {text}
           </Text>
@@ -297,7 +291,7 @@ export function TriageRowView({
           fixed,
           {
             fontSize: isTitle ? fontSize : smallFont,
-            fontFamily: IS_MONO[token.id] ? MONO : undefined,
+            fontFamily: mono ? MONO : undefined,
             color: isTitle && row.bucket !== "inactive" ? theme.colors.foreground : theme.colors.foregroundMuted,
           },
         ]}
@@ -401,6 +395,7 @@ export function HostFilter({
   onToggle,
   groupByHost,
   onToggleGroupByHost,
+  search,
 }: {
   theme: PluginTheme;
   compact: boolean;
@@ -409,10 +404,13 @@ export function HostFilter({
   onToggle(hostId: string): void;
   groupByHost: boolean;
   onToggleGroupByHost(): void;
+  /** Search button at the right end of the row; the caller shows the search box while `open`. */
+  search?: { open: boolean; onToggle(): void };
 }) {
   const dark = isDark(theme.colors.surface0);
   return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 8, paddingVertical: 6 }}>
+    <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, paddingHorizontal: 8, paddingVertical: 6 }}>
+      {hosts.length >= 2 ? (
       <Pressable
         accessibilityRole="switch"
         accessibilityLabel="Group rows by host"
@@ -437,7 +435,8 @@ export function HostFilter({
           Group
         </Text>
       </Pressable>
-      {hosts.map((host) => {
+      ) : null}
+      {hosts.length >= 2 ? hosts.map((host) => {
         const tint = hostColors(colorNames[host.id], dark);
         const on = !host.hidden;
         return (
@@ -470,7 +469,28 @@ export function HostFilter({
             </Text>
           </Pressable>
         );
-      })}
+      }) : null}
+      {search ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={search.open ? "Close search" : "Search chats"}
+          accessibilityState={{ expanded: search.open }}
+          onPress={search.onToggle}
+          style={{
+            marginLeft: "auto",
+            width: compact ? 36 : 24,
+            height: compact ? 36 : 24,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: search.open ? theme.colors.accent : theme.colors.border,
+            backgroundColor: search.open ? theme.colors.surface2 : "transparent",
+          }}
+        >
+          <Icon name="Search" size={12} color={search.open ? theme.colors.accent : theme.colors.foregroundMuted} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

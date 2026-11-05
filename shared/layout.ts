@@ -17,6 +17,8 @@ export const rowTokenSchema = z.object({
   line: z.number().int().min(1).max(MAX_LINES),
   /** Characters kept before an ellipsis. 0 = unlimited. Ignored for the status light. */
   maxChars: z.number().int().min(0).max(MAX_TOKEN_CHARS),
+  /** Show the text in a monospace font. Missing in layouts saved before the option existed: the default for the item applies. */
+  mono: z.boolean().optional(),
 });
 
 export type RowToken = z.output<typeof rowTokenSchema>;
@@ -26,11 +28,11 @@ export type RowToken = z.output<typeof rowTokenSchema>;
  * [branch 24] [agent name]
  */
 export const DEFAULT_LAYOUT: readonly RowToken[] = [
-  { id: "host", enabled: true, line: 1, maxChars: 6 },
-  { id: "led", enabled: true, line: 1, maxChars: 0 },
-  { id: "project", enabled: true, line: 1, maxChars: 10 },
-  { id: "workspace", enabled: true, line: 1, maxChars: 10 },
-  { id: "title", enabled: true, line: 1, maxChars: 0 },
-  { id: "branch", enabled: true, line: 2, maxChars: 24 },
-  { id: "agent", enabled: true, line: 2, maxChars: 0 },
+  { id: "host", enabled: true, line: 1, maxChars: 6, mono: false },
+  { id: "led", enabled: true, line: 1, maxChars: 0, mono: false },
+  { id: "project", enabled: true, line: 1, maxChars: 10, mono: false },
+  { id: "workspace", enabled: true, line: 1, maxChars: 10, mono: true },
+  { id: "title", enabled: true, line: 1, maxChars: 0, mono: false },
+  { id: "branch", enabled: true, line: 2, maxChars: 24, mono: true },
+  { id: "agent", enabled: true, line: 2, maxChars: 0, mono: false },
 ];

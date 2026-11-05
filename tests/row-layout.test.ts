@@ -11,6 +11,8 @@ import {
   resetLayout,
   setEnabled,
   setMaxChars,
+  setMono,
+  tokenMono,
   tokenText,
   tokensOfLine,
   visibleLines,
@@ -258,5 +260,28 @@ describe("columnChars", () => {
 
   it("ignores switched-off tokens", () => {
     expect(columnChars([row()], setEnabled(layout, "project", false)).project).toBeUndefined();
+  });
+});
+
+describe("monospace option", () => {
+  it("defaults to monospace for workspace and branch only, so the project is proportional", () => {
+    const mono = Object.fromEntries(resetLayout().map((token) => [token.id, tokenMono(token)]));
+    expect(mono).toEqual({ host: false, led: false, project: false, workspace: true, title: false, branch: true, agent: false });
+  });
+
+  it("falls back to the item's default for layouts saved before the option existed", () => {
+    expect(tokenMono({ id: "project", enabled: true, line: 1, maxChars: 10 })).toBe(false);
+    expect(tokenMono({ id: "branch", enabled: true, line: 2, maxChars: 24 })).toBe(true);
+    const old = normalizeLayout([{ id: "workspace", enabled: true, line: 1, maxChars: 10 }]);
+    expect(old.find((token) => token.id === "workspace")?.mono).toBe(true);
+    expect(old.find((token) => token.id === "title")?.mono).toBe(false);
+  });
+
+  it("an explicit choice wins and survives moving and normalising", () => {
+    let layout = setMono(resetLayout(), "title", true);
+    layout = setMono(layout, "workspace", false);
+    layout = normalizeLayout(moveToken(layout, "title", 1));
+    expect(tokenMono(layout.find((token) => token.id === "title")!)).toBe(true);
+    expect(tokenMono(layout.find((token) => token.id === "workspace")!)).toBe(false);
   });
 });

@@ -6,6 +6,12 @@ It puts a short, ordered inbox of your chats in the sidebar and in a pill next t
 Up front: I used AI to write a good part of the code and to help with the docs. The ideas, the
 feature list and the trade-offs are mine. Read the source like any third-party code.
 
+The inbox pill in a chat's composer, with sample data. One click opens the list, one click opens a chat:
+
+![The inbox popup above the composer, with the Inbox and Later pills](assets/screenshot-pill.png)
+
+The settings screen, where every row item can be shown, reordered, split over lines and given a length:
+
 ![Row layout editor with a live preview](assets/screenshot-layout.png)
 
 ## What it does
@@ -24,6 +30,18 @@ feature list and the trade-offs are mine. Read the source like any third-party c
 - Full list screen, a cog that opens the settings, and a Command Center item.
 - Settings: choose, reorder, split over any number of lines and set the length of every row item, with a
   live preview; list limits; the hover card with the full names and its transparency.
+
+## Install
+
+Plugins are trusted code, so read the source first. Then install it from GitHub on the daemon you want it on:
+
+```bash
+paseo plugin install github:SeriousM/paseo-recent-chats
+```
+
+`--ref <branch, tag or commit>` pins a revision (the default is the repository's default branch), and
+`paseo plugin update paseo-recent-chats` pulls newer commits later. Plugins must be enabled on the daemon
+(Settings, Plugins). In a desktop or web client the plugin then appears as "Recent Chats" in the sidebar.
 
 ## How unread works
 
@@ -53,7 +71,7 @@ on the host. Read marks and pins are always saved on the host.
 pnpm install
 pnpm typecheck
 pnpm test
-paseo plugin install /absolute/path/to/paseo-recent-chats
+paseo plugin install /absolute/path/to/paseo-recent-chats   # a local checkout
 ```
 
 The plugin has a client entry (all the UI and logic) and a tiny server entry that only enables settings
