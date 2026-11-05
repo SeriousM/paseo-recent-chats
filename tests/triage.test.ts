@@ -88,6 +88,32 @@ describe("buckets and ordering", () => {
     expect(result.counts).toEqual({ unread: 1, running: 0, inactive: 0 });
   });
 
+  it("a chat that finished earlier and now works again is running, not unread", () => {
+    for (const reason of ["finished", "error"] as const) {
+      const result = buildTriage(
+        [chat("resumed", { status: "running", startedAt: ago(1 * MIN), attention: attention(30, reason) })],
+        {},
+        limits,
+        NOW,
+      );
+      expect(result.rows[0]).toMatchObject({ bucket: "running", led: "running" });
+      expect(result.counts).toEqual({ unread: 0, running: 1, inactive: 0 });
+      expect(result.worstUnread).toBeNull();
+    }
+  });
+
+  it("a running chat with a Later mark shows as running and is unread again when it stops", () => {
+    const later = markUnread({}, "h1:a", ago(5 * MIN));
+    const running = chat("a", { status: "running", startedAt: ago(1 * MIN) });
+    expect(buildTriage([running], later, limits, NOW).rows[0]?.bucket).toBe("running");
+    expect(buildTriage([{ ...running, status: "idle", startedAt: null }], later, limits, NOW).rows[0]?.bucket).toBe("unread");
+  });
+
+  it("a chat that finishes its new turn is unread again, with the new time", () => {
+    const stopped = chat("a", { attention: attention(1) });
+    expect(buildTriage([stopped], {}, limits, NOW).rows[0]).toMatchObject({ bucket: "unread", sortAt: ago(1 * MIN) });
+  });
+
   it("maps attention reasons to LEDs and reports the worst unread", () => {
     const result = buildTriage(
       [

@@ -92,7 +92,7 @@ function unreadState(
   entry: OverlayEntry | undefined,
   limits: TriageLimits,
   now: number,
-): { sortAt: number; led: Led } | null {
+): { sortAt: number; led: Led; blocked: boolean } | null {
   const dismissedAt = entry?.dismissedAt ?? 0;
   const cutoff = now - limits.unreadExpiryDays * DAY_MS;
   const fresh = (at: number) => at > dismissedAt && at >= cutoff;
@@ -107,7 +107,7 @@ function unreadState(
         ? "error"
         : "finished"
     : "finished";
-  return { sortAt, led };
+  return { sortAt, led, blocked: native?.reason === "permission" };
 }
 
 const compare = (a: TriageRow, b: TriageRow, direction: 1 | -1): number =>
@@ -208,7 +208,10 @@ function triageOne(
     const isPinned = pinnedAt !== undefined;
     const state = unreadState(chat, overlay[key], limits, now);
     let row: TriageRow;
-    if (state) {
+    // The daemon keeps its "finished" or "error" flag while the chat works on a new turn. That flag is about
+    // the turn before: a running chat shows as running, and turns unread again when this turn ends. Only a
+    // chat that waits for a permission needs you while it runs.
+    if (state && !(chat.status === "running" && !state.blocked)) {
       row = { ...base, bucket: "unread", pinned: isPinned, led: state.led, sortAt: state.sortAt };
       unread.push(row);
     } else if (chat.status === "running") {
