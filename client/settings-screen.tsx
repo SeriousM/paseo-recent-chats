@@ -155,6 +155,27 @@ export function SettingsScreen({ theme, layout: screen, host }: PluginSurfacePro
             value={prefs.sidebarExpanded}
             onValueChange={(next) => change({ sidebarExpanded: next })}
           />
+          {(["sidebarHeightPhone", "sidebarHeightDesktop"] as const).map((key) => (
+            <View key={key} style={{ padding: 12, gap: 8 }}>
+              <Text style={{ color: theme.colors.foreground, fontSize: 14 }}>
+                {key === "sidebarHeightPhone" ? "Sidebar list height on phones" : "Sidebar list height on wide screens"}
+              </Text>
+              <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+                Most of the window height the list may take. The grip under the list sets it too.
+              </Text>
+              <Slider
+                theme={theme}
+                compact={screen.compact}
+                label={key === "sidebarHeightPhone" ? "phone sidebar list height" : "wide sidebar list height"}
+                value={prefs[key]}
+                min={15}
+                max={85}
+                step={5}
+                display={`${prefs[key]}%`}
+                onChange={(next) => change({ [key]: next })}
+              />
+            </View>
+          ))}
         </SettingsCard>
       </SettingsSection>
       <SettingsSection title="Full names card">

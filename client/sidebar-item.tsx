@@ -1,7 +1,7 @@
 import type { PluginSidebarItemProps } from "@getpaseo/plugin/client";
 import { Icon, ScrollView, SidebarRow } from "@getpaseo/plugin/client/ui";
-import { useMemo, useState } from "react";
-import { Pressable, Text, useWindowDimensions, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { PanResponder, Pressable, Text, useWindowDimensions, View, type ViewStyle } from "react-native";
 import { searchRows } from "./fuzzy";
 import { openPluginSettings } from "./runtime";
 import { SearchBox } from "./search-box";
@@ -16,11 +16,14 @@ const SEARCH_LIMIT = 15;
 /**
  * The host sidebar stacks its items above a scrolling project list that takes whatever height is left.
  * A tall list here would leave that list no height at all, and nothing could scroll. The list gets its
- * own scroll area, at most this share of the window height. Host chips and search box scroll with it.
+ * own scroll area, at most a share of the window height (prefs, separate for phone drawer and wide
+ * sidebar). Host chips and search box scroll with it. The grip under the list drags that share.
  */
-/** A phone drawer is short and also holds the project list; a desktop sidebar has room. */
-const MAX_LIST_SHARE = { compact: 0.25, wide: 0.5 };
 const MIN_LIST_HEIGHT = 100;
+const HEIGHT_PERCENT = { min: 15, max: 85 };
+
+// Stops a touch screen from scrolling the drawer while the grip is dragged; resize cursor on desktop. React Native Web only.
+const GRIP_WEB = { touchAction: "none", cursor: "row-resize" } as unknown as ViewStyle;
 
 // Survives the item remounting; the stored preference only decides the first state.
 let userExpanded: boolean | null = null;
@@ -39,6 +42,40 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   const searching = showSearch && query.trim().length > 0;
 
   const matches = useMemo(() => (searching ? searchRows(query, result.all) : []), [searching, query, result]);
+  const heightKey = layout.compact ? "sidebarHeightPhone" : "sidebarHeightDesktop";
+  const savedPercent = snapshot.prefs[heightKey];
+  // Percent while the grip is dragged; saved once on release so a drag is one settings write.
+  const [dragPercent, setDragPercent] = useState<number | null>(null);
+  const percent = dragPercent ?? savedPercent;
+  const listHeight = Math.max(MIN_LIST_HEIGHT, Math.round((windowHeight * percent) / 100));
+  const live = useRef({ windowHeight, savedPercent, heightKey, updatePrefs: store.updatePrefs });
+  live.current = { windowHeight, savedPercent, heightKey, updatePrefs: store.updatePrefs };
+  const grip = useMemo(() => {
+    let startPercent = 0;
+    let current = 0;
+    const end = () => {
+      const { heightKey: key, savedPercent: saved, updatePrefs } = live.current;
+      if (current !== saved) updatePrefs({ [key]: current });
+      setDragPercent(null);
+    };
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        startPercent = live.current.savedPercent;
+        current = startPercent;
+        setDragPercent(startPercent);
+      },
+      onPanResponderMove: (_event, gesture) => {
+        const next = Math.round(startPercent + (gesture.dy / live.current.windowHeight) * 100);
+        current = Math.min(HEIGHT_PERCENT.max, Math.max(HEIGHT_PERCENT.min, next));
+        setDragPercent(current);
+      },
+      onPanResponderRelease: end,
+      onPanResponderTerminate: end,
+    });
+  }, []);
 
   const toggle = () => {
     userExpanded = !expanded;
@@ -93,7 +130,7 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
           <ScrollView
             nestedScrollEnabled
             showsVerticalScrollIndicator={false}
-            style={{ maxHeight: Math.max(MIN_LIST_HEIGHT, Math.round(windowHeight * (layout.compact ? MAX_LIST_SHARE.compact : MAX_LIST_SHARE.wide))) }}
+            style={{ maxHeight: listHeight }}
           >
           <HostFilter
             theme={theme}
@@ -127,6 +164,28 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
             onShowAll={() => openScreen({ screenId: RECENT_SCREEN_ID, params: searching ? { q: query } : {} })}
           />
           </ScrollView>
+          <View
+            {...grip.panHandlers}
+            accessibilityRole="adjustable"
+            accessibilityLabel="Recent Chats list height"
+            accessibilityValue={{ min: HEIGHT_PERCENT.min, max: HEIGHT_PERCENT.max, now: percent }}
+            accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+            onAccessibilityAction={(event) => {
+              const step = event.nativeEvent.actionName === "increment" ? 5 : -5;
+              const next = Math.min(HEIGHT_PERCENT.max, Math.max(HEIGHT_PERCENT.min, savedPercent + step));
+              if (next !== savedPercent) store.updatePrefs({ [heightKey]: next });
+            }}
+            style={[{ height: layout.compact ? 24 : 12, alignItems: "center", justifyContent: "center" }, GRIP_WEB]}
+          >
+            <View
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: dragPercent === null ? theme.colors.border : theme.colors.accent,
+              }}
+            />
+          </View>
           {searching && matches.length > SEARCH_LIMIT ? (
             <Pressable
               accessibilityRole="button"
