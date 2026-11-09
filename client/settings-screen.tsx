@@ -151,7 +151,7 @@ export function SettingsScreen({ theme, layout: screen, host }: PluginSurfacePro
           />
           <SettingsSwitch
             label="Sidebar list expanded"
-            hint="Initial state of the sidebar list."
+            hint="Also changes when you open or close the list in the sidebar."
             value={prefs.sidebarExpanded}
             onValueChange={(next) => change({ sidebarExpanded: next })}
           />

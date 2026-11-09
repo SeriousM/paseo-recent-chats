@@ -25,18 +25,15 @@ const HEIGHT_PERCENT = { min: 15, max: 85 };
 // Stops a touch screen from scrolling the drawer while the grip is dragged; resize cursor on desktop. React Native Web only.
 const GRIP_WEB = { touchAction: "none", cursor: "row-resize" } as unknown as ViewStyle;
 
-// Survives the item remounting; the stored preference only decides the first state.
-let userExpanded: boolean | null = null;
 // The search box stays open (or closed) until the search button is pressed again, also across remounts.
 let searchOpen = false;
 
 export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: PluginSidebarItemProps) {
   const { store, snapshot, result } = useRecents();
-  const [override, setOverride] = useState(userExpanded);
   const [query, setQuery] = useState("");
   const [showSearch, setShowSearch] = useState(searchOpen);
-  // A phone drawer has little room: the list starts collapsed there, so the projects below stay reachable.
-  const expanded = override ?? (layout.compact ? false : snapshot.prefs.sidebarExpanded);
+  // Remembered in prefs, so the list stays open (or closed) across drawer remounts and app restarts.
+  const expanded = snapshot.prefs.sidebarExpanded;
   const { unread, running } = result.counts;
   const { height: windowHeight } = useWindowDimensions();
   const searching = showSearch && query.trim().length > 0;
@@ -77,10 +74,7 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
     });
   }, []);
 
-  const toggle = () => {
-    userExpanded = !expanded;
-    setOverride(userExpanded);
-  };
+  const toggle = () => store.updatePrefs({ sidebarExpanded: !expanded });
 
   const cog = layout.compact ? 36 : 24;
   const summary = (
