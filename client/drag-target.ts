@@ -52,3 +52,19 @@ export function markerY(drop: Drop, geometry: DragGeometry, dragId: RowTokenId):
   const last = inLine[inLine.length - 1];
   return last ? last.top + last.height : (geometry.lineTops[drop.line - 1] ?? 0);
 }
+
+/**
+ * New index for item `from` of a single list when its centre is dragged to `pointerY`. `boxes` are the
+ * items' top and height in display order. The item lands before the first other item whose middle is
+ * below the pointer.
+ */
+export function listDropIndex(boxes: readonly { top: number; height: number }[], from: number, pointerY: number): number {
+  let index = 0;
+  for (let i = 0; i < boxes.length; i++) {
+    const box = boxes[i];
+    if (i === from || !box) continue;
+    if (pointerY < box.top + box.height / 2) return index;
+    index += 1;
+  }
+  return index;
+}

@@ -1,37 +1,14 @@
 import type { PluginSurfaceProps } from "@getpaseo/plugin/client";
-import { Icon, SettingsCard, SettingsSection, SettingsSelect, SettingsSwitch } from "@getpaseo/plugin/client/ui";
+import { SettingsCard, SettingsSection, SettingsSelect, SettingsSwitch } from "@getpaseo/plugin/client/ui";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import type { RowToken } from "../shared/layout";
 import type { Prefs } from "../shared/settings";
-import type { Section } from "../shared/sections";
-import { IconButton, LayoutEditor, LayoutPreview, TooltipPreview } from "./layout-editor";
+import { LayoutEditor, LayoutPreview, TooltipPreview } from "./layout-editor";
+import { SectionEditor } from "./section-editor";
 import { Slider } from "./slider";
 import { sameLayout } from "./row-layout";
 import { useRecents } from "./use-recents";
-
-type NumericPref = "maxUnread" | "maxRunning" | "maxInactive" | "inactiveWindowDays" | "unreadExpiryDays";
-
-const SECTION_LABELS: Record<Section, string> = {
-  pinned: "Pinned",
-  unread: "Needs you",
-  running: "Running",
-  inactive: "Inactive",
-};
-
-/** What each section sorts its chats on. */
-const SORT_HINTS: Record<Section, string> = {
-  pinned: "By when it was pinned",
-  unread: "By when it started waiting",
-  running: "By when its turn started",
-  inactive: "By its last message",
-};
-
-/** Preset choices keep the screen usable on a phone and make invalid input impossible. */
-function options(presets: readonly number[], current: number, unit = "") {
-  const values = presets.includes(current) ? presets : [...presets, current].sort((a, b) => a - b);
-  return values.map((value) => ({ label: `${value}${unit}`, value: String(value) }));
-}
 
 export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
   const { store, snapshot } = useRecents();
@@ -51,15 +28,6 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
       if (wasClean) setDraft([...prefs.layout]);
     }
   }, [prefs.layout, draft]);
-  const numeric = (key: NumericPref, label: string, hint: string, presets: readonly number[], unit?: string) => (
-    <SettingsSelect
-      label={label}
-      hint={hint}
-      value={String(prefs[key])}
-      options={options(presets, prefs[key], unit)}
-      onValueChange={(next) => change({ [key]: Number(next) })}
-    />
-  );
   const where = snapshot.storageHosts.length
     ? `These settings, pins and read marks are saved on every connected host that runs Recent Chats (${snapshot.storageHosts.join(", ")}), so every device shows the same view. Pins and read marks of a chat are kept on that chat's host.`
     : "Connecting to the hosts that keep these settings.";
@@ -147,75 +115,9 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
           )}
         </SettingsCard>
       </SettingsSection>
-      <SettingsSection title="List size">
-        <SettingsCard>
-          {numeric("maxUnread", "Unread chats shown", "Oldest first. The rest appear as a +N chip. Per host when grouped.", [3, 4, 5, 6, 8, 10, 15, 20])}
-          {numeric("maxRunning", "Running chats shown", "Oldest first. 0 hides them (the +N chip still counts them).", [0, 1, 2, 3, 4, 5, 8, 10])}
-          {numeric("maxInactive", "Inactive chats shown", "Most recent first. 0 hides them.", [0, 2, 3, 4, 5, 8, 10, 15])}
-          {numeric("inactiveWindowDays", "Inactive window", "Chats older than this stay out of the short list.", [3, 7, 14, 30, 90], " days")}
-          {numeric("unreadExpiryDays", "Unread expiry", "Unread chats waiting longer count as inactive.", [1, 3, 7, 14, 30], " days")}
-        </SettingsCard>
-      </SettingsSection>
       <SettingsSection title="Sections">
         <SettingsCard>
-          {prefs.sectionOrder.map((section, index) => {
-            const move = (by: -1 | 1) => {
-              const next = [...prefs.sectionOrder];
-              [next[index], next[index + by]] = [next[index + by] ?? section, section];
-              change({ sectionOrder: next });
-            };
-            const direction = prefs.sectionSort[section];
-            const flip = () =>
-              change({ sectionSort: { ...prefs.sectionSort, [section]: direction === "oldest" ? "newest" : "oldest" } });
-            return (
-              <View key={section} style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12 }}>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ color: theme.colors.foreground, fontSize: 14 }}>{SECTION_LABELS[section]}</Text>
-                  <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{SORT_HINTS[section]}</Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`${SECTION_LABELS[section]}: ${direction} first. Switch.`}
-                  onPress={flip}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 4,
-                    minHeight: screen.compact ? 40 : 30,
-                    paddingHorizontal: 10,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                  }}
-                >
-                  <Icon
-                    name={direction === "oldest" ? "ArrowDownNarrowWide" : "ArrowDownWideNarrow"}
-                    size={16}
-                    color={theme.colors.foreground}
-                  />
-                  <Text style={{ color: theme.colors.foreground, fontSize: 13 }}>
-                    {direction === "oldest" ? "Oldest first" : "Newest first"}
-                  </Text>
-                </Pressable>
-                <IconButton
-                  theme={theme}
-                  compact={screen.compact}
-                  label={`Move ${SECTION_LABELS[section]} up`}
-                  icon="ChevronUp"
-                  disabled={index === 0}
-                  onPress={() => move(-1)}
-                />
-                <IconButton
-                  theme={theme}
-                  compact={screen.compact}
-                  label={`Move ${SECTION_LABELS[section]} down`}
-                  icon="ChevronDown"
-                  disabled={index === prefs.sectionOrder.length - 1}
-                  onPress={() => move(1)}
-                />
-              </View>
-            );
-          })}
+          <SectionEditor theme={theme} compact={screen.compact} prefs={prefs} onChange={change} />
         </SettingsCard>
       </SettingsSection>
       <SettingsSection title="Display">

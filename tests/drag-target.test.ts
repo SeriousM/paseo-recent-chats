@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dropTarget, markerY, type DragGeometry } from "../client/drag-target";
+import { dropTarget, listDropIndex, markerY, type DragGeometry } from "../client/drag-target";
 
 // Two lines of 3 and 2 rows, each row 40 high, a 20 high section header above the rows.
 //   line 1 section top 0:  rows at 20, 60, 100   (ids host, led, project)
@@ -78,5 +78,25 @@ describe("markerY", () => {
       newLineTop: 90,
     };
     expect(markerY({ line: 1, index: 0 }, alone, "title")).toBe(10);
+  });
+});
+
+describe("listDropIndex", () => {
+  // Four sections of different heights, as in the settings' section list.
+  const boxes = [
+    { top: 0, height: 60 },
+    { top: 60, height: 140 },
+    { top: 200, height: 100 },
+    { top: 300, height: 140 },
+  ];
+
+  it("keeps the place while the item stays between its neighbours' middles", () => {
+    expect(listDropIndex(boxes, 1, 130 + 40)).toBe(1);
+  });
+
+  it("moves past every other item whose middle the item's centre has passed", () => {
+    expect(listDropIndex(boxes, 0, 260)).toBe(2);
+    expect(listDropIndex(boxes, 0, 1000)).toBe(3);
+    expect(listDropIndex(boxes, 3, 10)).toBe(0);
   });
 });
