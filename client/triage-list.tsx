@@ -598,10 +598,15 @@ export function TriageList({
   const columns = useMemo(() => columnChars(shown, prefs.layout), [shown, prefs.layout]);
   const styles = useMemo(
     () => ({
-      heading: {
+      headingRow: {
+        flexDirection: "row" as const,
+        alignItems: "center" as const,
+        gap: 4,
         paddingHorizontal: 10,
         paddingTop: 8,
         paddingBottom: 2,
+      },
+      heading: {
         fontSize: 10.5,
         letterSpacing: 0.7,
         textTransform: "uppercase" as const,
@@ -714,9 +719,18 @@ export function TriageList({
                 />
               ) : null}
               {prefs.groupHeadings && !searching && (hostChanged || previousSection !== section) ? (
-                <Text style={styles.heading}>
-                  {section === "pinned" ? HEADINGS.pinned : `${HEADINGS[section]} \u00B7 ${prefs.sectionSort[section]} first`}
-                </Text>
+                <View
+                  style={styles.headingRow}
+                  accessibilityLabel={`${HEADINGS[section]}, ${prefs.sectionSort[section]} first`}
+                >
+                  {/* Same icons as the sort toggle in the settings. */}
+                  <Icon
+                    name={prefs.sectionSort[section] === "oldest" ? "ArrowDownNarrowWide" : "ArrowDownWideNarrow"}
+                    size={12}
+                    color={theme.colors.foregroundMuted}
+                  />
+                  <Text style={styles.heading}>{HEADINGS[section]}</Text>
+                </View>
               ) : null}
               <TriageRowView
                 row={row}
