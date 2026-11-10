@@ -21,6 +21,7 @@ The settings screen, where every row item can be shown, reordered, split over li
 - Ordered by what needs you: unread chats oldest first, then running chats oldest first, then the most
   recently used inactive chats. Each group has its own limit, and `+N` chips show what is hidden. Section order and the sort direction in each are settings.
 - Pinned chats stay at the top in their own section, whatever their state.
+- A chevron on the Pinned, Running and Inactive headings, and on each host heading when grouped by host, folds that group away until you unfold it or restart the app.
 - **Inbox pill** in every chat's composer with live counts and the same list as a popup.
 - **Later pill** marks the chat you are in as unread and opens the next one.
 - Check button on unread rows marks read without opening; clock button on inactive rows marks unread;

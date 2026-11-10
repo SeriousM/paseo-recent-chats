@@ -8,6 +8,7 @@ import { openPluginSettings } from "./runtime";
 import type { Bucket, Led, TriageResult, TriageRow } from "./triage";
 import type { RowToken, RowTokenId } from "../shared/layout";
 import type { StoreSnapshot } from "./store";
+import { hostGroupKey, sectionGroupKey, toggleCollapsed, useCollapsed } from "./collapsed";
 import type { Section } from "../shared/sections";
 
 const HEADINGS: Record<Section, string> = {
@@ -505,11 +506,16 @@ export function HostHeading({
   label,
   colorName,
   unread,
+  collapsed,
+  onToggleCollapsed,
 }: {
   theme: PluginTheme;
   label: string;
   colorName: string | undefined;
   unread: number;
+  /** With a handler, a chevron on the right folds the host's rows away. */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }) {
   const tint = hostColors(colorName, isDark(theme.colors.surface0));
   return (
@@ -529,7 +535,36 @@ export function HostHeading({
       {unread > 0 ? (
         <Text style={{ fontSize: 11, color: theme.colors.foregroundMuted }}>{`${unread} unread`}</Text>
       ) : null}
+      {onToggleCollapsed ? (
+        <CollapseChevron theme={theme} label={label} collapsed={collapsed ?? false} onPress={onToggleCollapsed} />
+      ) : null}
     </View>
+  );
+}
+
+/** Chevron on the right of a heading: down while the group is open, right while it is folded. */
+function CollapseChevron({
+  theme,
+  label,
+  collapsed,
+  onPress,
+}: {
+  theme: PluginTheme;
+  label: string;
+  collapsed: boolean;
+  onPress(): void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${collapsed ? "Show" : "Hide"} ${label}`}
+      accessibilityState={{ expanded: !collapsed }}
+      onPress={onPress}
+      hitSlop={10}
+      style={({ pressed }) => ({ marginLeft: "auto", padding: 2, borderRadius: 4, opacity: pressed ? 0.5 : 1 })}
+    >
+      <Icon name={collapsed ? "ChevronRight" : "ChevronDown"} size={14} color={theme.colors.foregroundMuted} />
+    </Pressable>
   );
 }
 
@@ -588,6 +623,7 @@ export function TriageList({
   searching = false,
   showSettingsButton = false,
 }: TriageListProps) {
+  const folded = useCollapsed();
   const shown = rows ?? result.rows;
   const { prefs, hostCount, hosts, hostColors: hostColorNames, loading, errors } = snapshot;
   const grouped = prefs.groupByHost && !searching;
@@ -711,6 +747,13 @@ export function TriageList({
           const hostChanged = grouped && previous?.hostId !== row.hostId;
           const section = row.pinned ? "pinned" : row.bucket;
           const previousSection = previous ? (previous.pinned ? "pinned" : previous.bucket) : null;
+          const hostKey = hostGroupKey(row.hostId);
+          const hostFolded = grouped && folded.has(hostKey);
+          const headings = prefs.groupHeadings && !searching;
+          const sectionKey = sectionGroupKey(section, grouped ? row.hostId : null);
+          // Needs you never folds away: it is what the list is for.
+          const foldable = section !== "unread";
+          const sectionFolded = headings && foldable && folded.has(sectionKey);
           return (
             <Fragment key={row.key}>
               {hostChanged ? (
@@ -719,9 +762,11 @@ export function TriageList({
                   label={row.hostLabel}
                   colorName={hostColorNames[row.hostId]}
                   unread={unreadByHost[row.hostId] ?? 0}
+                  collapsed={hostFolded}
+                  onToggleCollapsed={() => toggleCollapsed(hostKey)}
                 />
               ) : null}
-              {prefs.groupHeadings && !searching && (hostChanged || previousSection !== section) ? (
+              {headings && !hostFolded && (hostChanged || previousSection !== section) ? (
                 <View style={styles.headingRow}>
                   {/* Same icons as the sort toggle in the settings; pressing it switches the direction. */}
                   <Pressable
@@ -738,8 +783,17 @@ export function TriageList({
                     />
                   </Pressable>
                   <Text style={styles.heading}>{HEADINGS[section]}</Text>
+                  {foldable ? (
+                    <CollapseChevron
+                      theme={theme}
+                      label={HEADINGS[section]}
+                      collapsed={sectionFolded}
+                      onPress={() => toggleCollapsed(sectionKey)}
+                    />
+                  ) : null}
                 </View>
               ) : null}
+              {hostFolded || sectionFolded ? null : (
               <TriageRowView
                 row={row}
                 theme={theme}
@@ -756,6 +810,7 @@ export function TriageList({
                 onMarkUnread={onMarkUnread}
                 onSetPinned={onSetPinned}
               />
+              )}
             </Fragment>
           );
         })
