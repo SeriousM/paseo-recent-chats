@@ -17,7 +17,7 @@ function options(presets: readonly number[], current: number, unit = "") {
   return values.map((value) => ({ label: `${value}${unit}`, value: String(value) }));
 }
 
-export function SettingsScreen({ theme, layout: screen, host }: PluginSurfaceProps) {
+export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
   const { store, snapshot } = useRecents();
   const { prefs, hosts } = snapshot;
   const padding = screen.compact ? 12 : 20;
@@ -44,10 +44,9 @@ export function SettingsScreen({ theme, layout: screen, host }: PluginSurfacePro
       onValueChange={(next) => change({ [key]: Number(next) })}
     />
   );
-  const where =
-    snapshot.prefsStorage === "device"
-      ? "These settings are saved on this device. Other devices keep their own, and every host shows the same view here."
-      : `This device cannot save settings itself, so they are saved on ${host.label}. Desktop and web keep their own.`;
+  const where = snapshot.storageHosts.length
+    ? `These settings, pins and read marks are saved on every connected host that runs Recent Chats (${snapshot.storageHosts.join(", ")}), so every device shows the same view. Pins and read marks of a chat are kept on that chat's host.`
+    : "Connecting to the hosts that keep these settings.";
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.colors.surface0 }} contentContainerStyle={{ padding, gap: 16 }}>

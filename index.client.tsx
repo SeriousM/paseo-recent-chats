@@ -9,7 +9,12 @@ import { createStore } from "./client/store";
 import { GO_SCREEN_ID } from "./client/use-recents";
 
 export default function contribute(client: PluginClientContext) {
-  setStore(createStore((contract, input) => client.rpc(contract, input)));
+  setStore(
+    createStore({
+      rpc: (contract, input) => client.rpc(contract, input),
+      resolveSelf: async () => (await client.paseo.hosts.list()).self.serverId,
+    }),
+  );
   setSettingsOpener(() => client.openSettings(SETTINGS_SCREEN_ID));
 
   const cleanups = [

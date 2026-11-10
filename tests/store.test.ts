@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginHostSummary } from "@getpaseo/plugin/client";
 
-// The store talks to the Paseo app (host connections), to the host's settings RPC and to browser storage.
-// All three are replaced by controllable fakes; the store's own logic runs for real.
+// The store talks to the Paseo app (host connections), to each host's settings RPC through the peer
+// directory, and to browser storage. Connections, RPCs and storage are controllable fakes; the store's
+// own logic and the peer directory run for real. Two stores sharing one directory stand for the plugin
+// copies of two hosts loaded in the same app.
 const fake = vi.hoisted(() => ({
   /** serverId -> what that host's observer publishes. */
   hostData: new Map<string, unknown>(),
@@ -10,7 +12,8 @@ const fake = vi.hoisted(() => ({
   clientErrors: new Map<string, string>(),
   /** The app hands out the same connection object for a host until it reconnects. */
   clients: new Map<string, { hostId: string }>(),
-  storage: { available: true, raw: null as string | null, writes: [] as string[] },
+  /** The copy earlier versions kept on web and desktop. */
+  device: { raw: null as string | null, cleared: 0 },
 }));
 
 vi.mock("@getpaseo/plugin/client", () => ({
@@ -37,18 +40,17 @@ vi.mock("../client/host-observer", () => ({
 }));
 
 vi.mock("../client/web", () => ({
-  deviceStorageAvailable: () => fake.storage.available,
-  readDevicePrefs: () => fake.storage.raw,
-  writeDevicePrefs: (json: string) => {
-    fake.storage.raw = json;
-    fake.storage.writes.push(json);
-    return true;
+  readDevicePrefs: () => fake.device.raw,
+  clearDevicePrefs: () => {
+    fake.device.raw = null;
+    fake.device.cleared += 1;
   },
   readHostColorNames: () => ({}),
 }));
 
+import { createPeerDirectory, type PeerDirectory } from "../client/peers";
 import { createStore, type Rpc } from "../client/store";
-import { prefsSettings } from "../shared/settings";
+import { overlaySettings, prefsSettings } from "../shared/settings";
 
 const DEFAULTS = prefsSettings.schema.parse({});
 const NOW = Date.UTC(2026, 10, 5, 12, 0, 0);
@@ -64,7 +66,7 @@ interface HostSettings {
   gate: Promise<void> | null;
 }
 
-/** A fake of the host's settings RPC with revisions, like the real one. */
+/** A fake of one host's settings RPC with revisions, like the real one. */
 function fakeRpc() {
   const docs: Record<"overlay" | "prefs", HostSettings> = {
     overlay: { revision: 1, values: { entries: {} }, down: false, writes: [], gate: null },
@@ -87,7 +89,16 @@ function fakeRpc() {
     doc.writes.push(input.values);
     return { status: "saved", revision: String(doc.revision), values: doc.values };
   }) as unknown as Rpc;
-  return { rpc, docs, reads };
+  const entries = () => overlaySettings.schema.parse(docs.overlay.values).entries;
+  return { rpc, docs, reads, entries };
+}
+
+let directory: PeerDirectory;
+
+/** The plugin copy of host `selfId`, keeping its settings in `settings`. */
+function storeOn(selfId: string, settings = fakeRpc()) {
+  const store = createStore({ rpc: settings.rpc, resolveSelf: async () => selfId, directory });
+  return { store, ...settings };
 }
 
 const host = (serverId: string, status: PluginHostSummary["status"] = "online"): PluginHostSummary => ({
@@ -123,9 +134,9 @@ beforeEach(() => {
   fake.observerStarts.length = 0;
   fake.clientErrors.clear();
   fake.clients.clear();
-  fake.storage.available = true;
-  fake.storage.raw = null;
-  fake.storage.writes.length = 0;
+  fake.device.raw = null;
+  fake.device.cleared = 0;
+  directory = createPeerDirectory({});
 });
 
 afterEach(() => {
@@ -141,8 +152,7 @@ describe("chats in the snapshot", () => {
         [{ id: "w1", name: "Checkout", projectDisplayName: "Storefront", gitRuntime: { currentBranch: "feature/x" } }],
       ),
     );
-    const { rpc } = fakeRpc();
-    const store = createStore(rpc);
+    const { store } = storeOn("a");
     store.setHosts([host("a")]);
     store.retain();
     await settle();
@@ -165,7 +175,7 @@ describe("chats in the snapshot", () => {
         agent("sub", { labels: { "paseo.parent-agent-id": "main" } }),
       ]),
     );
-    const store = createStore(fakeRpc().rpc);
+    const { store } = storeOn("a");
     store.setHosts([host("a")]);
     store.retain();
     await settle();
@@ -178,7 +188,7 @@ describe("chats in the snapshot", () => {
   it("hides the chats of a host that is switched off, but keeps it in the filter", async () => {
     fake.hostData.set("a", data([agent("a1")]));
     fake.hostData.set("b", data([agent("b1")]));
-    const store = createStore(fakeRpc().rpc);
+    const { store, docs } = storeOn("a");
     store.setHosts([host("a"), host("b")]);
     store.retain();
     await settle();
@@ -190,13 +200,14 @@ describe("chats in the snapshot", () => {
       { id: "b", label: "B", hidden: true },
     ]);
     expect(snapshot.hostCount).toBe(1);
-    expect(JSON.parse(fake.storage.raw ?? "{}").hiddenHosts).toEqual(["b"]);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(docs.prefs.writes.at(-1)).toMatchObject({ hiddenHosts: ["b"] });
     store.dispose();
   });
 
   it("lists only online hosts", async () => {
     fake.hostData.set("a", data([agent("a1")]));
-    const store = createStore(fakeRpc().rpc);
+    const { store } = storeOn("a");
     store.setHosts([host("a"), host("off", "offline")]);
     store.retain();
     await settle();
@@ -208,8 +219,7 @@ describe("chats in the snapshot", () => {
 describe("observing hosts", () => {
   it("does not start a second set of timers when re-retained inside the grace period", async () => {
     fake.hostData.set("a", data([agent("a1")]));
-    const { rpc, reads } = fakeRpc();
-    const store = createStore(rpc);
+    const { store, reads } = storeOn("a");
     store.setHosts([host("a")]);
     const release = store.retain();
     await settle();
@@ -225,7 +235,7 @@ describe("observing hosts", () => {
 
   it("stops observing after the grace period and starts again when needed", async () => {
     fake.hostData.set("a", data([agent("a1")]));
-    const store = createStore(fakeRpc().rpc);
+    const { store } = storeOn("a");
     store.setHosts([host("a")]);
     store.retain()();
     await vi.advanceTimersByTimeAsync(6_000);
@@ -237,7 +247,7 @@ describe("observing hosts", () => {
 
   it("starts a host's subscription again after it failed", async () => {
     fake.hostData.set("a", { agents: [], workspaces: [], loading: false, error: "agents: not ready" });
-    const store = createStore(fakeRpc().rpc);
+    const { store } = storeOn("a");
     store.setHosts([host("a")]);
     store.retain();
     await settle();
@@ -254,7 +264,7 @@ describe("observing hosts", () => {
   it("drops the error of a host that went offline", async () => {
     fake.hostData.set("a", data([]));
     fake.clientErrors.set("a", "no connection");
-    const store = createStore(fakeRpc().rpc);
+    const { store } = storeOn("a");
     store.setHosts([host("a")]);
     store.retain();
     await settle();
@@ -268,8 +278,7 @@ describe("observing hosts", () => {
 describe("read marks and pins", () => {
   it("saves a mark, and shows it at once", async () => {
     fake.hostData.set("a", data([agent("a1")]));
-    const { rpc, docs } = fakeRpc();
-    const store = createStore(rpc);
+    const { store, docs } = storeOn("a");
     store.setHosts([host("a")]);
     store.retain();
     await settle();
@@ -283,8 +292,7 @@ describe("read marks and pins", () => {
 
   it("writes again on a revision conflict and keeps what another client saved", async () => {
     fake.hostData.set("a", data([agent("a1"), agent("a2")]));
-    const { rpc, docs } = fakeRpc();
-    const store = createStore(rpc);
+    const { store, docs, entries } = storeOn("a");
     store.setHosts([host("a")]);
     store.retain();
     await settle();
@@ -294,17 +302,15 @@ describe("read marks and pins", () => {
     const markedAt = Date.now();
     store.markRead(["a:a1"]);
     await settle();
-    const saved = docs.overlay.values as { entries: Record<string, { dismissedAt?: number; pinnedAt?: number }> };
-    expect(saved.entries["a:a1"]?.dismissedAt).toBe(markedAt);
-    expect(saved.entries["a:a2"]?.pinnedAt).toBe(5);
+    expect(entries()["a:a1"]?.dismissedAt).toBe(markedAt);
+    expect(entries()["a:a2"]?.pinnedAt).toBe(5);
     expect(store.getSnapshot().errors).toEqual([]);
     store.dispose();
   });
 
   it("does not let the periodic read undo a change whose write is still pending", async () => {
     fake.hostData.set("a", data([agent("a1")]));
-    const { rpc, docs, reads } = fakeRpc();
-    const store = createStore(rpc);
+    const { store, docs, reads } = storeOn("a");
     store.setHosts([host("a")]);
     store.retain();
     await settle();
@@ -324,8 +330,7 @@ describe("read marks and pins", () => {
 
   it("keeps a change made while an earlier write fails, and reports the failure", async () => {
     fake.hostData.set("a", data([agent("a1"), agent("a2")]));
-    const { rpc, docs } = fakeRpc();
-    const store = createStore(rpc);
+    const { store, docs } = storeOn("a");
     store.setHosts([host("a")]);
     store.retain();
     await settle();
@@ -342,110 +347,194 @@ describe("read marks and pins", () => {
   });
 });
 
-describe("settings storage on the device", () => {
-  it("adopts the host's settings on first run and stores them", async () => {
-    const { rpc, docs } = fakeRpc();
-    docs.prefs.values = { ...DEFAULTS, maxUnread: 9 };
-    const store = createStore(rpc);
+describe("read marks across hosts", () => {
+  beforeEach(() => {
+    fake.hostData.set("a", data([agent("a1")]));
+    fake.hostData.set("b", data([agent("b1")]));
+  });
+
+  it("keeps a chat's pin on that chat's host, and every copy shows it", async () => {
+    const a = storeOn("a");
+    const b = storeOn("b");
+    for (const { store } of [a, b]) {
+      store.setHosts([host("a"), host("b")]);
+      store.retain();
+    }
+    await settle();
+    const pinnedAt = Date.now();
+    a.store.setPinned("b:b1", true);
+    await settle();
+    expect(b.entries()["b:b1"]?.pinnedAt).toBe(pinnedAt);
+    expect(a.entries()["b:b1"]).toBeUndefined();
+    expect(b.store.getSnapshot().overlay["b:b1"]?.pinnedAt).toBe(pinnedAt);
+    expect(a.store.getSnapshot().storageHosts).toEqual(["A", "B"]);
+    a.store.dispose();
+    b.store.dispose();
+  });
+
+  it("keeps marks on this host while the chat's host has no plugin copy, and moves them there once it has", async () => {
+    const a = storeOn("a");
+    a.store.setHosts([host("a"), host("b")]);
+    a.store.retain();
+    await settle();
+    const pinnedAt = Date.now();
+    a.store.setPinned("b:b1", true);
+    await settle();
+    expect(a.entries()["b:b1"]?.pinnedAt).toBe(pinnedAt);
+    const b = storeOn("b");
+    await settle();
+    expect(b.entries()["b:b1"]?.pinnedAt).toBe(pinnedAt);
+    expect(a.entries()["b:b1"]).toBeUndefined();
+    a.store.dispose();
+    b.store.dispose();
+  });
+
+  it("merges copies of one chat kept on two hosts: latest read, earliest pin", async () => {
+    const a = fakeRpc();
+    a.docs.overlay.values = { entries: { "b:b1": { pinnedAt: 50, dismissedAt: 10 } } };
+    const b = fakeRpc();
+    b.docs.overlay.values = { entries: { "b:b1": { pinnedAt: 70, dismissedAt: 90 } } };
+    const first = storeOn("a", a);
+    const second = storeOn("b", b);
+    first.store.setHosts([host("a"), host("b")]);
+    first.store.retain();
+    await settle();
+    expect(b.entries()["b:b1"]).toEqual({ pinnedAt: 50, dismissedAt: 90 });
+    expect(a.entries()["b:b1"]).toBeUndefined();
+    first.store.dispose();
+    second.store.dispose();
+  });
+});
+
+describe("view settings across hosts", () => {
+  it("writes a change to every host after a short delay, one write each", async () => {
+    const a = storeOn("a");
+    const b = storeOn("b");
+    a.store.setHosts([host("a"), host("b")]);
+    a.store.retain();
+    await settle();
+    const writesBefore = [a.docs.prefs.writes.length, b.docs.prefs.writes.length];
+    const changedAt = Date.now();
+    a.store.updatePrefs({ maxUnread: 8 });
+    a.store.updatePrefs({ maxInactive: 9 });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(a.docs.prefs.writes.length - (writesBefore[0] ?? 0)).toBe(1);
+    expect(b.docs.prefs.writes.length - (writesBefore[1] ?? 0)).toBe(1);
+    expect(b.docs.prefs.writes.at(-1)).toMatchObject({ maxUnread: 8, maxInactive: 9, updatedAt: changedAt });
+    a.store.dispose();
+    b.store.dispose();
+  });
+
+  it("takes the most recently changed copy and brings the older one up to date", async () => {
+    const a = fakeRpc();
+    a.docs.prefs.values = { ...DEFAULTS, maxUnread: 9, updatedAt: 100 };
+    const b = fakeRpc();
+    b.docs.prefs.values = { ...DEFAULTS, maxUnread: 12, updatedAt: 200 };
+    const first = storeOn("a", a);
+    const second = storeOn("b", b);
+    first.store.setHosts([host("a"), host("b")]);
+    first.store.retain();
+    await settle();
+    expect(first.store.getSnapshot().prefs.maxUnread).toBe(12);
+    expect(a.docs.prefs.values).toMatchObject({ maxUnread: 12, updatedAt: 200 });
+    expect(b.docs.prefs.writes).toEqual([]);
+    first.store.dispose();
+    second.store.dispose();
+  });
+
+  it("settles on this host's copy when no copy was changed yet, and stamps it so it reaches every host", async () => {
+    const a = fakeRpc();
+    a.docs.prefs.values = { ...DEFAULTS, maxUnread: 9 };
+    const b = fakeRpc();
+    b.docs.prefs.values = { ...DEFAULTS, maxUnread: 12 };
+    const first = storeOn("a", a);
+    const second = storeOn("b", b);
+    first.store.setHosts([host("a"), host("b")]);
+    first.store.retain();
+    await settle();
+    expect(first.store.getSnapshot().prefs.maxUnread).toBe(9);
+    expect(b.docs.prefs.values).toMatchObject({ maxUnread: 9, updatedAt: 1 });
+    first.store.dispose();
+    second.store.dispose();
+  });
+
+  it("moves the copy earlier versions kept on this device to the hosts, ahead of settled copies", async () => {
+    fake.device.raw = JSON.stringify({ ...DEFAULTS, maxRunning: 6 });
+    const a = fakeRpc();
+    a.docs.prefs.values = { ...DEFAULTS, maxRunning: 2, updatedAt: 1 };
+    const { store } = storeOn("a", a);
+    store.setHosts([host("a")]);
     store.retain();
     await settle();
-    expect(store.getSnapshot().prefs.maxUnread).toBe(9);
-    expect(JSON.parse(fake.storage.raw ?? "{}").maxUnread).toBe(9);
-    expect(store.getSnapshot().prefsStorage).toBe("device");
+    expect(store.getSnapshot().prefs.maxRunning).toBe(6);
+    expect(a.docs.prefs.values).toMatchObject({ maxRunning: 6, updatedAt: NOW });
+    expect(fake.device.raw).toBeNull();
     store.dispose();
   });
 
-  it("does not store defaults when the host cannot be read, and adopts its settings later", async () => {
-    const { rpc, docs } = fakeRpc();
-    docs.prefs.values = { ...DEFAULTS, maxUnread: 9 };
-    docs.prefs.down = true;
-    const store = createStore(rpc);
+  it("drops the device copy when a host holds a change made since", async () => {
+    fake.device.raw = JSON.stringify({ ...DEFAULTS, maxRunning: 6 });
+    const a = fakeRpc();
+    a.docs.prefs.values = { ...DEFAULTS, maxRunning: 2, updatedAt: 500 };
+    const { store } = storeOn("a", a);
+    store.setHosts([host("a")]);
+    store.retain();
+    await settle();
+    expect(store.getSnapshot().prefs.maxRunning).toBe(2);
+    expect(fake.device.cleared).toBe(1);
+    store.dispose();
+  });
+
+  it("hands a change to the other plugin copies at once", async () => {
+    const a = storeOn("a");
+    const b = storeOn("b");
+    for (const { store } of [a, b]) {
+      store.setHosts([host("a"), host("b")]);
+      store.retain();
+    }
+    await settle();
+    a.store.updatePrefs({ maxUnread: 15 });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(b.store.getSnapshot().prefs.maxUnread).toBe(15);
+    a.store.dispose();
+    b.store.dispose();
+  });
+
+  it("does not store defaults when no host can be read, and adopts the hosts' settings later", async () => {
+    const a = fakeRpc();
+    a.docs.prefs.values = { ...DEFAULTS, maxUnread: 9, updatedAt: 100 };
+    a.docs.prefs.down = true;
+    const { store } = storeOn("a", a);
     store.setHosts([host("a")]);
     fake.hostData.set("a", data([]));
     store.retain();
     await settle();
-    expect(fake.storage.writes).toEqual([]);
+    expect(a.docs.prefs.writes).toEqual([]);
     expect(store.getSnapshot().prefs.maxUnread).toBe(DEFAULTS.maxUnread);
-    docs.prefs.down = false;
+    a.docs.prefs.down = false;
     await vi.advanceTimersByTimeAsync(15_000);
     expect(store.getSnapshot().prefs.maxUnread).toBe(9);
-    expect(JSON.parse(fake.storage.raw ?? "{}").maxUnread).toBe(9);
     store.dispose();
   });
 
-  it("leaves a stored copy that cannot be read alone until the user changes something", async () => {
-    fake.storage.raw = "{ broken";
-    const store = createStore(fakeRpc().rpc);
-    store.retain();
-    await settle();
-    expect(fake.storage.writes).toEqual([]);
-    expect(store.getSnapshot().prefs.maxUnread).toBe(DEFAULTS.maxUnread);
-    store.updatePrefs({ maxUnread: 12 });
-    expect(JSON.parse(fake.storage.raw ?? "{}").maxUnread).toBe(12);
-    store.dispose();
-  });
-
-  it("uses the stored copy and never writes it back unchanged", async () => {
-    fake.storage.raw = JSON.stringify({ ...DEFAULTS, maxInactive: 7 });
-    const store = createStore(fakeRpc().rpc);
-    store.retain();
-    await settle();
-    expect(store.getSnapshot().prefs.maxInactive).toBe(7);
-    expect(fake.storage.writes).toEqual([]);
-    store.dispose();
-  });
-
-  it("keeps an edit made while the first read is under way", async () => {
-    const { rpc, docs } = fakeRpc();
-    docs.prefs.values = { ...DEFAULTS, maxRunning: 7 };
-    const store = createStore(rpc);
-    store.retain();
-    store.updatePrefs({ maxUnread: 11 });
-    await settle();
-    const prefs = store.getSnapshot().prefs;
-    expect(prefs).toMatchObject({ maxUnread: 11, maxRunning: 7 });
-    expect(JSON.parse(fake.storage.raw ?? "{}")).toMatchObject({ maxUnread: 11, maxRunning: 7 });
-    store.dispose();
-  });
-});
-
-describe("settings storage on the host (phones)", () => {
-  beforeEach(() => {
-    fake.storage.available = false;
-  });
-
-  it("saves changes to the host after a short delay, as one write", async () => {
-    const { rpc, docs } = fakeRpc();
-    const store = createStore(rpc);
-    store.retain();
-    await settle();
-    store.updatePrefs({ maxUnread: 8 });
-    store.updatePrefs({ maxInactive: 9 });
-    expect(docs.prefs.writes).toHaveLength(0);
-    await vi.advanceTimersByTimeAsync(600);
-    expect(docs.prefs.writes).toHaveLength(1);
-    expect(docs.prefs.writes[0]).toMatchObject({ maxUnread: 8, maxInactive: 9 });
-    expect(store.getSnapshot().prefsStorage).toBe("host");
-    store.dispose();
-  });
-
-  it("builds an edit made before the host could be read on the host's copy instead of the defaults", async () => {
-    const { rpc, docs } = fakeRpc();
-    docs.prefs.values = { ...DEFAULTS, maxRunning: 7 };
-    docs.prefs.down = true;
-    const store = createStore(rpc);
+  it("builds an edit made before any host could be read on the hosts' copy", async () => {
+    const a = fakeRpc();
+    a.docs.prefs.values = { ...DEFAULTS, maxRunning: 7, updatedAt: 100 };
+    a.docs.prefs.down = true;
+    const { store } = storeOn("a", a);
+    store.setHosts([host("a")]);
     store.retain();
     await settle();
     store.updatePrefs({ maxUnread: 11 });
-    docs.prefs.down = false;
+    a.docs.prefs.down = false;
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(docs.prefs.writes.at(-1)).toMatchObject({ maxUnread: 11, maxRunning: 7 });
+    expect(a.docs.prefs.writes.at(-1)).toMatchObject({ maxUnread: 11, maxRunning: 7 });
     store.dispose();
   });
 
   it("writes again after a conflict with another client's save", async () => {
-    const { rpc, docs } = fakeRpc();
-    const store = createStore(rpc);
+    const { store, docs } = storeOn("a");
+    store.setHosts([host("a")]);
     store.retain();
     await settle();
     docs.prefs.revision += 1;
@@ -453,6 +542,20 @@ describe("settings storage on the host (phones)", () => {
     await vi.advanceTimersByTimeAsync(1_000);
     expect(docs.prefs.writes.at(-1)).toMatchObject({ maxUnread: 8 });
     expect(store.getSnapshot().errors).toEqual([]);
+    store.dispose();
+  });
+
+  it("leaves a stored copy that cannot be read alone until the user changes something", async () => {
+    const a = fakeRpc();
+    a.docs.prefs.values = { maxUnread: 0 };
+    const { store } = storeOn("a", a);
+    store.setHosts([host("a")]);
+    store.retain();
+    await settle();
+    expect(a.docs.prefs.writes).toEqual([]);
+    store.updatePrefs({ maxUnread: 12 });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(a.docs.prefs.writes.at(-1)).toMatchObject({ maxUnread: 12 });
     store.dispose();
   });
 });

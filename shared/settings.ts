@@ -3,9 +3,9 @@ import { z } from "zod";
 import { DEFAULT_LAYOUT, rowTokenSchema } from "./layout";
 
 /**
- * User-facing view options. On web and desktop they live in this device's own storage (client/web.ts),
- * so every host's copy of the plugin shows the same view. Phones have no such storage, so they keep
- * them in this host document. Written through the store, from the settings screen and the host chips.
+ * User-facing view options. Every host that runs this plugin keeps a copy, and the client writes each
+ * change to all of them, so every device and every host shows the same view. `updatedAt` decides which
+ * copy is current when they differ (a host was offline during a change). Written through the store.
  */
 export const prefsSettings = defineSettings({
   id: "prefs",
@@ -34,6 +34,8 @@ export const prefsSettings = defineSettings({
     showTooltip: z.boolean().default(true),
     /** How see-through the full-names card is, in percent. 0 = solid. */
     tooltipTransparency: z.number().int().min(0).max(90).default(0),
+    /** When these settings were last changed (ms). The newest copy across the hosts wins; 0 = never synced. */
+    updatedAt: z.number().default(0),
     /** Show a heading per host and keep each host's chats together. Caps then apply per host. */
     groupByHost: z.boolean().default(false),
     /** Hosts switched off in the host filter (serverIds). A host not listed here is shown, so new hosts start on. */

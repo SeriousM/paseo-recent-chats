@@ -82,6 +82,9 @@ const DAY_MS = 86_400_000;
 
 export const chatKey = (hostId: string, agentId: string): string => `${hostId}:${agentId}`;
 
+/** The host a chat key belongs to: the part before the first colon. */
+export const keyHost = (key: string): string => key.slice(0, key.indexOf(":"));
+
 /**
  * Unread when the daemon flags attention newer than the last dismissal, or the
  * user marked it Later after the last dismissal. Each source expires on its own: an old

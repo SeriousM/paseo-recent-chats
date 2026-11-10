@@ -1,5 +1,5 @@
 // Pure read/unread transitions on the overlay. Persistence lives in the store.
-import type { Overlay } from "./triage";
+import type { Overlay, OverlayEntry } from "./triage";
 
 const PRUNE_AFTER_MS = 30 * 86_400_000;
 
@@ -46,4 +46,32 @@ export function pruneOverlay(overlay: Overlay, live: ReadonlySet<string> | null,
     if (live.has(key) && keep) next[key] = entry;
   }
   return Object.keys(next).length === Object.keys(overlay).length ? overlay : next;
+}
+
+/**
+ * One view of the copies kept on several hosts. A chat whose marks sit on more than one host (left behind
+ * while its own host was unreachable, or from before marks moved to the chat's host) takes the latest
+ * read and Later time, and its earliest pin so it keeps its place in the Pinned section.
+ */
+export function mergeOverlays(copies: readonly Overlay[]): Overlay {
+  if (copies.length === 1) return copies[0] ?? {};
+  const merged: Record<string, OverlayEntry> = {};
+  for (const copy of copies) {
+    for (const [key, entry] of Object.entries(copy)) {
+      const seen = merged[key];
+      if (!seen) {
+        merged[key] = entry;
+        continue;
+      }
+      const next: OverlayEntry = {};
+      const unreadAt = Math.max(seen.unreadAt ?? -1, entry.unreadAt ?? -1);
+      const dismissedAt = Math.max(seen.dismissedAt ?? -1, entry.dismissedAt ?? -1);
+      const pinnedAt = Math.min(seen.pinnedAt ?? Infinity, entry.pinnedAt ?? Infinity);
+      if (unreadAt >= 0) next.unreadAt = unreadAt;
+      if (dismissedAt >= 0) next.dismissedAt = dismissedAt;
+      if (pinnedAt !== Infinity) next.pinnedAt = pinnedAt;
+      merged[key] = next;
+    }
+  }
+  return merged;
 }

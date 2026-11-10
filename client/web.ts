@@ -4,7 +4,7 @@ import { parseHostColorNames } from "./format";
 
 declare const localStorage: {
   getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
 };
 
 /** Where the Paseo web and desktop app save the host list, including each host's colour. */
@@ -24,22 +24,11 @@ export function readHostColorNames(): Record<string, string> {
   }
 }
 
-/** Where this device keeps the view preferences. One key per browser or desktop profile. */
+/** Where earlier versions kept the view preferences on web and desktop. Read once to move them to the hosts. */
 const PREFS_KEY = "paseo-recent-chats:prefs:v1";
 
-/** True where this device can keep preferences itself: web and desktop, not private modes that block storage. */
-export function deviceStorageAvailable(): boolean {
-  if (Platform.OS !== "web") return false;
-  try {
-    localStorage.getItem(PREFS_KEY);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function readDevicePrefs(): string | null {
-  if (!deviceStorageAvailable()) return null;
+  if (Platform.OS !== "web") return null;
   try {
     return localStorage.getItem(PREFS_KEY);
   } catch {
@@ -47,13 +36,12 @@ export function readDevicePrefs(): string | null {
   }
 }
 
-/** Returns false when the browser refused the write (quota, blocked storage). */
-export function writeDevicePrefs(json: string): boolean {
-  if (!deviceStorageAvailable()) return false;
+/** Forgets the device copy once the hosts hold the settings. */
+export function clearDevicePrefs(): void {
+  if (Platform.OS !== "web") return;
   try {
-    localStorage.setItem(PREFS_KEY, json);
-    return true;
+    localStorage.removeItem(PREFS_KEY);
   } catch {
-    return false;
+    // Blocked storage: the copy stays, and is ignored because the hosts already hold newer settings.
   }
 }

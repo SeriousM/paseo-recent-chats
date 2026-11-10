@@ -50,18 +50,28 @@ and you have not opened or dismissed it since. A running chat waiting for a perm
 Unread chats older than the expiry (7 days by default) count as inactive.
 
 Plugins cannot change Paseo's own read state, so "Later", "mark read without opening" and pins are stored
-by the plugin on the host it runs on. Paseo's own status indicators do not show them.
+by the plugin, on the host the chat belongs to. Paseo's own status indicators do not show them.
 A "Later" mark clears when you open the chat from this plugin; opening it from Paseo's own sidebar does not clear it.
 
 ## Where settings live
 
-On web and desktop the view settings are saved in the browser or app profile you are using, so every host
-shows the same view and each device can differ. Phones cannot store them locally, so there they are saved
-on the host. Read marks and pins are always saved on the host.
+Install the plugin on every host you connect to. Each host's copy finds the others inside the app, so:
+
+- Pins, Later and read marks are saved on the chat's own host. Every device and every host shows the same.
+  While a chat's host is offline or has no copy of the plugin, its marks are kept on the current host and
+  move to the chat's host once it is reachable.
+- View settings (row layout, limits, list height, and the rest) are saved on every connected host. The most
+  recently changed copy wins, so a host that was offline catches up when it is back. List height has
+  separate settings for phones and wide screens.
+- Settings earlier versions kept in a web or desktop profile are moved to the hosts on first start.
+
+Copies of the plugin reach each other through a shared object in the app, not through a documented Paseo
+API. If a future Paseo release isolates them, each host simply keeps its own marks and settings again.
 
 ## Limits
 
-- Needs Paseo 0.14.0 or later (daemon and app).
+- Needs Paseo 0.14.0 or later (daemon and app). Hosts running an older version of this plugin keep their
+  own marks and settings until updated.
 - Host colours are read from the app's saved host list, so they show on web and desktop only.
 - No keyboard shortcuts: plugins cannot register them. Use the Command Center.
 - Sub-agents are not listed.
@@ -76,7 +86,9 @@ paseo plugin install /absolute/path/to/paseo-recent-chats   # a local checkout
 ```
 
 The plugin has a client entry (all the UI and logic) and a tiny server entry that only enables settings
-storage. `client/web.ts` is the only file that touches a browser global.
+storage. `client/web.ts` is the only file that touches a browser global. `client/peers.ts` is the shared
+directory through which the copies of the plugin on different hosts reach each other; its shape is a
+contract between plugin versions.
 
 ## License
 
