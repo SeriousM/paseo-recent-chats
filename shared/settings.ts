@@ -21,7 +21,7 @@ export const prefsSettings = defineSettings({
     unreadExpiryDays: z.number().int().min(1).max(365).default(7),
     groupHeadings: z.boolean().default(true),
     sidebarExpanded: z.boolean().default(true),
-    /** Most of the window height the sidebar list may take, in percent. Phone drawer and wide sidebar apart. */
+    /** Share of the window height the sidebar list takes, in percent. Phone drawer and wide sidebar apart. */
     sidebarHeightPhone: z.number().int().min(15).max(85).default(40),
     sidebarHeightDesktop: z.number().int().min(15).max(85).default(50),
     /** What the Later pill does after marking a chat unread. */

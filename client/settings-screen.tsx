@@ -160,7 +160,7 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
                 {key === "sidebarHeightPhone" ? "Sidebar list height on phones" : "Sidebar list height on wide screens"}
               </Text>
               <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-                Most of the window height the list may take. The grip under the list sets it too.
+                Share of the window height the list takes, even when fewer chats would fit. The grip under the list sets it too.
               </Text>
               <Slider
                 theme={theme}

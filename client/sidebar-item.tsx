@@ -17,8 +17,8 @@ const SEARCH_LIMIT = 15;
 /**
  * The host sidebar stacks its items above a scrolling project list that takes whatever height is left.
  * A tall list here would leave that list no height at all, and nothing could scroll. The list gets its
- * own scroll area, at most a share of the window height (prefs, separate for phone drawer and wide
- * sidebar). Host chips and search box scroll with it. The grip under the list drags that share.
+ * own scroll area of a set share of the window height (prefs, separate for phone drawer and wide sidebar),
+ * also when the chats would fit in less. Host chips and search box scroll with it. The grip drags that share.
  */
 const MIN_LIST_HEIGHT = 100;
 const HEIGHT_PERCENT = { min: 15, max: 85 };
@@ -136,7 +136,7 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
           <ScrollView
             nestedScrollEnabled
             showsVerticalScrollIndicator={false}
-            style={{ maxHeight: listHeight }}
+            style={{ height: listHeight }}
           >
           <HostFilter
             theme={theme}
