@@ -58,7 +58,9 @@ export interface RecentsStore {
 
 const EMIT_DELAY_MS = 250;
 const RECONCILE_MS = 15_000;
-const OVERLAY_REFRESH_MS = 60_000;
+/** Another device's change shows up here within this time. Only while a surface is mounted. */
+const OVERLAY_REFRESH_MS = 5_000;
+const PREFS_REFRESH_MS = 30_000;
 const STOP_GRACE_MS = 5_000;
 const WRITE_ATTEMPTS = 4;
 
@@ -172,6 +174,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
   let consumers = 0;
   let reconcileTimer: ReturnType<typeof setInterval> | undefined;
   let overlayTimer: ReturnType<typeof setInterval> | undefined;
+  let prefsRefreshTimer: ReturnType<typeof setInterval> | undefined;
   let stopTimer: ReturnType<typeof setTimeout> | undefined;
   let emitTimer: ReturnType<typeof setTimeout> | undefined;
   let snapshot: StoreSnapshot = buildSnapshot();
@@ -382,8 +385,12 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     const peers = reachablePeers();
     const before = saves;
     const results = await Promise.all(peers.map(fetchDoc));
-    // A write that finished meanwhile left newer copies than these reads; the next read catches up.
-    if (flushing || saves !== before) return;
+    // A write finished meanwhile and left newer copies than these reads: read again.
+    if (saves !== before) {
+      readAgain = true;
+      return;
+    }
+    if (flushing) return;
     peers.forEach((peer, index) => {
       const result = results[index];
       if (typeof result === "string") docErrors.set(peer.serverId, result);
@@ -594,10 +601,8 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     started = true;
     reconcile();
     reconcileTimer = setInterval(reconcile, RECONCILE_MS);
-    overlayTimer = setInterval(() => {
-      void readOverlay();
-      void syncPrefs();
-    }, OVERLAY_REFRESH_MS);
+    overlayTimer = setInterval(() => void readOverlay(), OVERLAY_REFRESH_MS);
+    prefsRefreshTimer = setInterval(() => void syncPrefs(), PREFS_REFRESH_MS);
     void readOverlay();
     void syncPrefs();
   }
@@ -610,6 +615,10 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     if (overlayTimer !== undefined) {
       clearInterval(overlayTimer);
       overlayTimer = undefined;
+    }
+    if (prefsRefreshTimer !== undefined) {
+      clearInterval(prefsRefreshTimer);
+      prefsRefreshTimer = undefined;
     }
     for (const entry of observers.values()) entry.observer.stop();
     observers.clear();

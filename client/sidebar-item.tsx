@@ -1,12 +1,13 @@
 import type { PluginSidebarItemProps } from "@getpaseo/plugin/client";
 import { Icon, ScrollView, SidebarRow } from "@getpaseo/plugin/client/ui";
-import { useMemo, useRef, useState } from "react";
-import { PanResponder, Pressable, Text, useWindowDimensions, View, type ViewStyle } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { PanResponder, Platform, Pressable, Text, useWindowDimensions, View, type ViewStyle } from "react-native";
 import { searchRows } from "./fuzzy";
 import { openPluginSettings } from "./runtime";
 import { SearchBox } from "./search-box";
 import { HostFilter, ledColor, TriageList } from "./triage-list";
 import { openChat, useRecents } from "./use-recents";
+import { attachVerticalDrag } from "./web";
 
 export const RECENT_SCREEN_ID = "recent";
 
@@ -47,32 +48,43 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   const listHeight = Math.max(MIN_LIST_HEIGHT, Math.round((windowHeight * percent) / 100));
   const live = useRef({ windowHeight, savedPercent, heightKey, updatePrefs: store.updatePrefs });
   live.current = { windowHeight, savedPercent, heightKey, updatePrefs: store.updatePrefs };
-  const grip = useMemo(() => {
+  // One drag model for both input paths: React Native's responder on phones, pointer events on the web.
+  const drag = useMemo(() => {
     let startPercent = 0;
     let current = 0;
-    const end = () => {
-      const { heightKey: key, savedPercent: saved, updatePrefs } = live.current;
-      if (current !== saved) updatePrefs({ [key]: current });
-      setDragPercent(null);
-    };
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: () => {
+    return {
+      start() {
         startPercent = live.current.savedPercent;
         current = startPercent;
         setDragPercent(startPercent);
       },
-      onPanResponderMove: (_event, gesture) => {
-        const next = Math.round(startPercent + (gesture.dy / live.current.windowHeight) * 100);
+      move(dy: number) {
+        const next = Math.round(startPercent + (dy / live.current.windowHeight) * 100);
         current = Math.min(HEIGHT_PERCENT.max, Math.max(HEIGHT_PERCENT.min, next));
         setDragPercent(current);
       },
-      onPanResponderRelease: end,
-      onPanResponderTerminate: end,
-    });
+      end() {
+        const { heightKey: key, savedPercent: saved, updatePrefs } = live.current;
+        if (current !== saved) updatePrefs({ [key]: current });
+        setDragPercent(null);
+      },
+    };
   }, []);
+  const grip = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => Platform.OS !== "web",
+        onMoveShouldSetPanResponder: () => Platform.OS !== "web",
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: drag.start,
+        onPanResponderMove: (_event, gesture) => drag.move(gesture.dy),
+        onPanResponderRelease: drag.end,
+        onPanResponderTerminate: drag.end,
+      }),
+    [drag],
+  );
+  const gripNode = useRef<View>(null);
+  useEffect(() => attachVerticalDrag(gripNode.current, drag), [drag, expanded]);
 
   const toggle = () => store.updatePrefs({ sidebarExpanded: !expanded });
 
@@ -159,6 +171,7 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
           />
           </ScrollView>
           <View
+            ref={gripNode}
             {...grip.panHandlers}
             accessibilityRole="adjustable"
             accessibilityLabel="Recent Chats list height"

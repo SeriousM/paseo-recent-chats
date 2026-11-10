@@ -45,3 +45,61 @@ export function clearDevicePrefs(): void {
     // Blocked storage: the copy stays, and is ignored because the hosts already hold newer settings.
   }
 }
+
+interface DomPointerEvent {
+  clientY: number;
+  button: number;
+  preventDefault(): void;
+  stopPropagation(): void;
+}
+
+interface DomTarget {
+  addEventListener(type: string, listener: (event: DomPointerEvent) => void): void;
+  removeEventListener(type: string, listener: (event: DomPointerEvent) => void): void;
+}
+
+declare const window: DomTarget;
+
+function isDomTarget(node: unknown): node is DomTarget {
+  return typeof node === "object" && node !== null && "addEventListener" in node && "removeEventListener" in node;
+}
+
+/**
+ * Vertical mouse/pen/touch drag on a web element. The app's sidebar sorts its items with pointer-event
+ * drag and drop, which takes the mouse before React Native's responder sees it, so the grip handles
+ * pointer events itself and keeps them from reaching the sidebar. Returns a cleanup; a no-op off the web.
+ */
+export function attachVerticalDrag(
+  node: unknown,
+  handlers: { start(): void; move(dy: number): void; end(): void },
+): () => void {
+  if (Platform.OS !== "web" || !isDomTarget(node)) return () => {};
+  let startY = 0;
+  const move = (event: DomPointerEvent) => {
+    event.preventDefault();
+    handlers.move(event.clientY - startY);
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+    handlers.end();
+  };
+  const down = (event: DomPointerEvent) => {
+    if (event.button !== 0) return;
+    event.stopPropagation();
+    event.preventDefault();
+    startY = event.clientY;
+    handlers.start();
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
+  node.addEventListener("pointerdown", down);
+  return () => {
+    node.removeEventListener("pointerdown", down);
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+  };
+}

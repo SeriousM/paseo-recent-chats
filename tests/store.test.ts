@@ -226,8 +226,8 @@ describe("observing hosts", () => {
     release();
     store.retain();
     const before = reads.overlay;
-    await vi.advanceTimersByTimeAsync(60_000);
-    // One periodic overlay read per minute, not two.
+    await vi.advanceTimersByTimeAsync(5_000);
+    // One periodic overlay read per interval, not two.
     expect(reads.overlay - before).toBe(1);
     expect(fake.observerStarts).toEqual(["a"]);
     store.dispose();
@@ -403,6 +403,27 @@ describe("read marks across hosts", () => {
     expect(a.entries()["b:b1"]).toBeUndefined();
     first.store.dispose();
     second.store.dispose();
+  });
+});
+
+describe("read marks across devices", () => {
+  it("shows a mark made on another device within seconds", async () => {
+    fake.hostData.set("a", data([agent("a1")]));
+    // Two devices: each app has its own peer directory; both reach host a's one settings file.
+    const shared = fakeRpc();
+    const laptop = createStore({ rpc: shared.rpc, resolveSelf: async () => "a", directory: createPeerDirectory({}) });
+    const phone = createStore({ rpc: shared.rpc, resolveSelf: async () => "a", directory: createPeerDirectory({}) });
+    for (const store of [laptop, phone]) {
+      store.setHosts([host("a")]);
+      store.retain();
+    }
+    await settle();
+    const markedAt = Date.now();
+    laptop.markUnread("a:a1");
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(phone.getSnapshot().overlay["a:a1"]?.unreadAt).toBe(markedAt);
+    laptop.dispose();
+    phone.dispose();
   });
 });
 
