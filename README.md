@@ -19,7 +19,7 @@ The settings screen, where every row item can be shown, reordered, split over li
 - One row per chat, from every connected host. Default row: host tag, status light, project,
   workspace and tab name on the first line; git branch and agent on the second.
 - Ordered by what needs you: unread chats oldest first, then running chats oldest first, then the most
-  recently used inactive chats. Each group has its own limit, and `+N` chips show what is hidden.
+  recently used inactive chats. Each group has its own limit, and `+N` chips show what is hidden. Section order and the sort direction in each are settings.
 - Pinned chats stay at the top in their own section, whatever their state.
 - **Inbox pill** in every chat's composer with live counts and the same list as a popup.
 - **Later pill** marks the chat you are in as unread and opens the next one.
@@ -29,7 +29,7 @@ The settings screen, where every row item can be shown, reordered, split over li
   one chip groups rows per host.
 - Full list screen, a cog that opens the settings, and a Command Center item.
 - Settings: choose, reorder, split over any number of lines and set the length of every row item, with a
-  live preview; list limits; the order of the sections; the hover card with the full names and its transparency.
+  live preview; list limits; the order of the sections and the sort direction inside each; the hover card with the full names and its transparency.
 
 ## Install
 

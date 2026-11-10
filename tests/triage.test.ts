@@ -80,6 +80,25 @@ describe("section order", () => {
     expect(schema.safeParse({ sectionOrder: ["pinned", "pinned", "running", "inactive"] }).success).toBe(false);
     expect(schema.safeParse({ sectionOrder: ["pinned", "unread", "running"] }).success).toBe(false);
   });
+
+  it("sorts inside each section in the chosen direction, and the limit keeps the first", () => {
+    const waiting = [chat("u-old", { attention: attention(30) }), chat("u-mid", { attention: attention(20) }), chat("u-new", { attention: attention(10) }), chat("u-newest", { attention: attention(1) })];
+    const pins: Overlay = { "h1:p1": { pinnedAt: ago(5 * MIN) }, "h1:p2": { pinnedAt: ago(1 * MIN) } };
+    const result = buildTriage([...waiting, chat("p1"), chat("p2")], pins, limits, NOW, {
+      sectionSort: { pinned: "newest", unread: "newest", running: "oldest", inactive: "newest" },
+    });
+    expect(ids(result.rows)).toEqual(["p2", "p1", "u-newest", "u-new", "u-mid"]);
+    expect(result.hidden.unread).toBe(1);
+  });
+
+  it("fills a missing section direction with its default", () => {
+    expect(prefsSettings.schema.parse({ sectionSort: { unread: "newest" } }).sectionSort).toEqual({
+      pinned: "oldest",
+      unread: "newest",
+      running: "oldest",
+      inactive: "newest",
+    });
+  });
 });
 
 describe("buckets and ordering", () => {

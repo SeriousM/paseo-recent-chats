@@ -36,6 +36,7 @@ export function useRecents(): Recents {
         groupByHost: snapshot.prefs.groupByHost,
         hostOrder: snapshot.hosts.map((host) => host.id),
         sectionOrder: snapshot.prefs.sectionOrder,
+        sectionSort: snapshot.prefs.sectionSort,
       }),
     [snapshot],
   );

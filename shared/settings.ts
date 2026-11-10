@@ -1,7 +1,7 @@
 import { defineSettings } from "@getpaseo/plugin";
 import { z } from "zod";
 import { DEFAULT_LAYOUT, rowTokenSchema } from "./layout";
-import { SECTIONS } from "./sections";
+import { DEFAULT_SECTION_SORT, SECTIONS } from "./sections";
 
 /**
  * User-facing view options. Every host that runs this plugin keeps a copy, and the client writes each
@@ -29,6 +29,18 @@ export const prefsSettings = defineSettings({
         message: "every section exactly once",
       })
       .default(() => [...SECTIONS]),
+    /**
+     * Order of the chats inside each section. Pinned sorts on when it was pinned, Needs you on when it
+     * started waiting, Running on when its turn started, Inactive on its last message. Limits keep the first.
+     */
+    sectionSort: z
+      .object({
+        pinned: z.enum(["oldest", "newest"]).default(DEFAULT_SECTION_SORT.pinned),
+        unread: z.enum(["oldest", "newest"]).default(DEFAULT_SECTION_SORT.unread),
+        running: z.enum(["oldest", "newest"]).default(DEFAULT_SECTION_SORT.running),
+        inactive: z.enum(["oldest", "newest"]).default(DEFAULT_SECTION_SORT.inactive),
+      })
+      .default(() => ({ ...DEFAULT_SECTION_SORT })),
     /** Share of the window height the sidebar list takes, in percent. Phone drawer and wide sidebar apart. */
     sidebarHeightPhone: z.number().int().min(15).max(85).default(40),
     sidebarHeightDesktop: z.number().int().min(15).max(85).default(50),

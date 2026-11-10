@@ -8,12 +8,13 @@ import { openPluginSettings } from "./runtime";
 import type { Bucket, Led, TriageResult, TriageRow } from "./triage";
 import type { RowToken, RowTokenId } from "../shared/layout";
 import type { StoreSnapshot } from "./store";
+import type { Section } from "../shared/sections";
 
-const HEADINGS: Record<Bucket | "pinned", string> = {
+const HEADINGS: Record<Section, string> = {
   pinned: "Pinned",
-  unread: "Needs you \u00B7 oldest first",
-  running: "Running \u00B7 oldest first",
-  inactive: "Inactive \u00B7 newest first",
+  unread: "Needs you",
+  running: "Running",
+  inactive: "Inactive",
 };
 
 const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "ui-monospace, Menlo, Consolas, monospace" });
@@ -713,7 +714,9 @@ export function TriageList({
                 />
               ) : null}
               {prefs.groupHeadings && !searching && (hostChanged || previousSection !== section) ? (
-                <Text style={styles.heading}>{HEADINGS[section]}</Text>
+                <Text style={styles.heading}>
+                  {section === "pinned" ? HEADINGS.pinned : `${HEADINGS[section]} \u00B7 ${prefs.sectionSort[section]} first`}
+                </Text>
               ) : null}
               <TriageRowView
                 row={row}

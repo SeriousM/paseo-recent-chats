@@ -1,5 +1,5 @@
 // Pure triage rules. No React, no SDK imports: unit-testable and Hermes-safe.
-import { SECTIONS, type Section } from "../shared/sections";
+import { DEFAULT_SECTION_SORT, SECTIONS, type Section, type SortDirection } from "../shared/sections";
 
 export type AttentionReason = "finished" | "error" | "permission";
 export type AgentStatus = "initializing" | "idle" | "running" | "error" | "closed";
@@ -128,6 +128,8 @@ export interface TriageOptions {
   hostOrder?: readonly string[];
   /** Order of the sections in `rows` and `all`. Default: pinned, unread, running, inactive. */
   sectionOrder?: readonly Section[];
+  /** Order of the chats inside each section. Default: oldest first, Inactive newest first. */
+  sectionSort?: Readonly<Record<Section, SortDirection>>;
 }
 
 export function buildTriage(
@@ -137,7 +139,7 @@ export function buildTriage(
   now: number,
   options: TriageOptions = {},
 ): TriageResult {
-  if (!options.groupByHost) return triageOne(chats, overlay, limits, now, options.sectionOrder);
+  if (!options.groupByHost) return triageOne(chats, overlay, limits, now, options);
 
   const byHost = new Map<string, ChatInput[]>();
   for (const chat of chats) {
@@ -166,7 +168,7 @@ export function buildTriage(
     worstUnread: null,
   };
   for (const hostId of hostIds) {
-    const part = triageOne(byHost.get(hostId) ?? [], overlay, limits, now, options.sectionOrder);
+    const part = triageOne(byHost.get(hostId) ?? [], overlay, limits, now, options);
     merged.rows.push(...part.rows);
     merged.all.push(...part.all);
     merged.pinned += part.pinned;
@@ -189,7 +191,7 @@ function triageOne(
   overlay: Overlay,
   limits: TriageLimits,
   now: number,
-  sectionOrder: readonly Section[] = SECTIONS,
+  { sectionOrder = SECTIONS, sectionSort = DEFAULT_SECTION_SORT }: TriageOptions,
 ): TriageResult {
   const unread: TriageRow[] = [];
   const running: TriageRow[] = [];
@@ -243,11 +245,15 @@ function triageOne(
     if (pinnedAt !== undefined) pinned.push({ row, at: pinnedAt });
   }
 
-  unread.sort((a, b) => compare(a, b, 1));
-  running.sort((a, b) => compare(a, b, 1));
-  inactive.sort((a, b) => compare(a, b, -1));
+  const sign = (section: Section): 1 | -1 => (sectionSort[section] === "oldest" ? 1 : -1);
+  unread.sort((a, b) => compare(a, b, sign("unread")));
+  running.sort((a, b) => compare(a, b, sign("running")));
+  inactive.sort((a, b) => compare(a, b, sign("inactive")));
 
-  pinned.sort((a, b) => a.at - b.at || a.row.hostId.localeCompare(b.row.hostId) || a.row.agentId.localeCompare(b.row.agentId));
+  pinned.sort(
+    (a, b) =>
+      (a.at - b.at) * sign("pinned") || a.row.hostId.localeCompare(b.row.hostId) || a.row.agentId.localeCompare(b.row.agentId),
+  );
   const pinnedRows = pinned.map((entry) => entry.row);
 
   // Caps and the inactive window apply to chats that are not pinned; a pinned chat is always listed.
