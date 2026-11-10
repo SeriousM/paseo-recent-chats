@@ -15,7 +15,7 @@ export function markUnread(overlay: Overlay, key: string, now: number): Overlay 
   return { ...overlay, [key]: { ...overlay[key], unreadAt: now } };
 }
 
-/** Pin a chat: it is listed first until unpinned. Pinning an already pinned chat keeps its place. */
+/** Pin a chat: it is listed in the Pinned section until unpinned. Pinning an already pinned chat keeps its place. */
 export function pinChat(overlay: Overlay, key: string, now: number): Overlay {
   if (overlay[key]?.pinnedAt !== undefined) return overlay;
   return { ...overlay, [key]: { ...overlay[key], pinnedAt: now } };

@@ -29,7 +29,7 @@ The settings screen, where every row item can be shown, reordered, split over li
   one chip groups rows per host.
 - Full list screen, a cog that opens the settings, and a Command Center item.
 - Settings: choose, reorder, split over any number of lines and set the length of every row item, with a
-  live preview; list limits; the hover card with the full names and its transparency.
+  live preview; list limits; the order of the sections; the hover card with the full names and its transparency.
 
 ## Install
 

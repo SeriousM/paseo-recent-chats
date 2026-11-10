@@ -46,7 +46,7 @@ export interface RecentsStore {
   setHosts(hosts: readonly PluginHostSummary[]): void;
   markRead(keys: readonly string[]): void;
   markUnread(key: string): void;
-  /** Pin or unpin a chat. Pinned chats are listed first. */
+  /** Pin or unpin a chat. Pinned chats get their own section (first by default). */
   setPinned(key: string, pinned: boolean): void;
   /** Change view preferences. Applied at once, then saved to every host that runs this plugin. */
   updatePrefs(patch: Partial<Prefs>): void;

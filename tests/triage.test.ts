@@ -10,6 +10,7 @@ import {
   type Overlay,
   type TriageLimits,
 } from "../client/triage";
+import { prefsSettings } from "../shared/settings";
 
 const NOW = Date.UTC(2026, 10, 5, 12, 0, 0);
 const MIN = 60_000;
@@ -51,6 +52,35 @@ const attention = (minutesAgo: number, reason: "finished" | "error" | "permissio
 });
 
 const ids = (rows: { agentId: string }[]) => rows.map((row) => row.agentId);
+
+describe("section order", () => {
+  const chats = [
+    chat("idle"),
+    chat("run", { status: "running", startedAt: ago(2 * MIN) }),
+    chat("new", { attention: attention(1) }),
+    chat("pin"),
+  ];
+  const overlay: Overlay = { "h1:pin": { pinnedAt: ago(1 * MIN) } };
+
+  it("lists the sections in the chosen order, in the capped list and in all", () => {
+    const result = buildTriage(chats, overlay, limits, NOW, { sectionOrder: ["inactive", "running", "unread", "pinned"] });
+    expect(ids(result.rows)).toEqual(["idle", "run", "new", "pin"]);
+    expect(ids(result.all)).toEqual(["idle", "run", "new", "pin"]);
+  });
+
+  it("keeps pinned, needs you, running, inactive without a chosen order, also per host", () => {
+    expect(ids(buildTriage(chats, overlay, limits, NOW).rows)).toEqual(["pin", "new", "run", "idle"]);
+    const grouped = buildTriage(chats, overlay, limits, NOW, { groupByHost: true, sectionOrder: ["running", "pinned", "unread", "inactive"] });
+    expect(ids(grouped.rows)).toEqual(["run", "pin", "new", "idle"]);
+  });
+
+  it("accepts only an order naming every section once, and defaults the rest", () => {
+    const schema = prefsSettings.schema;
+    expect(schema.parse({}).sectionOrder).toEqual(["pinned", "unread", "running", "inactive"]);
+    expect(schema.safeParse({ sectionOrder: ["pinned", "pinned", "running", "inactive"] }).success).toBe(false);
+    expect(schema.safeParse({ sectionOrder: ["pinned", "unread", "running"] }).success).toBe(false);
+  });
+});
 
 describe("buckets and ordering", () => {
   it("orders oldest unread, oldest running, newest inactive", () => {

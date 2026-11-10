@@ -1,6 +1,7 @@
 import { defineSettings } from "@getpaseo/plugin";
 import { z } from "zod";
 import { DEFAULT_LAYOUT, rowTokenSchema } from "./layout";
+import { SECTIONS } from "./sections";
 
 /**
  * User-facing view options. Every host that runs this plugin keeps a copy, and the client writes each
@@ -21,6 +22,13 @@ export const prefsSettings = defineSettings({
     unreadExpiryDays: z.number().int().min(1).max(365).default(7),
     groupHeadings: z.boolean().default(true),
     sidebarExpanded: z.boolean().default(true),
+    /** Order of the Pinned, Needs you, Running and Inactive sections; each listed exactly once. */
+    sectionOrder: z
+      .array(z.enum(SECTIONS))
+      .refine((order) => order.length === SECTIONS.length && SECTIONS.every((section) => order.includes(section)), {
+        message: "every section exactly once",
+      })
+      .default(() => [...SECTIONS]),
     /** Share of the window height the sidebar list takes, in percent. Phone drawer and wide sidebar apart. */
     sidebarHeightPhone: z.number().int().min(15).max(85).default(40),
     sidebarHeightDesktop: z.number().int().min(15).max(85).default(50),

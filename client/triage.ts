@@ -1,4 +1,5 @@
 // Pure triage rules. No React, no SDK imports: unit-testable and Hermes-safe.
+import { SECTIONS, type Section } from "../shared/sections";
 
 export type AttentionReason = "finished" | "error" | "permission";
 export type AgentStatus = "initializing" | "idle" | "running" | "error" | "closed";
@@ -30,7 +31,7 @@ export interface ChatInput {
 export type OverlayEntry = {
   unreadAt?: number;
   dismissedAt?: number;
-  /** Set while the chat is pinned: it is listed first, whatever its state. */
+  /** Set while the chat is pinned: it is listed in the Pinned section, whatever its state. */
   pinnedAt?: number;
 }
 export type Overlay = Readonly<Record<string, OverlayEntry>>;
@@ -56,7 +57,7 @@ export interface TriageRow {
   title: string | null;
   provider: string;
   bucket: Bucket;
-  /** Pinned chats are listed first, in the order they were pinned. `bucket` and `led` still show their state. */
+  /** Pinned chats form their own section, in the order they were pinned. `bucket` and `led` still show their state. */
   pinned: boolean;
   led: Led;
   /** Value the bucket sorts on, epoch ms. */
@@ -125,6 +126,8 @@ export interface TriageOptions {
   groupByHost?: boolean;
   /** Host order for grouped output (serverIds). Hosts not listed follow, by label. */
   hostOrder?: readonly string[];
+  /** Order of the sections in `rows` and `all`. Default: pinned, unread, running, inactive. */
+  sectionOrder?: readonly Section[];
 }
 
 export function buildTriage(
@@ -134,7 +137,7 @@ export function buildTriage(
   now: number,
   options: TriageOptions = {},
 ): TriageResult {
-  if (!options.groupByHost) return triageOne(chats, overlay, limits, now);
+  if (!options.groupByHost) return triageOne(chats, overlay, limits, now, options.sectionOrder);
 
   const byHost = new Map<string, ChatInput[]>();
   for (const chat of chats) {
@@ -163,7 +166,7 @@ export function buildTriage(
     worstUnread: null,
   };
   for (const hostId of hostIds) {
-    const part = triageOne(byHost.get(hostId) ?? [], overlay, limits, now);
+    const part = triageOne(byHost.get(hostId) ?? [], overlay, limits, now, options.sectionOrder);
     merged.rows.push(...part.rows);
     merged.all.push(...part.all);
     merged.pinned += part.pinned;
@@ -186,6 +189,7 @@ function triageOne(
   overlay: Overlay,
   limits: TriageLimits,
   now: number,
+  sectionOrder: readonly Section[] = SECTIONS,
 ): TriageResult {
   const unread: TriageRow[] = [];
   const running: TriageRow[] = [];
@@ -253,12 +257,19 @@ function triageOne(
   const windowStart = now - limits.inactiveWindowDays * DAY_MS;
   const looseInactive = loose(inactive).filter((row) => row.sortAt >= windowStart);
 
-  const rows = [
-    ...pinnedRows,
-    ...looseUnread.slice(0, limits.maxUnread),
-    ...looseRunning.slice(0, limits.maxRunning),
-    ...looseInactive.slice(0, limits.maxInactive),
-  ];
+  const shownBy: Record<Section, TriageRow[]> = {
+    pinned: pinnedRows,
+    unread: looseUnread.slice(0, limits.maxUnread),
+    running: looseRunning.slice(0, limits.maxRunning),
+    inactive: looseInactive.slice(0, limits.maxInactive),
+  };
+  const allBy: Record<Section, TriageRow[]> = {
+    pinned: pinnedRows,
+    unread: looseUnread,
+    running: looseRunning,
+    inactive: loose(inactive),
+  };
+  const rows = sectionOrder.flatMap((section) => shownBy[section]);
 
   let worstUnread: Led | null = null;
   for (const row of unread) {
@@ -267,7 +278,7 @@ function triageOne(
 
   return {
     rows,
-    all: [...pinnedRows, ...loose(unread), ...loose(running), ...loose(inactive)],
+    all: sectionOrder.flatMap((section) => allBy[section]),
     counts: { unread: unread.length, running: running.length, inactive: inactive.length },
     pinned: pinnedRows.length,
     hidden: {

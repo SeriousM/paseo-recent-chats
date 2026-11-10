@@ -138,7 +138,7 @@ export function TooltipPreview({
   );
 }
 
-function IconButton({
+export function IconButton({
   theme,
   compact,
   label,

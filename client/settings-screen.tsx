@@ -4,12 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import type { RowToken } from "../shared/layout";
 import type { Prefs } from "../shared/settings";
-import { LayoutEditor, LayoutPreview, TooltipPreview } from "./layout-editor";
+import type { Section } from "../shared/sections";
+import { IconButton, LayoutEditor, LayoutPreview, TooltipPreview } from "./layout-editor";
 import { Slider } from "./slider";
 import { sameLayout } from "./row-layout";
 import { useRecents } from "./use-recents";
 
 type NumericPref = "maxUnread" | "maxRunning" | "maxInactive" | "inactiveWindowDays" | "unreadExpiryDays";
+
+const SECTION_LABELS: Record<Section, string> = {
+  pinned: "Pinned",
+  unread: "Needs you",
+  running: "Running",
+  inactive: "Inactive",
+};
 
 /** Preset choices keep the screen usable on a phone and make invalid input impossible. */
 function options(presets: readonly number[], current: number, unit = "") {
@@ -138,6 +146,38 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
           {numeric("maxInactive", "Inactive chats shown", "Most recent first. 0 hides them.", [0, 2, 3, 4, 5, 8, 10, 15])}
           {numeric("inactiveWindowDays", "Inactive window", "Chats older than this stay out of the short list.", [3, 7, 14, 30, 90], " days")}
           {numeric("unreadExpiryDays", "Unread expiry", "Unread chats waiting longer count as inactive.", [1, 3, 7, 14, 30], " days")}
+        </SettingsCard>
+      </SettingsSection>
+      <SettingsSection title="Section order">
+        <SettingsCard>
+          {prefs.sectionOrder.map((section, index) => {
+            const move = (by: -1 | 1) => {
+              const next = [...prefs.sectionOrder];
+              [next[index], next[index + by]] = [next[index + by] ?? section, section];
+              change({ sectionOrder: next });
+            };
+            return (
+              <View key={section} style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12 }}>
+                <Text style={{ color: theme.colors.foreground, fontSize: 14, flex: 1 }}>{SECTION_LABELS[section]}</Text>
+                <IconButton
+                  theme={theme}
+                  compact={screen.compact}
+                  label={`Move ${SECTION_LABELS[section]} up`}
+                  icon="ChevronUp"
+                  disabled={index === 0}
+                  onPress={() => move(-1)}
+                />
+                <IconButton
+                  theme={theme}
+                  compact={screen.compact}
+                  label={`Move ${SECTION_LABELS[section]} down`}
+                  icon="ChevronDown"
+                  disabled={index === prefs.sectionOrder.length - 1}
+                  onPress={() => move(1)}
+                />
+              </View>
+            );
+          })}
         </SettingsCard>
       </SettingsSection>
       <SettingsSection title="Display">

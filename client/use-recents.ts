@@ -35,6 +35,7 @@ export function useRecents(): Recents {
       buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), {
         groupByHost: snapshot.prefs.groupByHost,
         hostOrder: snapshot.hosts.map((host) => host.id),
+        sectionOrder: snapshot.prefs.sectionOrder,
       }),
     [snapshot],
   );
