@@ -69,7 +69,7 @@ function createInboxContent(client: PluginClientContext) {
         onMarkRead={store.markRead}
         onMarkUnread={store.markUnread}
         onSetPinned={store.setPinned}
-        footerFirst
+        footer="first"
         showSettingsButton
         onShowAll={() => {
           close();

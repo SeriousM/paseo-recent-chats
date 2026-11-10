@@ -553,8 +553,12 @@ export interface TriageListProps {
   hideHostFilter?: boolean;
   /** Present when the list is capped; shows the hidden-count chips and the all-chats link. */
   onShowAll?: () => void;
-  /** Popups scroll as one unit, so the footer would be cut off below the fold: show it first instead. */
-  footerFirst?: boolean;
+  /**
+   * Where the footer (hidden-count chips, Mark all read, All chats) goes. "first": popups scroll as one
+   * unit, so a footer at the end would be cut off below the fold. "none"/"only": the caller renders the
+   * footer as a second TriageList outside its scroll area, so it stays at the bottom.
+   */
+  footer?: "first" | "last" | "none" | "only";
   /** The rows are search results: no group headings, no footer, host tag whenever several hosts are listed. */
   searching?: boolean;
   /** Adds a cog to the footer that opens the plugin settings. */
@@ -576,7 +580,7 @@ export function TriageList({
   onSetPinned,
   hideHostFilter = false,
   onShowAll,
-  footerFirst = false,
+  footer = "last",
   searching = false,
   showSettingsButton = false,
 }: TriageListProps) {
@@ -674,6 +678,8 @@ export function TriageList({
         ? "Loading chats\u2026"
         : "Nothing to look at.";
 
+  if (footer === "only") return footerNode;
+
   return (
     <View>
       {hosts.length >= 2 && !hideHostFilter ? (
@@ -687,7 +693,7 @@ export function TriageList({
           onToggleGroupByHost={onToggleGroupByHost}
         />
       ) : null}
-      {footerFirst ? footerNode : null}
+      {footer === "first" ? footerNode : null}
       {shown.length === 0 ? (
         <Text style={styles.muted}>{emptyText}</Text>
       ) : (
@@ -734,7 +740,7 @@ export function TriageList({
           {error}
         </Text>
       ))}
-      {footerFirst ? null : footerNode}
+      {footer === "last" ? footerNode : null}
     </View>
   );
 }

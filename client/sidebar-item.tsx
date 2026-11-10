@@ -5,7 +5,7 @@ import { PanResponder, Platform, Pressable, Text, useWindowDimensions, View, typ
 import { searchRows } from "./fuzzy";
 import { openPluginSettings } from "./runtime";
 import { SearchBox } from "./search-box";
-import { HostFilter, ledColor, TriageList } from "./triage-list";
+import { HostFilter, ledColor, TriageList, type TriageListProps } from "./triage-list";
 import { openChat, useRecents } from "./use-recents";
 import { attachVerticalDrag } from "./web";
 
@@ -87,6 +87,22 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   useEffect(() => attachVerticalDrag(gripNode.current, drag), [drag, expanded]);
 
   const toggle = () => store.updatePrefs({ sidebarExpanded: !expanded });
+  const listProps: TriageListProps = {
+    theme,
+    compact: layout.compact,
+    result,
+    rows: searching ? matches.slice(0, SEARCH_LIMIT) : undefined,
+    snapshot,
+    onToggleHost: store.toggleHost,
+    onToggleGroupByHost: () => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost }),
+    searching,
+    onOpen: (row) => open(row),
+    onMarkRead: store.markRead,
+    onMarkUnread: store.markUnread,
+    onSetPinned: store.setPinned,
+    hideHostFilter: true,
+    onShowAll: () => openScreen({ screenId: RECENT_SCREEN_ID, params: searching ? { q: query } : {} }),
+  };
 
   const cog = layout.compact ? 36 : 24;
   const summary = (
@@ -153,23 +169,10 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
               <SearchBox theme={theme} compact={layout.compact} value={query} onChange={setQuery} autoFocus />
             </View>
           ) : null}
-          <TriageList
-            theme={theme}
-            compact={layout.compact}
-            result={result}
-            rows={searching ? matches.slice(0, SEARCH_LIMIT) : undefined}
-            snapshot={snapshot}
-            onToggleHost={store.toggleHost}
-            onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
-            searching={searching}
-            onOpen={open}
-            onMarkRead={store.markRead}
-            onMarkUnread={store.markUnread}
-            onSetPinned={store.setPinned}
-            hideHostFilter
-            onShowAll={() => openScreen({ screenId: RECENT_SCREEN_ID, params: searching ? { q: query } : {} })}
-          />
+          <TriageList {...listProps} footer="none" />
           </ScrollView>
+          {/* Outside the scroll area, so the chips, Mark all read and All chats stay at the bottom of the list. */}
+          <TriageList {...listProps} footer="only" />
           <View
             ref={gripNode}
             {...grip.panHandlers}
