@@ -12,6 +12,7 @@ import { clearDevicePrefs, readDevicePrefs, readHostColorNames } from "./web";
 import { agentLabel } from "./format";
 import { DEFAULT_PREFS, parseStoredPrefs, toggleHiddenHost, withNormalizedLayout } from "./prefs";
 import { overlaySettings, prefsSettings, type Prefs } from "../shared/settings";
+import type { Section } from "../shared/sections";
 
 export type Rpc = PluginCommandCapabilities["rpc"];
 
@@ -52,6 +53,8 @@ export interface RecentsStore {
   updatePrefs(patch: Partial<Prefs>): void;
   /** Switch one host on or off in the host filter. */
   toggleHost(hostId: string): void;
+  /** Switch a section between oldest first and newest first. */
+  toggleSort(section: Section): void;
   /** Stops observation and drops every listener. Called when the plugin unloads. */
   dispose(): void;
 }
@@ -671,6 +674,8 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     updatePrefs,
     toggleHost: (hostId) =>
       updatePrefs({ hiddenHosts: toggleHiddenHost(prefs.hiddenHosts, hostId, hosts.map((host) => host.serverId)) }),
+    toggleSort: (section) =>
+      updatePrefs({ sectionSort: { ...prefs.sectionSort, [section]: prefs.sectionSort[section] === "oldest" ? "newest" : "oldest" } }),
     dispose() {
       if (stopTimer !== undefined) {
         clearTimeout(stopTimer);

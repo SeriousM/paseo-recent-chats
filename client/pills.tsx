@@ -61,6 +61,7 @@ function createInboxContent(client: PluginClientContext) {
         snapshot={snapshot}
         onToggleHost={store.toggleHost}
         onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
+        onToggleSort={store.toggleSort}
         currentKey={props.context === "agent" ? chatKey(host.id, props.agentId) : null}
         onOpen={(row) => {
           close();

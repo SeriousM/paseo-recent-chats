@@ -543,6 +543,8 @@ export interface TriageListProps {
   onToggleHost(hostId: string): void;
   /** Switches grouping of rows by host on or off. */
   onToggleGroupByHost(): void;
+  /** Switches a section between oldest first and newest first (the icon in its heading). */
+  onToggleSort(section: Section): void;
   currentKey?: string | null;
   onOpen(row: TriageRow): void;
   onMarkRead(keys: readonly string[]): void;
@@ -574,6 +576,7 @@ export function TriageList({
   snapshot,
   onToggleHost,
   onToggleGroupByHost,
+  onToggleSort,
   currentKey,
   onOpen,
   onMarkRead,
@@ -719,16 +722,21 @@ export function TriageList({
                 />
               ) : null}
               {prefs.groupHeadings && !searching && (hostChanged || previousSection !== section) ? (
-                <View
-                  style={styles.headingRow}
-                  accessibilityLabel={`${HEADINGS[section]}, ${prefs.sectionSort[section]} first`}
-                >
-                  {/* Same icons as the sort toggle in the settings. */}
-                  <Icon
-                    name={prefs.sectionSort[section] === "oldest" ? "ArrowDownNarrowWide" : "ArrowDownWideNarrow"}
-                    size={12}
-                    color={theme.colors.foregroundMuted}
-                  />
+                <View style={styles.headingRow}>
+                  {/* Same icons as the sort toggle in the settings; pressing it switches the direction. */}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${HEADINGS[section]}, ${prefs.sectionSort[section]} first. Switch.`}
+                    onPress={() => onToggleSort(section)}
+                    hitSlop={compact ? 12 : 6}
+                    style={({ pressed }) => ({ padding: 2, borderRadius: 4, opacity: pressed ? 0.5 : 1 })}
+                  >
+                    <Icon
+                      name={prefs.sectionSort[section] === "oldest" ? "ArrowDownNarrowWide" : "ArrowDownWideNarrow"}
+                      size={compact ? 14 : 12}
+                      color={theme.colors.foregroundMuted}
+                    />
+                  </Pressable>
                   <Text style={styles.heading}>{HEADINGS[section]}</Text>
                 </View>
               ) : null}

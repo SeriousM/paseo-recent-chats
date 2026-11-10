@@ -95,6 +95,7 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
     snapshot,
     onToggleHost: store.toggleHost,
     onToggleGroupByHost: () => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost }),
+    onToggleSort: store.toggleSort,
     searching,
     onOpen: (row) => open(row),
     onMarkRead: store.markRead,

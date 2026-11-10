@@ -60,6 +60,7 @@ export function RecentScreen({ theme, layout, navigation, params }: PluginScreen
           snapshot={snapshot}
           onToggleHost={store.toggleHost}
           onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
+          onToggleSort={store.toggleSort}
           searching={searching}
           onOpen={(row) => openChat(store, row, navigation ? { navigation } : {})}
           onMarkRead={store.markRead}
