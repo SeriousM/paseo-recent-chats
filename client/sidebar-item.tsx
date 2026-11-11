@@ -7,6 +7,8 @@ import { openPluginSettings } from "./runtime";
 import { SearchBox } from "./search-box";
 import { HostFilter, ledColor, TriageList, type TriageListProps } from "./triage-list";
 import { openChat, useRecents } from "./use-recents";
+import { ProjectsView, ViewModeBar } from "./projects-view";
+import { useViewMode } from "./view-mode";
 import { attachVerticalDrag } from "./web";
 
 export const RECENT_SCREEN_ID = "recent";
@@ -105,6 +107,8 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
     hideHostFilter: true,
     onShowAll: () => openScreen({ screenId: RECENT_SCREEN_ID, params: searching ? { q: query } : {} }),
   };
+  // Projects mode (a trial, kept on this device); search results are always the plain list.
+  const projects = useViewMode().view === "projects" && !searching;
 
   const cog = layout.compact ? 36 : 24;
   const summary = (
@@ -156,6 +160,7 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
             showsVerticalScrollIndicator={false}
             style={{ height: listHeight }}
           >
+          <ViewModeBar theme={theme} compact={layout.compact} />
           <HostFilter
             theme={theme}
             compact={layout.compact}
@@ -171,10 +176,28 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
               <SearchBox theme={theme} compact={layout.compact} value={query} onChange={setQuery} autoFocus />
             </View>
           ) : null}
-          <TriageList {...listProps} footer="none" />
+          {projects ? (
+            <ProjectsView
+              snapshot={snapshot}
+              rows={result.all}
+              rowShared={{
+                theme,
+                compact: layout.compact,
+                fullNames: snapshot.prefs.showTooltip,
+                cardTransparency: snapshot.prefs.tooltipTransparency,
+                onOpen: open,
+                onMarkRead: store.markRead,
+                onMarkUnread: store.markUnread,
+                onSetPinned: store.setPinned,
+                onRename: store.renameChat,
+              }}
+            />
+          ) : (
+            <TriageList {...listProps} footer="none" />
+          )}
           </ScrollView>
           {/* Outside the scroll area, so the chips, Mark all read and All chats stay at the bottom of the list. */}
-          <TriageList {...listProps} footer="only" />
+          {projects ? null : <TriageList {...listProps} footer="only" />}
           <View
             ref={gripNode}
             {...grip.panHandlers}

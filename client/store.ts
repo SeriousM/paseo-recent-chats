@@ -25,6 +25,19 @@ export interface UpdateCheck {
   failed: boolean;
 }
 
+/** A workspace as the projects view shows it. */
+export interface WorkspaceInfo {
+  hostId: string;
+  hostLabel: string;
+  id: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+  kind: "directory" | "worktree" | "checkout" | "local_checkout";
+  branch: string;
+  diff: { additions: number; deletions: number } | null;
+}
+
 export interface HostChip {
   id: string;
   label: string;
@@ -34,6 +47,8 @@ export interface HostChip {
 
 export interface StoreSnapshot {
   chats: readonly ChatInput[];
+  /** Workspaces of the listed hosts, for the projects view. */
+  workspaces: readonly WorkspaceInfo[];
   overlay: Overlay;
   prefs: Prefs;
   /** Hosts whose chats are listed: online and not switched off in the host filter. */
@@ -208,6 +223,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
 
   function buildSnapshot(): StoreSnapshot {
     const chats: ChatInput[] = [];
+    const workspaces: WorkspaceInfo[] = [];
     let loading = false;
     const errors: string[] = [];
     for (const host of hosts) {
@@ -232,6 +248,20 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
       for (const agent of data.agents) {
         if (!isDelegated(agent.labels)) chats.push(toChat(host, agent, names));
       }
+      for (const workspace of data.workspaces) {
+        if (workspace.internal || workspace.background) continue;
+        workspaces.push({
+          hostId: host.serverId,
+          hostLabel: host.label,
+          id: workspace.id,
+          projectId: workspace.projectId,
+          projectName: workspace.projectCustomName || workspace.projectDisplayName,
+          title: workspace.title || workspace.name,
+          kind: workspace.workspaceKind,
+          branch: workspace.gitRuntime?.currentBranch ?? "",
+          diff: workspace.diffStat ?? null,
+        });
+      }
     }
     const label = (hostId: string) => hosts.find((host) => host.serverId === hostId)?.label ?? hostId;
     for (const [hostId, error] of hostErrors) errors.push(`${label(hostId)}: ${error}`);
@@ -240,6 +270,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     if (prefsError) errors.push(`Settings: ${prefsError}`);
     return {
       chats,
+      workspaces,
       overlay,
       prefs,
       hostCount: hosts.filter((host) => host.status === "online" && !prefs.hiddenHosts.includes(host.serverId))

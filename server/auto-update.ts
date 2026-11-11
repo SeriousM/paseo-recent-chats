@@ -3,6 +3,7 @@
 // run is started detached. A failed build keeps the installed version (Paseo's own guarantee).
 import { stat } from "node:fs/promises";
 import { dirname, sep } from "node:path";
+import { RELEASE_CHANNEL } from "../shared/channel";
 import { runCli, startCliDetached } from "./cli";
 
 /** The repository this plugin is published from; installations from elsewhere (a local folder) are left alone. */
@@ -48,6 +49,7 @@ export async function installedVersion(): Promise<InstalledVersion | null> {
 
 /** Checks once and starts the update when a newer commit exists. Resolves to what happened, for the log. */
 export async function updateIfBehind(): Promise<string> {
+  if (RELEASE_CHANNEL !== "main") return `trial build (${RELEASE_CHANNEL}); not updated automatically`;
   const ids = (await ownInstallations()).map((entry) => entry.id);
   if (!ids.length) return "not installed from GitHub; nothing to update";
   const notes: string[] = [];

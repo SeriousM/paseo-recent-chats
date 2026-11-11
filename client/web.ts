@@ -4,6 +4,7 @@ import { parseHostColorNames } from "./format";
 
 declare const localStorage: {
   getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
   removeItem(key: string): void;
 };
 
@@ -43,6 +44,26 @@ export function clearDevicePrefs(): void {
     localStorage.removeItem(PREFS_KEY);
   } catch {
     // Blocked storage: the copy stays, and is ignored because the hosts already hold newer settings.
+  }
+}
+
+/** A value kept on this device (web and desktop); null on phones or when storage is blocked. */
+export function readDeviceValue(key: string): string | null {
+  if (Platform.OS !== "web") return null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** Stores a value on this device; a no-op on phones or when storage is blocked. */
+export function writeDeviceValue(key: string, value: string): void {
+  if (Platform.OS !== "web") return;
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Blocked storage: the value lasts until the app restarts.
   }
 }
 
