@@ -456,7 +456,6 @@ export function HostFilter({
   onToggle,
   groupByHost,
   onToggleGroupByHost,
-  search,
 }: {
   theme: PluginTheme;
   compact: boolean;
@@ -465,8 +464,6 @@ export function HostFilter({
   onToggle(hostId: string): void;
   groupByHost: boolean;
   onToggleGroupByHost(): void;
-  /** Search button at the right end of the row; the caller shows the search box while `open`. */
-  search?: { open: boolean; onToggle(): void };
 }) {
   const dark = isDark(theme.colors.surface0);
   return (
@@ -531,27 +528,6 @@ export function HostFilter({
           </Pressable>
         );
       }) : null}
-      {search ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={search.open ? "Close search" : "Search chats"}
-          accessibilityState={{ expanded: search.open }}
-          onPress={search.onToggle}
-          style={{
-            marginLeft: "auto",
-            width: compact ? 36 : 24,
-            height: compact ? 36 : 24,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: search.open ? theme.colors.accent : theme.colors.border,
-            backgroundColor: search.open ? theme.colors.surface2 : "transparent",
-          }}
-        >
-          <Icon name="Search" size={12} color={search.open ? theme.colors.accent : theme.colors.foregroundMuted} />
-        </Pressable>
-      ) : null}
     </View>
   );
 }

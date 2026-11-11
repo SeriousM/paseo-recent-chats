@@ -4,7 +4,7 @@
 // the mode are kept on this device (view-mode.ts). Chat pins are the synced ones every list shares.
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/ui";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { RowTokenId } from "../shared/layout";
 import { useOpenChat } from "./open-chat";
@@ -14,9 +14,9 @@ import type { StoreSnapshot, WorkspaceInfo } from "./store";
 import type { TriageRow } from "./triage";
 import { hostColors } from "./format";
 import { HostHeading, isDark, LedDot, TriageRowView, type RowViewProps } from "./triage-list";
-import { SearchBox } from "./search-box";
-import { searchTree, type TreeHit } from "./tree-search";
-import { revealNodes, toggleNode, togglePin, updateViewMode, useViewMode } from "./view-mode";
+import { scoreRow } from "./fuzzy";
+import { filterTree } from "./tree-search";
+import { toggleNode, togglePin, updateViewMode, useViewMode } from "./view-mode";
 
 /** Chats listed per workspace before "+N older"; chats that need you, run or are pinned always show. */
 const CHATS_PER_WORKSPACE = 3;
@@ -33,9 +33,44 @@ const KIND_LABEL: Partial<Record<WorkspaceInfo["kind"], string>> = {
   local_checkout: "checkout",
 };
 
-/** The Projects / Triage switch and the Active only toggle, above the sidebar list. */
-export function ViewModeBar({ theme, compact }: { theme: PluginTheme; compact: boolean }) {
+/**
+ * The first row of the sidebar list: Triage / Projects, the Hosts dropdown (which hosts are listed and
+ * whether rows group by host), Active only (Projects), and the search button.
+ */
+export function ViewModeBar({
+  theme,
+  compact,
+  showHosts,
+  hostsOpen,
+  onHosts,
+  searchOpen,
+  onSearch,
+}: {
+  theme: PluginTheme;
+  compact: boolean;
+  /** Two or more hosts are connected. */
+  showHosts: boolean;
+  hostsOpen: boolean;
+  onHosts(): void;
+  searchOpen: boolean;
+  onSearch(): void;
+}) {
   const mode = useViewMode();
+  const size = compact ? 36 : 26;
+  const toggle = (on: boolean) => ({
+    minHeight: size,
+    minWidth: size,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    flexDirection: "row" as const,
+    gap: 4,
+    paddingHorizontal: 6,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: on ? theme.colors.border : "transparent",
+    backgroundColor: on ? theme.colors.surface2 : "transparent",
+  });
+  const tone = (on: boolean) => (on ? theme.colors.foreground : theme.colors.foregroundMuted);
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4 }}>
       <View
@@ -61,12 +96,22 @@ export function ViewModeBar({ theme, compact }: { theme: PluginTheme; compact: b
               backgroundColor: mode.view === option ? theme.colors.surface2 : "transparent",
             }}
           >
-            <Text style={{ fontSize: 12, color: mode.view === option ? theme.colors.foreground : theme.colors.foregroundMuted }}>
-              {option === "projects" ? "Projects" : "Triage"}
-            </Text>
+            <Text style={{ fontSize: 12, color: tone(mode.view === option) }}>{option === "projects" ? "Projects" : "Triage"}</Text>
           </Pressable>
         ))}
       </View>
+      {showHosts ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Hosts: which hosts are listed, and grouping by host"
+          accessibilityState={{ expanded: hostsOpen }}
+          onPress={onHosts}
+          style={toggle(hostsOpen)}
+        >
+          <Icon name="Server" size={13} color={tone(hostsOpen)} />
+          <Icon name={hostsOpen ? "ChevronUp" : "ChevronDown"} size={11} color={tone(hostsOpen)} />
+        </Pressable>
+      ) : null}
       <View style={{ flex: 1 }} />
       {mode.view === "projects" ? (
         <Pressable
@@ -74,44 +119,21 @@ export function ViewModeBar({ theme, compact }: { theme: PluginTheme; compact: b
           accessibilityLabel="Active only: hide workspaces outside the inactive window"
           accessibilityState={{ selected: mode.activeOnly }}
           onPress={() => updateViewMode({ activeOnly: !mode.activeOnly })}
-          style={({ pressed }) => ({
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 4,
-            paddingHorizontal: 8,
-            minHeight: compact ? 36 : 26,
-            borderRadius: 7,
-            borderWidth: 1,
-            borderColor: mode.activeOnly ? theme.colors.border : "transparent",
-            opacity: pressed ? 0.6 : 1,
-          })}
+          style={toggle(mode.activeOnly)}
         >
-          <Icon name="ListFilter" size={13} color={mode.activeOnly ? theme.colors.foreground : theme.colors.foregroundMuted} />
-          <Text style={{ fontSize: 11.5, color: mode.activeOnly ? theme.colors.foreground : theme.colors.foregroundMuted }}>
-            Active only
-          </Text>
+          <Icon name="ListFilter" size={13} color={tone(mode.activeOnly)} />
+          <Text style={{ fontSize: 11.5, color: tone(mode.activeOnly) }}>Active</Text>
         </Pressable>
       ) : null}
-      {mode.view === "projects" ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={mode.groupHosts ? "Grouped by host. Show one list of projects" : "One list of projects. Group by host"}
-          accessibilityState={{ selected: mode.groupHosts }}
-          onPress={() => updateViewMode({ groupHosts: !mode.groupHosts })}
-          style={({ pressed }) => ({
-            width: compact ? 36 : 26,
-            height: compact ? 36 : 26,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 7,
-            borderWidth: 1,
-            borderColor: mode.groupHosts ? theme.colors.border : "transparent",
-            opacity: pressed ? 0.6 : 1,
-          })}
-        >
-          <Icon name="Server" size={13} color={mode.groupHosts ? theme.colors.foreground : theme.colors.foregroundMuted} />
-        </Pressable>
-      ) : null}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={searchOpen ? "Close search" : "Search"}
+        accessibilityState={{ expanded: searchOpen }}
+        onPress={onSearch}
+        style={toggle(searchOpen)}
+      >
+        <Icon name="Search" size={13} color={tone(searchOpen)} />
+      </Pressable>
     </View>
   );
 }
@@ -120,28 +142,22 @@ export function ProjectsView({
   snapshot,
   rows,
   rowShared,
-  reveal,
+  query,
 }: {
   snapshot: StoreSnapshot;
   rows: readonly TriageRow[];
   rowShared: RowShared;
-  /** Scrolls the list so `node` is in view. */
-  reveal(node: View): void;
+  /** Search text: the view is filtered to what matches, drawn the same way. */
+  query: string;
 }) {
   const { theme, compact } = rowShared;
   const { prefs } = snapshot;
   const mode = useViewMode();
   const openKey = useOpenChat();
   const [stripAll, setStripAll] = useState(false);
-  const [query, setQuery] = useState("");
-  /** Tree key of the node a search result jumped to; it scrolls into view and is marked briefly. */
-  const [focus, setFocus] = useState<string | null>(null);
-  useEffect(() => {
-    if (!focus) return;
-    const timer = setTimeout(() => setFocus(null), FOCUS_MS);
-    return () => clearTimeout(timer);
-  }, [focus]);
-  const toggled = useMemo(() => new Set(mode.toggled), [mode.toggled]);
+  const searching = query.trim().length > 0;
+  // While searching every match shows: folds are ignored.
+  const toggled = useMemo(() => (searching ? new Set<string>() : new Set(mode.toggled)), [searching, mode.toggled]);
   const pins = useMemo(() => new Set(mode.pins), [mode.pins]);
   const pinnedWorkspaces = useMemo(
     () => new Set(mode.pins.filter((pin) => pin.startsWith("workspace:")).map((pin) => pin.slice("workspace:".length))),
@@ -185,11 +201,15 @@ export function ProjectsView({
       }),
     [rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects],
   );
-  const pinned = useMemo(() => pinnedTree(full, pinnedProjects), [full, pinnedProjects]);
-  const hits = useMemo(() => searchTree(query, full), [query, full]);
+  const pinned = useMemo(() => filterTree(pinnedTree(full, pinnedProjects), query), [full, pinnedProjects, query]);
+  // Searching looks through everything, also what "active only" and "+N older" hide.
+  const shownTree = useMemo(() => (searching ? filterTree(full, query) : tree), [searching, full, tree, query]);
 
   // Chats that wait for you or finished unseen, plus an opened one held in place (grey).
-  const urgent = useMemo(() => rows.filter((row) => row.bucket === "unread"), [rows]);
+  const urgent = useMemo(
+    () => rows.filter((row) => row.bucket === "unread" && (!searching || scoreRow(query, row) !== null)),
+    [rows, searching, query],
+  );
   const stripShown = stripAll ? urgent : urgent.slice(0, prefs.maxUnread);
   const stripLines = useMemo(() => visibleLines(prefs.layout), [prefs.layout]);
   const stripColumns = useMemo(() => columnChars(stripShown, prefs.layout), [stripShown, prefs.layout]);
@@ -221,28 +241,6 @@ export function ProjectsView({
     color: theme.colors.foregroundMuted,
   };
 
-  /** Jumps to a search result: a chat opens, a project or workspace is unfolded and scrolled to. */
-  const jump = (hit: TreeHit) => {
-    setQuery("");
-    if (hit.kind === "chat") {
-      rowShared.onOpen(hit.row);
-      return;
-    }
-    const host = tree.find((candidate) => candidate.hostId === hit.hostId);
-    const inTree = host?.projects.some((project) => project.key === hit.projectKey) ?? false;
-    const unfold = [`host:${hit.hostId}`, `project:${hit.projectKey}`];
-    const open: string[] = [];
-    if (!inTree) open.push(`quiet:${hit.hostId}`);
-    if (hit.kind === "workspace") {
-      unfold.push(`workspace:${hit.workspaceKey}`);
-      // A workspace that "active only" hides inside a shown project: show everything.
-      const shown = host?.projects.find((project) => project.key === hit.projectKey)?.workspaces.some((ws) => ws.key === hit.workspaceKey);
-      if (inTree && !shown) updateViewMode({ activeOnly: false });
-    }
-    revealNodes(unfold, open);
-    setFocus(hit.kind === "project" ? `project:${hit.projectKey}` : `workspace:${hit.workspaceKey}`);
-  };
-
   const flat = !mode.groupHosts;
   const renderProject = (project: TreeProject, prefix: string, inPinned: boolean) => (
     <ProjectNode
@@ -254,8 +252,6 @@ export function ProjectsView({
       compact={compact}
       toggled={toggled}
       hostTag={flat ? hostOfProject(project, snapshot) : undefined}
-      focused={!prefix && focus === `project:${project.key}`}
-      reveal={reveal}
     >
       {project.workspaces.map((workspace) => (
         <WorkspaceNode
@@ -268,8 +264,6 @@ export function ProjectsView({
           compact={compact}
           folded={toggled.has(`${prefix}workspace:${workspace.key}`)}
           showOlder={inPinned || toggled.has(`${prefix}older:${workspace.key}`)}
-          focused={!prefix && focus === `workspace:${workspace.key}`}
-          reveal={reveal}
           renderChat={(row) => chatRow(row, false)}
         />
       ))}
@@ -308,13 +302,6 @@ export function ProjectsView({
   const pinnedFolded = toggled.has("pinned");
   return (
     <View>
-      <View style={{ paddingHorizontal: 8, paddingBottom: 6 }}>
-        <SearchBox theme={theme} compact={compact} value={query} onChange={setQuery} placeholder="Search projects, workspaces, chats" />
-      </View>
-      {query.trim() ? (
-        <SearchResults theme={theme} compact={compact} hits={hits} onSelect={jump} />
-      ) : (
-        <>
           {urgent.length > 0 ? (
             <View
               style={{
@@ -356,20 +343,18 @@ export function ProjectsView({
                 </View>
               )}
             </View>
-          ) : (
+          ) : searching ? null : (
             <Text style={{ fontSize: 11.5, color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingBottom: 6 }}>
               Pin a project, workspace or chat to keep it here, with what is around it.
             </Text>
           )}
-          {renderHosts(tree, "", false)}
-        </>
-      )}
+          {renderHosts(shownTree, "", false)}
+          {searching && shownTree.length === 0 && pinned.length === 0 && urgent.length === 0 ? (
+            <Text style={{ fontSize: 12, color: theme.colors.foregroundMuted, padding: 12 }}>Nothing matches.</Text>
+          ) : null}
     </View>
   );
 }
-
-/** How long a jumped-to project or workspace stays marked. */
-const FOCUS_MS = 1_800;
 
 /** Host label and colour of a project (its key starts with the host id). */
 function hostOfProject(project: TreeProject, snapshot: StoreSnapshot): { label: string; colorName: string | undefined } {
@@ -419,57 +404,6 @@ function FlatProjects({
         </Pressable>
       ) : null}
       {quietOpen ? merged.quiet.map(renderProject) : null}
-    </View>
-  );
-}
-
-function SearchResults({
-  theme,
-  compact,
-  hits,
-  onSelect,
-}: {
-  theme: PluginTheme;
-  compact: boolean;
-  hits: readonly TreeHit[];
-  onSelect(hit: TreeHit): void;
-}) {
-  if (!hits.length) {
-    return <Text style={{ fontSize: 12, color: theme.colors.foregroundMuted, padding: 12 }}>Nothing matches.</Text>;
-  }
-  return (
-    <View>
-      {hits.map((hit) => (
-        <Pressable
-          key={hit.key}
-          accessibilityRole="button"
-          accessibilityLabel={`${hit.kind} ${hit.label}, ${hit.detail}`}
-          onPress={() => onSelect(hit)}
-          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            paddingHorizontal: 10,
-            minHeight: compact ? 48 : 34,
-            borderRadius: 7,
-            backgroundColor: pressed || hovered ? theme.colors.surface2 : "transparent",
-          })}
-        >
-          {hit.kind === "chat" ? (
-            <LedDot led={hit.row.led} theme={theme} size={9} />
-          ) : (
-            <Icon name={hit.kind === "project" ? "Folder" : "GitBranch"} size={13} color={theme.colors.foregroundMuted} />
-          )}
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={1} style={{ fontSize: 13, color: theme.colors.foreground }}>
-              {hit.label}
-            </Text>
-            <Text numberOfLines={1} style={{ fontSize: 11, color: theme.colors.foregroundMuted }}>
-              {`${hit.kind === "chat" ? "chat" : hit.kind} \u00B7 ${hit.detail}`}
-            </Text>
-          </View>
-        </Pressable>
-      ))}
     </View>
   );
 }
@@ -543,19 +477,6 @@ function HostNode({
   );
 }
 
-/** Marks a node a search jumped to, and scrolls it into view once it is laid out. */
-function useFocus(focused: boolean, reveal: (node: View) => void) {
-  const node = useRef<View>(null);
-  useEffect(() => {
-    if (!focused) return;
-    const timer = setTimeout(() => {
-      if (node.current) reveal(node.current);
-    }, 60);
-    return () => clearTimeout(timer);
-  }, [focused, reveal]);
-  return node;
-}
-
 function HostPill({ theme, label, colorName }: { theme: PluginTheme; label: string; colorName: string | undefined }) {
   const tint = hostColors(colorName, isDark(theme.colors.surface0));
   return (
@@ -575,8 +496,6 @@ function ProjectNode({
   compact,
   toggled,
   hostTag,
-  focused,
-  reveal,
   children,
 }: {
   project: TreeProject;
@@ -587,24 +506,13 @@ function ProjectNode({
   toggled: ReadonlySet<string>;
   /** Shown at the right when projects are not grouped by host. */
   hostTag: { label: string; colorName: string | undefined } | undefined;
-  focused: boolean;
-  reveal(node: View): void;
   children: ReactNode;
 }) {
   const key = `${prefix}project:${project.key}`;
   const folded = toggled.has(key);
-  const node = useFocus(focused, reveal);
   return (
-    <View ref={node} style={{ marginTop: 4 }}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingRight: 6,
-          borderRadius: 7,
-          backgroundColor: focused ? theme.colors.surface2 : "transparent",
-        }}
-      >
+    <View style={{ marginTop: 4 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6 }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${folded ? "Show" : "Hide"} ${project.name}`}
@@ -643,8 +551,6 @@ function WorkspaceNode({
   compact,
   folded,
   showOlder,
-  focused,
-  reveal,
   renderChat,
 }: {
   workspace: TreeWorkspace;
@@ -655,25 +561,14 @@ function WorkspaceNode({
   compact: boolean;
   folded: boolean;
   showOlder: boolean;
-  focused: boolean;
-  reveal(node: View): void;
   renderChat(row: TriageRow): ReactNode;
 }) {
   const chats = showOlder ? [...workspace.chats, ...workspace.older] : workspace.chats;
   const kind = info ? KIND_LABEL[info.kind] : undefined;
   const small = { fontSize: 10.5, color: theme.colors.foregroundMuted };
-  const node = useFocus(focused, reveal);
   return (
-    <View ref={node} style={{ marginBottom: 2 }}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingRight: 6,
-          borderRadius: 7,
-          backgroundColor: focused ? theme.colors.surface2 : "transparent",
-        }}
-      >
+    <View style={{ marginBottom: 2 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6 }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${folded ? "Show" : "Hide"} ${info?.title ?? workspace.name}`}

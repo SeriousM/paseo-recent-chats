@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildTree } from "../client/project-tree";
-import { searchTree } from "../client/tree-search";
+import { filterTree } from "../client/tree-search";
 import type { TriageRow } from "../client/triage";
 
 const NOW = Date.UTC(2026, 10, 12, 9);
@@ -26,24 +26,30 @@ function row(agentId: string, change: Partial<TriageRow> = {}): TriageRow {
   };
 }
 
+const idp = { workspaceId: "w2", workspaceName: "Resume IDP refactor", projectName: "Everything", branch: "chore/idp-refactor" };
 const tree = buildTree(
-  [
-    row("plugin changes"),
-    row("IDP P2 ExpoPlatform provider", { workspaceId: "w2", workspaceName: "Resume IDP refactor", projectName: "Everything", branch: "chore/idp-refactor" }),
-  ],
+  [row("plugin changes"), row("pill colours"), row("IDP P2 ExpoPlatform provider", idp), row("IDP P3 Aditus", idp)],
   [{ id: "h1", label: "desk" }],
-  { now: NOW, inactiveWindowDays: 14, activeOnly: false, chatsPerWorkspace: 99, pinnedWorkspaces: new Set() },
+  { now: NOW, inactiveWindowDays: 14, activeOnly: false, chatsPerWorkspace: 1, pinnedWorkspaces: new Set() },
 );
 
-describe("search over the projects tree", () => {
-  it("finds projects, workspaces and chats by fuzzy words", () => {
-    expect(searchTree("rcpp", tree).map((hit) => `${hit.kind}:${hit.label}`)).toContain("project:RecentChatsPaseoPlugin");
-    expect(searchTree("idp refac", tree)[0]).toMatchObject({ kind: "workspace", label: "Resume IDP refactor", projectKey: "h1:Everything" });
-    expect(searchTree("expo", tree)[0]).toMatchObject({ kind: "chat", label: "IDP P2 ExpoPlatform provider" });
+const shape = (hosts: ReturnType<typeof filterTree>) =>
+  hosts.flatMap((host) =>
+    host.projects.map((project) => `${project.name}: ${project.workspaces.map((ws) => `${ws.name}[${ws.chats.map((chat) => chat.agentId).sort().join(", ")}]`).join(" ")}`),
+  );
+
+describe("filtering the projects tree", () => {
+  it("keeps a matching chat with its parents only", () => {
+    expect(shape(filterTree(tree, "expo"))).toEqual(["Everything: Resume IDP refactor[IDP P2 ExpoPlatform provider]"]);
   });
 
-  it("finds a workspace by its branch, and nothing for an empty query", () => {
-    expect(searchTree("chore", tree).map((hit) => hit.kind)).toContain("workspace");
-    expect(searchTree("  ", tree)).toEqual([]);
+  it("keeps everything below a matching workspace or project, including what was behind +N older", () => {
+    expect(shape(filterTree(tree, "idp refac"))).toEqual(["Everything: Resume IDP refactor[IDP P2 ExpoPlatform provider, IDP P3 Aditus]"]);
+    expect(shape(filterTree(tree, "rcpp"))).toEqual(["RecentChatsPaseoPlugin: Plan recent chats[pill colours, plugin changes]"]);
+  });
+
+  it("finds a workspace by its branch, and leaves the tree alone for an empty query", () => {
+    expect(shape(filterTree(tree, "chore"))).toHaveLength(1);
+    expect(filterTree(tree, "  ")).toEqual(tree);
   });
 });

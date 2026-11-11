@@ -1,20 +1,17 @@
 import type { PluginSidebarItemProps } from "@getpaseo/plugin/client";
 import { Icon, ScrollView, SidebarRow } from "@getpaseo/plugin/client/ui";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Platform, Pressable, Text, useWindowDimensions, View, type ScrollView as NativeScrollView, type ViewStyle } from "react-native";
-import { searchRows } from "./fuzzy";
+import { scoreRow } from "./fuzzy";
 import { openPluginSettings } from "./runtime";
 import { SearchBox } from "./search-box";
 import { HostFilter, ledColor, TriageList, type TriageListProps } from "./triage-list";
 import { openChat, useRecents } from "./use-recents";
 import { ProjectsView, ViewModeBar } from "./projects-view";
-import { useViewMode } from "./view-mode";
-import { attachVerticalDrag } from "./web";
+import { updateViewMode, useViewMode } from "./view-mode";
+import { attachVerticalDrag, attachWheelScroll } from "./web";
 
 export const RECENT_SCREEN_ID = "recent";
-
-/** Search results shown in the sidebar; the rest are reached through "All chats". */
-const SEARCH_LIMIT = 15;
 
 /**
  * The host sidebar stacks its items above a scrolling project list that takes whatever height is left.
@@ -39,19 +36,21 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   const expanded = snapshot.prefs.sidebarExpanded;
   const { unread, running } = result.counts;
   const { height: windowHeight } = useWindowDimensions();
-  // Projects mode has its own search over projects, workspaces and chats.
-  const projects = useViewMode().view === "projects";
-  const searching = !projects && showSearch && query.trim().length > 0;
+  const viewMode = useViewMode();
+  const projects = viewMode.view === "projects";
+  // Search filters what either view shows, drawn the same way.
+  const searchText = showSearch ? query : "";
+  const searching = searchText.trim().length > 0;
+  const [hostsOpen, setHostsOpen] = useState(false);
   const scroll = useRef<NativeScrollView>(null);
-  const scrollContent = useRef<View>(null);
-  /** Scrolls the list so a node (a project or workspace a search jumped to) is near the top. */
-  const reveal = useCallback((node: View) => {
-    const content = scrollContent.current;
-    if (!content) return;
-    node.measureLayout(content, (_x, y) => scroll.current?.scrollTo({ y: Math.max(0, y - 8), animated: true }), () => {});
-  }, []);
+  // The wheel scrolls the list even before the panel has been clicked once.
+  useEffect(() => attachWheelScroll(scroll.current), [expanded]);
 
-  const matches = useMemo(() => (searching ? searchRows(query, result.all) : []), [searching, query, result]);
+  // Triage: every matching chat, in its section, uncapped.
+  const matches = useMemo(
+    () => (searching ? result.all.filter((row) => scoreRow(searchText, row) !== null) : undefined),
+    [searching, searchText, result],
+  );
   const heightKey = layout.compact ? "sidebarHeightPhone" : "sidebarHeightDesktop";
   const savedPercent = snapshot.prefs[heightKey];
   // Percent while the grip is dragged; saved once on release so a drag is one settings write.
@@ -103,19 +102,18 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
     theme,
     compact: layout.compact,
     result,
-    rows: searching ? matches.slice(0, SEARCH_LIMIT) : undefined,
+    rows: matches,
     snapshot,
     onToggleHost: store.toggleHost,
     onToggleGroupByHost: () => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost }),
     onToggleSort: store.toggleSort,
-    searching,
     onOpen: (row) => open(row),
     onMarkRead: store.markRead,
     onMarkUnread: store.markUnread,
     onSetPinned: store.setPinned,
     onRename: store.renameChat,
     hideHostFilter: true,
-    onShowAll: () => openScreen({ screenId: RECENT_SCREEN_ID, params: searching ? { q: query } : {} }),
+    onShowAll: () => openScreen({ screenId: RECENT_SCREEN_ID, params: searching ? { q: searchText } : {} }),
   };
 
   const cog = layout.compact ? 36 : 24;
@@ -163,32 +161,51 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
       />
       {expanded ? (
         <View>
+          <ViewModeBar
+            theme={theme}
+            compact={layout.compact}
+            showHosts={snapshot.hosts.length >= 2}
+            hostsOpen={hostsOpen}
+            onHosts={() => setHostsOpen(!hostsOpen)}
+            searchOpen={showSearch}
+            onSearch={toggleSearch}
+          />
+          {hostsOpen && snapshot.hosts.length >= 2 ? (
+            <HostFilter
+              theme={theme}
+              compact={layout.compact}
+              hosts={snapshot.hosts}
+              hostColors={snapshot.hostColors}
+              onToggle={store.toggleHost}
+              groupByHost={projects ? viewMode.groupHosts : snapshot.prefs.groupByHost}
+              onToggleGroupByHost={() =>
+                projects
+                  ? updateViewMode({ groupHosts: !viewMode.groupHosts })
+                  : store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })
+              }
+            />
+          ) : null}
+          {showSearch ? (
+            <View style={{ paddingHorizontal: 8, paddingBottom: 4 }}>
+              <SearchBox
+                theme={theme}
+                compact={layout.compact}
+                value={query}
+                onChange={setQuery}
+                placeholder={projects ? "Filter projects, workspaces, chats" : "Filter chats"}
+                autoFocus
+              />
+            </View>
+          ) : null}
           <ScrollView
             ref={scroll}
             nestedScrollEnabled
             showsVerticalScrollIndicator={false}
             style={{ height: listHeight }}
           >
-          <View ref={scrollContent}>
-          <ViewModeBar theme={theme} compact={layout.compact} />
-          <HostFilter
-            theme={theme}
-            compact={layout.compact}
-            hosts={snapshot.hosts}
-            hostColors={snapshot.hostColors}
-            onToggle={store.toggleHost}
-            groupByHost={snapshot.prefs.groupByHost}
-            onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
-            search={projects ? undefined : { open: showSearch, onToggle: toggleSearch }}
-          />
-          {showSearch && !projects ? (
-            <View style={{ paddingHorizontal: 8, paddingBottom: 4 }}>
-              <SearchBox theme={theme} compact={layout.compact} value={query} onChange={setQuery} autoFocus />
-            </View>
-          ) : null}
           {projects ? (
             <ProjectsView
-              reveal={reveal}
+              query={searchText}
               snapshot={snapshot}
               rows={result.all}
               rowShared={{
@@ -206,10 +223,9 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
           ) : (
             <TriageList {...listProps} footer="none" />
           )}
-          </View>
           </ScrollView>
           {/* Outside the scroll area, so the chips, Mark all read and All chats stay at the bottom of the list. */}
-          {projects ? null : <TriageList {...listProps} footer="only" />}
+          {projects || searching ? null : <TriageList {...listProps} footer="only" />}
           <View
             ref={gripNode}
             {...grip.panHandlers}
@@ -233,17 +249,6 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
               }}
             />
           </View>
-          {searching && matches.length > SEARCH_LIMIT ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => openScreen({ screenId: RECENT_SCREEN_ID, params: { q: query } })}
-              style={{ paddingHorizontal: 12, paddingVertical: layout.compact ? 12 : 6 }}
-            >
-              <Text style={{ color: theme.colors.accent, fontSize: 12 }}>
-                {`+${matches.length - SEARCH_LIMIT} more matches in All chats`}
-              </Text>
-            </Pressable>
-          ) : null}
         </View>
       ) : null}
     </View>

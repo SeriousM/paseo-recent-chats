@@ -186,3 +186,47 @@ export function onEscapeKey(node: unknown, handler: () => void): () => void {
   document.addEventListener("keydown", listener, true);
   return () => document.removeEventListener("keydown", listener, true);
 }
+
+interface DomWheelEvent {
+  deltaY: number;
+  /** 0 pixels, 1 lines, 2 pages. */
+  deltaMode: number;
+  preventDefault(): void;
+  stopPropagation(): void;
+}
+
+interface DomScrollable {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+  addEventListener(type: "wheel", listener: (event: DomWheelEvent) => void, options: { passive: boolean }): void;
+  removeEventListener(type: "wheel", listener: (event: DomWheelEvent) => void): void;
+}
+
+function scrollableNode(scrollView: unknown): DomScrollable | null {
+  if (typeof scrollView !== "object" || scrollView === null || !("getScrollableNode" in scrollView)) return null;
+  const getter = scrollView.getScrollableNode;
+  const node: unknown = typeof getter === "function" ? getter.call(scrollView) : null;
+  return typeof node === "object" && node !== null && "scrollTop" in node && "addEventListener" in node ? (node as DomScrollable) : null;
+}
+
+/**
+ * Scrolls a React Native ScrollView by the mouse wheel on the web. Inside the app's sidebar the wheel
+ * otherwise reaches the list only after it has been clicked once. At either end the wheel is left to
+ * the page. Returns a cleanup; a no-op off the web.
+ */
+export function attachWheelScroll(scrollView: unknown): () => void {
+  if (Platform.OS !== "web") return () => {};
+  const node = scrollableNode(scrollView);
+  if (!node) return () => {};
+  const listener = (event: DomWheelEvent) => {
+    const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaMode === 2 ? event.deltaY * node.clientHeight : event.deltaY;
+    const next = Math.min(Math.max(0, node.scrollTop + delta), node.scrollHeight - node.clientHeight);
+    if (next === node.scrollTop) return;
+    node.scrollTop = next;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  node.addEventListener("wheel", listener, { passive: false });
+  return () => node.removeEventListener("wheel", listener);
+}
