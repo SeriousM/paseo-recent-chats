@@ -182,6 +182,16 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
           </View>
         </SettingsCard>
       </SettingsSection>
+      <SettingsSection title="Updates">
+        <SettingsCard>
+          <SettingsSwitch
+            label="Keep Recent Chats up to date"
+            hint="Every host that installed it from GitHub checks for a newer version a few minutes after it starts and every 6 hours, and installs it. Hosts that run it from a local folder are left alone."
+            value={prefs.autoUpdate}
+            onValueChange={(next) => change({ autoUpdate: next })}
+          />
+        </SettingsCard>
+      </SettingsSection>
       <SettingsSection title="Composer pills">
         <SettingsCard>
           <SettingsSwitch

@@ -41,6 +41,8 @@ export const prefsSettings = defineSettings({
         inactive: z.enum(["oldest", "newest"]).default(DEFAULT_SECTION_SORT.inactive),
       })
       .default(() => ({ ...DEFAULT_SECTION_SORT })),
+    /** Each host checks GitHub for a newer version of this plugin every few hours and installs it. */
+    autoUpdate: z.boolean().default(true),
     /** Share of the window height the sidebar list takes, in percent. Phone drawer and wide sidebar apart. */
     sidebarHeightPhone: z.number().int().min(15).max(85).default(40),
     sidebarHeightDesktop: z.number().int().min(15).max(85).default(50),
