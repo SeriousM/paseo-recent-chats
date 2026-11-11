@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** Everything a list row can show. Order, visibility, line and length are user settings. */
-export const ROW_TOKEN_IDS = ["host", "led", "project", "workspace", "title", "branch", "agent"] as const;
+export const ROW_TOKEN_IDS = ["host", "led", "project", "workspace", "title", "branch", "agent", "age"] as const;
 export type RowTokenId = (typeof ROW_TOKEN_IDS)[number];
 
 /** Upper bound that only keeps stored data sane; a row can have as many lines as it has items. */
@@ -26,6 +26,7 @@ export type RowToken = z.output<typeof rowTokenSchema>;
 /**
  * [host] [status light] [project 10] [workspace 10] [tab name]
  * [branch 24] [agent name]
+ * Age is off until switched on in the settings.
  */
 export const DEFAULT_LAYOUT: readonly RowToken[] = [
   { id: "host", enabled: true, line: 1, maxChars: 6, mono: false },
@@ -35,4 +36,5 @@ export const DEFAULT_LAYOUT: readonly RowToken[] = [
   { id: "title", enabled: true, line: 1, maxChars: 0, mono: false },
   { id: "branch", enabled: true, line: 2, maxChars: 24, mono: true },
   { id: "agent", enabled: true, line: 2, maxChars: 0, mono: false },
+  { id: "age", enabled: false, line: 2, maxChars: 0, mono: true },
 ];

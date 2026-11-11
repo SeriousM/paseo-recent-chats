@@ -29,6 +29,7 @@ const LABELS: Record<RowTokenId, string> = {
   title: "Tab name",
   branch: "Branch",
   agent: "Agent name",
+  age: "Age",
 };
 
 const HINTS: Record<RowTokenId, string> = {
@@ -39,6 +40,7 @@ const HINTS: Record<RowTokenId, string> = {
   title: "The chat's tab name.",
   branch: "Git branch of the workspace. Empty for folders that are not a repository.",
   agent: "Model the chat runs on, e.g. opus-5.5.",
+  age: "How long ago it started waiting (Needs you), its turn started (Running) or its last message (Inactive).",
 };
 
 const MONO_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "ui-monospace, Menlo, Consolas, monospace" });

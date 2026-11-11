@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentLabel } from "../client/format";
+import { agentLabel, formatAge } from "../client/format";
 import {
   columnChars,
   linesOf,
@@ -15,6 +15,7 @@ import {
   setMono,
   tokenMono,
   tokenText,
+  tokenValue,
   visibleLines,
 } from "../client/row-layout";
 import type { TriageRow } from "../client/triage";
@@ -46,11 +47,12 @@ function row(patch: Partial<TriageRow> = {}): TriageRow {
 }
 
 describe("default layout", () => {
-  it("is host, light, project, workspace, tab name on line 1 and branch, agent on line 2", () => {
+  it("is host, light, project, workspace, tab name on line 1 and branch, agent, age (off) on line 2", () => {
     const layout = resetLayout();
     expect(ids(tokensOfLine(layout, 1))).toEqual(["host", "led", "project", "workspace", "title"]);
-    expect(ids(tokensOfLine(layout, 2))).toEqual(["branch", "agent"]);
-    expect(layout.map((token) => token.maxChars)).toEqual([6, 0, 10, 10, 0, 24, 0]);
+    expect(ids(tokensOfLine(layout, 2))).toEqual(["branch", "agent", "age"]);
+    expect(layout.map((token) => token.maxChars)).toEqual([6, 0, 10, 10, 0, 24, 0, 0]);
+    expect(layout.filter((token) => !token.enabled).map((token) => token.id)).toEqual(["age"]);
   });
 
   it("returns copies, so editing a reset layout never changes the defaults", () => {
@@ -68,7 +70,7 @@ describe("normalizeLayout", () => {
       { id: "host", enabled: true, line: 1, maxChars: 6 },
     ];
     const layout = normalizeLayout(stored);
-    expect(ids(layout)).toEqual(["title", "host", "led", "project", "workspace", "branch", "agent"]);
+    expect(ids(layout)).toEqual(["title", "host", "led", "project", "workspace", "branch", "agent", "age"]);
     expect(layout.find((token) => token.id === "title")?.maxChars).toBe(0);
     expect(layout.filter((token) => !token.enabled).map((token) => token.id)).toEqual([
       "led",
@@ -76,6 +78,7 @@ describe("normalizeLayout", () => {
       "workspace",
       "branch",
       "agent",
+      "age",
     ]);
   });
 
@@ -88,6 +91,7 @@ describe("normalizeLayout", () => {
       { id: "workspace", enabled: true, line: 9, maxChars: 0 },
       { id: "branch", enabled: true, line: 9, maxChars: 0 },
       { id: "agent", enabled: true, line: 9, maxChars: 0 },
+      { id: "age", enabled: false, line: 9, maxChars: 0 },
     ]);
     expect(layout.map((token) => [token.id, token.line])).toEqual([
       ["host", 1],
@@ -97,6 +101,7 @@ describe("normalizeLayout", () => {
       ["workspace", 3],
       ["branch", 3],
       ["agent", 3],
+      ["age", 3],
     ]);
   });
 
@@ -135,22 +140,21 @@ describe("editing", () => {
   it("crosses into the neighbouring line at the edge of a line", () => {
     const down = moveToken(resetLayout(), "title", 1);
     expect(ids(tokensOfLine(down, 1))).toEqual(["host", "led", "project", "workspace"]);
-    expect(ids(tokensOfLine(down, 2))).toEqual(["title", "branch", "agent"]);
+    expect(ids(tokensOfLine(down, 2))).toEqual(["title", "branch", "agent", "age"]);
     const up = moveToken(resetLayout(), "branch", -1);
     expect(ids(tokensOfLine(up, 1))).toEqual(["host", "led", "project", "workspace", "title", "branch"]);
-    expect(ids(tokensOfLine(up, 2))).toEqual(["agent"]);
+    expect(ids(tokensOfLine(up, 2))).toEqual(["agent", "age"]);
   });
 
   it("leaves the very first and very last place alone", () => {
     expect(moveToken(resetLayout(), "host", -1)).toEqual(resetLayout());
-    expect(moveToken(resetLayout(), "agent", 1)).toEqual(resetLayout());
+    expect(moveToken(resetLayout(), "age", 1)).toEqual(resetLayout());
   });
 
   it("closes a line that becomes empty", () => {
-    let layout = moveToken(resetLayout(), "agent", -1);
-    layout = moveToken(layout, "branch", 1);
+    let layout = moveToken(resetLayout(), "branch", -1);
     layout = moveToken(layout, "agent", -1);
-    layout = moveToken(layout, "branch", -1);
+    layout = moveToken(layout, "age", -1);
     expect(lineCount(layout)).toBe(1);
     expect(new Set(layout.map((token) => token.line))).toEqual(new Set([1]));
   });
@@ -158,7 +162,7 @@ describe("editing", () => {
   it("places a token into any line at any position", () => {
     const layout = placeToken(resetLayout(), "title", 2, 1);
     expect(ids(tokensOfLine(layout, 1))).toEqual(["host", "led", "project", "workspace"]);
-    expect(ids(tokensOfLine(layout, 2))).toEqual(["branch", "title", "agent"]);
+    expect(ids(tokensOfLine(layout, 2))).toEqual(["branch", "title", "agent", "age"]);
   });
 
   it("dropping a token where it already is changes nothing", () => {
@@ -166,7 +170,7 @@ describe("editing", () => {
   });
 
   it("clamps the position and treats a line past the end as a new line", () => {
-    expect(ids(tokensOfLine(placeToken(resetLayout(), "host", 2, 99), 2))).toEqual(["branch", "agent", "host"]);
+    expect(ids(tokensOfLine(placeToken(resetLayout(), "host", 2, 99), 2))).toEqual(["branch", "agent", "age", "host"]);
     const added = placeToken(resetLayout(), "host", 9, 0);
     expect(lineCount(added)).toBe(3);
     expect(ids(tokensOfLine(added, 3))).toEqual(["host"]);
@@ -179,7 +183,7 @@ describe("editing", () => {
     }
     expect(lineCount(layout)).toBe(7);
     expect(visibleLines(layout)).toHaveLength(7);
-    expect(ids(layout)).toEqual(["agent", "host", "led", "project", "workspace", "title", "branch"]);
+    expect(ids(layout)).toEqual(["agent", "age", "host", "led", "project", "workspace", "title", "branch"]);
   });
 
   it("puts a token on a new line at a chosen position", () => {
@@ -193,7 +197,7 @@ describe("editing", () => {
     const split = ownLine(resetLayout(), "workspace");
     expect(ids(tokensOfLine(split, 1))).toEqual(["host", "led", "project", "title"]);
     expect(ids(tokensOfLine(split, 2))).toEqual(["workspace"]);
-    expect(ids(tokensOfLine(split, 3))).toEqual(["branch", "agent"]);
+    expect(ids(tokensOfLine(split, 3))).toEqual(["branch", "agent", "age"]);
     const alone = placeTokenOnNewLine(resetLayout(), "agent", 3);
     expect(ownLine(alone, "agent")).toEqual(alone);
   });
@@ -268,7 +272,7 @@ describe("columnChars", () => {
 describe("monospace option", () => {
   it("defaults to monospace for workspace and branch only, so the project is proportional", () => {
     const mono = Object.fromEntries(resetLayout().map((token) => [token.id, tokenMono(token)]));
-    expect(mono).toEqual({ host: false, led: false, project: false, workspace: true, title: false, branch: true, agent: false });
+    expect(mono).toEqual({ host: false, led: false, project: false, workspace: true, title: false, branch: true, agent: false, age: true });
   });
 
   it("falls back to the item's default for layouts saved before the option existed", () => {
@@ -303,5 +307,20 @@ describe("sameLayout", () => {
     expect(sameLayout(base, setMono(base, "title", true))).toBe(false);
     expect(sameLayout(base, moveToken(base, "host", 1))).toBe(false);
     expect(sameLayout(base, base.slice(1))).toBe(false);
+  });
+});
+
+describe("age", () => {
+  it("shows how long ago the section's time was, in the largest whole unit", () => {
+    expect(formatAge(20_000)).toBe("now");
+    expect(formatAge(5 * 60_000)).toBe("5m");
+    expect(formatAge(3 * 3_600_000 + 59 * 60_000)).toBe("3h");
+    expect(formatAge(2 * 86_400_000)).toBe("2d");
+    expect(formatAge(20 * 86_400_000)).toBe("2w");
+    expect(formatAge(400 * 86_400_000)).toBe("1y");
+  });
+
+  it("is the age of the time the row sorts on", () => {
+    expect(tokenValue(row({ sortAt: Date.now() - 90 * 60_000 }), "age")).toBe("1h");
   });
 });

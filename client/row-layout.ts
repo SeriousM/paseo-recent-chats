@@ -2,7 +2,7 @@
 // A layout is an array of tokens. Each token has a line; lines are numbered 1..n without gaps and
 // the array is ordered by line, then by position within the line.
 import { DEFAULT_LAYOUT, MAX_LINES, MAX_TOKEN_CHARS, type RowToken, type RowTokenId } from "../shared/layout";
-import { agentLabel, chatTitle, ellipsize } from "./format";
+import { agentLabel, chatTitle, ellipsize, formatAge } from "./format";
 import type { TriageRow } from "./triage";
 
 /** Whether a token shows in monospace: its own choice, else the default for that item. */
@@ -166,6 +166,8 @@ export function tokenValue(row: TriageRow, id: RowTokenId): string {
       return row.branch;
     case "agent":
       return row.agentName || agentLabel(null, row.provider);
+    case "age":
+      return formatAge(Date.now() - row.sortAt);
     default:
       return "";
   }

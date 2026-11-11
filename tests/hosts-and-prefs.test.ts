@@ -116,7 +116,7 @@ describe("stored preferences", () => {
     expect(parsed?.groupByHost).toBe(false);
     expect(parsed?.hiddenHosts).toEqual([]);
     // Missing row items are added, switched off.
-    expect(parsed?.layout.map((token) => token.id)).toEqual(["title", "host", "led", "project", "workspace", "branch", "agent"]);
+    expect(parsed?.layout.map((token) => token.id)).toEqual(["title", "host", "led", "project", "workspace", "branch", "agent", "age"]);
     expect(parsed?.layout.filter((token) => token.enabled).map((token) => token.id)).toEqual(["title"]);
   });
 
