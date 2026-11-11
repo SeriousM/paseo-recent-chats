@@ -103,3 +103,26 @@ export function attachVerticalDrag(
     window.removeEventListener("pointercancel", up);
   };
 }
+
+interface DomSizeEntry {
+  contentRect: { width: number; height: number };
+}
+
+declare const ResizeObserver:
+  | (new (callback: (entries: DomSizeEntry[]) => void) => { observe(node: unknown): void; disconnect(): void })
+  | undefined;
+
+/**
+ * Calls `onChange` when a web element is hidden (no size: a background tab is `display: none`) or shown
+ * again. Unlike an intersection check, an element scrolled out of a clipped bar still counts as shown.
+ * Returns a cleanup; a no-op off the web.
+ */
+export function watchShown(node: unknown, onChange: (shown: boolean) => void): () => void {
+  if (Platform.OS !== "web" || !node || typeof ResizeObserver === "undefined") return () => {};
+  const observer = new ResizeObserver((entries) => {
+    const rect = entries[entries.length - 1]?.contentRect;
+    if (rect) onChange(rect.width > 0 && rect.height > 0);
+  });
+  observer.observe(node);
+  return () => observer.disconnect();
+}

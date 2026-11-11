@@ -5,13 +5,15 @@ import type {
   PluginClientContext,
 } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/ui";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { View } from "react-native";
 import type { PaseoAgentListResult } from "./paseo-types";
 import { getStore } from "./runtime";
 import { ledColor, TriageList } from "./triage-list";
 import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
 import { limitsOf, openChat, useRecents } from "./use-recents";
 import { reportOpenChat } from "./open-chat";
+import { watchShown } from "./web";
 import { RECENT_SCREEN_ID } from "./sidebar-item";
 
 const INBOX_PILL_ID = "inbox";
@@ -29,32 +31,51 @@ function inboxLabel(result: TriageResult): string {
   return parts.length ? `Inbox ${parts.join(" \u00B7 ")}` : "Inbox";
 }
 
-/** Remembers the host for Later, and reports the icon's chat as the open one while it is shown. */
+/**
+ * Remembers the host for Later, and reports the icon's chat as the open one while it is shown. Returns
+ * the ref for the icon's wrapper, whose size tells (on the web) whether the chat's tab is on screen.
+ */
 function useShownChat(props: PluginButtonIconProps) {
   const agentId = props.context === "agent" ? props.agentId : null;
   const hostId = props.host.id;
+  const node = useRef<View>(null);
   useEffect(() => {
     pillHostId = hostId;
-    return agentId ? reportOpenChat(chatKey(hostId, agentId)) : undefined;
+    if (!agentId) return undefined;
+    const shown = reportOpenChat(chatKey(hostId, agentId));
+    const stopWatching = watchShown(node.current, shown.setVisible);
+    return () => {
+      stopWatching();
+      shown.remove();
+    };
   }, [hostId, agentId]);
+  return node;
 }
 
 function InboxIcon(props: PluginButtonIconProps) {
   const { theme, size } = props;
   const { result } = useRecents();
-  useShownChat(props);
+  const node = useShownChat(props);
   const color = result.worstUnread
     ? ledColor(theme, result.worstUnread)
     : result.counts.running
       ? ledColor(theme, "running")
       : theme.colors.foregroundMuted;
-  return <Icon name="Inbox" size={size} color={color} />;
+  return (
+    <View ref={node}>
+      <Icon name="Inbox" size={size} color={color} />
+    </View>
+  );
 }
 
 function LaterIcon(props: PluginButtonIconProps) {
   useRecents();
-  useShownChat(props);
-  return <Icon name="Clock" size={props.size} color={props.theme.colors.foregroundMuted} />;
+  const node = useShownChat(props);
+  return (
+    <View ref={node}>
+      <Icon name="Clock" size={props.size} color={props.theme.colors.foregroundMuted} />
+    </View>
+  );
 }
 
 function createInboxContent(client: PluginClientContext) {
