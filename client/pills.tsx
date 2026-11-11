@@ -11,6 +11,7 @@ import { getStore } from "./runtime";
 import { ledColor, TriageList } from "./triage-list";
 import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
 import { limitsOf, openChat, useRecents } from "./use-recents";
+import { reportOpenChat } from "./open-chat";
 import { RECENT_SCREEN_ID } from "./sidebar-item";
 
 const INBOX_PILL_ID = "inbox";
@@ -28,11 +29,20 @@ function inboxLabel(result: TriageResult): string {
   return parts.length ? `Inbox ${parts.join(" \u00B7 ")}` : "Inbox";
 }
 
-function InboxIcon({ theme, size, host }: PluginButtonIconProps) {
-  const { result } = useRecents();
+/** Remembers the host for Later, and reports the icon's chat as the open one while it is shown. */
+function useShownChat(props: PluginButtonIconProps) {
+  const agentId = props.context === "agent" ? props.agentId : null;
+  const hostId = props.host.id;
   useEffect(() => {
-    pillHostId = host.id;
-  }, [host.id]);
+    pillHostId = hostId;
+    return agentId ? reportOpenChat(chatKey(hostId, agentId)) : undefined;
+  }, [hostId, agentId]);
+}
+
+function InboxIcon(props: PluginButtonIconProps) {
+  const { theme, size } = props;
+  const { result } = useRecents();
+  useShownChat(props);
   const color = result.worstUnread
     ? ledColor(theme, result.worstUnread)
     : result.counts.running
@@ -41,17 +51,15 @@ function InboxIcon({ theme, size, host }: PluginButtonIconProps) {
   return <Icon name="Inbox" size={size} color={color} />;
 }
 
-function LaterIcon({ theme, size, host }: PluginButtonIconProps) {
+function LaterIcon(props: PluginButtonIconProps) {
   useRecents();
-  useEffect(() => {
-    pillHostId = host.id;
-  }, [host.id]);
-  return <Icon name="Clock" size={size} color={theme.colors.foregroundMuted} />;
+  useShownChat(props);
+  return <Icon name="Clock" size={props.size} color={props.theme.colors.foregroundMuted} />;
 }
 
 function createInboxContent(client: PluginClientContext) {
   return function InboxContent(props: PluginButtonContentProps) {
-    const { theme, layout, host, close } = props;
+    const { theme, layout, close } = props;
     const { store, snapshot, result } = useRecents();
     return (
       <TriageList
@@ -62,7 +70,6 @@ function createInboxContent(client: PluginClientContext) {
         onToggleHost={store.toggleHost}
         onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
         onToggleSort={store.toggleSort}
-        currentKey={props.context === "agent" ? chatKey(host.id, props.agentId) : null}
         onOpen={(row) => {
           close();
           openChat(store, row, { openScreen: (input) => client.openScreen(input) });

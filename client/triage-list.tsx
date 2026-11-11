@@ -9,6 +9,7 @@ import type { Bucket, Led, TriageResult, TriageRow } from "./triage";
 import type { RowToken, RowTokenId } from "../shared/layout";
 import type { StoreSnapshot } from "./store";
 import { hostGroupKey, sectionGroupKey, toggleCollapsed, useCollapsed } from "./collapsed";
+import { useOpenChat } from "./open-chat";
 import type { Section } from "../shared/sections";
 
 const HEADINGS: Record<Section, string> = {
@@ -204,9 +205,12 @@ export function TriageRowView({
         gap,
         minHeight: compact ? 48 : 32,
         paddingVertical: 3,
-        paddingLeft: compact ? 10 : 8,
+        // A 3px bar on the left marks the open chat; every row keeps the same width for it.
+        paddingLeft: (compact ? 10 : 8) - 3,
         paddingRight: 6,
         borderRadius: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: current ? theme.colors.accent : "transparent",
         backgroundColor: current ? theme.colors.surface2 : "transparent",
       },
       body: { flex: 1, minWidth: 0, gap: 2 },
@@ -580,7 +584,6 @@ export interface TriageListProps {
   onToggleGroupByHost(): void;
   /** Switches a section between oldest first and newest first (the icon in its heading). */
   onToggleSort(section: Section): void;
-  currentKey?: string | null;
   onOpen(row: TriageRow): void;
   onMarkRead(keys: readonly string[]): void;
   /** Later: mark an inactive chat unread. */
@@ -612,7 +615,6 @@ export function TriageList({
   onToggleHost,
   onToggleGroupByHost,
   onToggleSort,
-  currentKey,
   onOpen,
   onMarkRead,
   onMarkUnread,
@@ -624,6 +626,8 @@ export function TriageList({
   showSettingsButton = false,
 }: TriageListProps) {
   const folded = useCollapsed();
+  // Highlighted wherever the list is shown: the chat whose composer is on screen.
+  const openKey = useOpenChat();
   const shown = rows ?? result.rows;
   const { prefs, hostCount, hosts, hostColors: hostColorNames, loading, errors } = snapshot;
   const grouped = prefs.groupByHost && !searching;
@@ -802,7 +806,7 @@ export function TriageList({
                 hostColor={hostColorNames[row.hostId]}
                 lines={lines}
                 columns={columns}
-                current={row.key === currentKey}
+                current={row.key === openKey}
                 fullNames={prefs.showTooltip}
                 cardTransparency={prefs.tooltipTransparency}
                 onOpen={onOpen}
