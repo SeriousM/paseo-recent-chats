@@ -1,5 +1,7 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
+import { runCli } from "./server/cli";
 import { updateIfBehind } from "./server/auto-update";
+import { renameChat } from "./shared/rename";
 import { overlaySettings, prefsSettings } from "./shared/settings";
 
 /** First check a little after start, so a host that just started is not slowed down; then every few hours. */
@@ -10,6 +12,11 @@ const CHECK_EVERY_MS = 6 * 60 * 60_000;
 export default function contribute(server: PluginServerContext) {
   const prefs = server.registerSettings(prefsSettings);
   server.registerSettings(overlaySettings);
+  // `--name=` keeps a title that starts with a dash from being read as an option.
+  server.handle(renameChat, async ({ agentId, title }) => {
+    await runCli(["agent", "update", agentId, `--name=${title}`]);
+    return { title };
+  });
 
   let checking = false;
   const check = async () => {

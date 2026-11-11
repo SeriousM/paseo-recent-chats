@@ -98,6 +98,7 @@ function createInboxContent(client: PluginClientContext) {
         onMarkRead={store.markRead}
         onMarkUnread={store.markUnread}
         onSetPinned={store.setPinned}
+        onRename={store.renameChat}
         footer="first"
         showSettingsButton
         onShowAll={() => {

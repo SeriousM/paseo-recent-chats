@@ -13,6 +13,7 @@ import { agentLabel } from "./format";
 import { DEFAULT_PREFS, parseStoredPrefs, toggleHiddenHost, withNormalizedLayout } from "./prefs";
 import { overlaySettings, prefsSettings, type Prefs } from "../shared/settings";
 import type { Section } from "../shared/sections";
+import { renameChat } from "../shared/rename";
 
 export type Rpc = PluginCommandCapabilities["rpc"];
 
@@ -55,6 +56,8 @@ export interface RecentsStore {
   toggleHost(hostId: string): void;
   /** Switch a section between oldest first and newest first. */
   toggleSort(section: Section): void;
+  /** Sets a chat's title, through the plugin copy of the chat's own host. Rejects with a readable reason. */
+  renameChat(key: string, title: string): Promise<void>;
   /** Stops observation and drops every listener. Called when the plugin unloads. */
   dispose(): void;
 }
@@ -676,6 +679,12 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
       updatePrefs({ hiddenHosts: toggleHiddenHost(prefs.hiddenHosts, hostId, hosts.map((host) => host.serverId)) }),
     toggleSort: (section) =>
       updatePrefs({ sectionSort: { ...prefs.sectionSort, [section]: prefs.sectionSort[section] === "oldest" ? "newest" : "oldest" } }),
+    async renameChat(key, title) {
+      const peer = directory.get(keyHost(key));
+      // Only that host's plugin can rename its chat; an older version there has no rename yet.
+      if (!peer) throw new Error("That chat's host does not run a current Recent Chats.");
+      await peer.rpc(renameChat, { agentId: key.slice(key.indexOf(":") + 1), title });
+    },
     dispose() {
       if (stopTimer !== undefined) {
         clearTimeout(stopTimer);

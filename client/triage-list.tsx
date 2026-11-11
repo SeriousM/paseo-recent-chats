@@ -10,6 +10,8 @@ import type { RowToken, RowTokenId } from "../shared/layout";
 import type { StoreSnapshot } from "./store";
 import { hostGroupKey, sectionGroupKey, toggleCollapsed, useCollapsed } from "./collapsed";
 import { useOpenChat } from "./open-chat";
+import { RenameField } from "./rename-field";
+import { onDoubleClick } from "./web";
 import type { Section } from "../shared/sections";
 
 const HEADINGS: Record<Section, string> = {
@@ -174,6 +176,8 @@ export interface RowViewProps {
   onMarkUnread(key: string): void;
   /** Pin or unpin the chat. */
   onSetPinned(key: string, pinned: boolean): void;
+  /** Present where chats can be renamed: long press (or double-click on the web) opens a title field. */
+  onRename?: (key: string, title: string) => Promise<void>;
 }
 
 export function TriageRowView({
@@ -191,6 +195,7 @@ export function TriageRowView({
   onMarkRead,
   onMarkUnread,
   onSetPinned,
+  onRename,
 }: RowViewProps) {
   const hostTint = hostColors(hostColor, isDark(theme.colors.surface0));
   const title = chatTitle(row.title, row.provider, row.agentId);
@@ -237,8 +242,20 @@ export function TriageRowView({
     [theme, compact, current, gap],
   );
   const state = row.bucket === "unread" ? "unread" : row.bucket === "running" ? "running" : "inactive";
-  // The full names appear while the pointer rests on the row (desktop) or after a long press (touch).
+  // The full names appear while the pointer rests on the row (desktop) or after a long press (touch, where
+  // long press renames instead when renaming is offered).
   const [showFull, setShowFull] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const rowNode = useRef<View>(null);
+  const startRename = onRename
+    ? () => {
+        setShowFull(false);
+        setEditing(true);
+      }
+    : null;
+  const latestStart = useRef(startRename);
+  latestStart.current = startRename;
+  useEffect(() => onDoubleClick(rowNode.current, () => latestStart.current?.()), []);
   const renderToken = (token: RowToken): ReactElement | null => {
     if (token.id === "led") return <LedDot key="led" led={row.led} theme={theme} />;
     if (token.id === "host" && !showHost) return null;
@@ -333,18 +350,33 @@ export function TriageRowView({
 
   return (
     <Pressable
+      ref={rowNode}
       accessibilityRole="button"
       accessibilityLabel={`${row.hostLabel}, ${row.projectName}, ${row.workspaceName}, ${title}, ${state}`}
-      onPress={() => {
-        setShowFull(false);
-        onOpen(row);
-      }}
-      onHoverIn={fullNames ? () => setShowFull(true) : undefined}
+      accessibilityHint={onRename ? "Long press to rename" : undefined}
+      onPress={
+        editing
+          ? undefined
+          : () => {
+              setShowFull(false);
+              onOpen(row);
+            }
+      }
+      onHoverIn={fullNames && !editing ? () => setShowFull(true) : undefined}
       onHoverOut={fullNames ? () => setShowFull(false) : undefined}
-      onLongPress={fullNames ? () => setShowFull((value) => !value) : undefined}
+      onLongPress={editing ? undefined : (startRename ?? (fullNames ? () => setShowFull((value) => !value) : undefined))}
       style={[styles.row, showFull ? { position: "relative", zIndex: 20 } : null]}
     >
       {current ? <View pointerEvents="none" style={styles.currentBar} /> : null}
+      {editing && onRename ? (
+        <RenameField
+          theme={theme}
+          compact={compact}
+          initial={row.title ?? ""}
+          onSave={(next) => onRename(row.key, next)}
+          onClose={() => setEditing(false)}
+        />
+      ) : (
       <View style={styles.body}>
         {lines.map((line, index) =>
           index === 0 || hasContent(line) ? (
@@ -354,6 +386,9 @@ export function TriageRowView({
           ) : null,
         )}
       </View>
+      )}
+      {editing ? null : (
+        <>
       {row.bucket === "unread" ? (
         <Pressable
           accessibilityRole="button"
@@ -383,7 +418,9 @@ export function TriageRowView({
       >
         <Icon name={row.pinned ? "PinOff" : "Pin"} size={14} color={row.pinned ? theme.colors.accent : theme.colors.foregroundMuted} />
       </Pressable>
-      {showFull && fullNames ? <FullNamesCard row={row} theme={theme} showHost={showHost} transparency={cardTransparency} /> : null}
+        </>
+      )}
+      {showFull && fullNames && !editing ? <FullNamesCard row={row} theme={theme} showHost={showHost} transparency={cardTransparency} /> : null}
     </Pressable>
   );
 }
@@ -613,6 +650,8 @@ export interface TriageListProps {
   onMarkUnread(key: string): void;
   /** Pin or unpin a chat. */
   onSetPinned(key: string, pinned: boolean): void;
+  /** Sets a chat's title (long press or double-click on a row). */
+  onRename(key: string, title: string): Promise<void>;
   /** The caller shows the host filter itself (the sidebar puts it above its search box). */
   hideHostFilter?: boolean;
   /** Present when the list is capped; shows the hidden-count chips and the all-chats link. */
@@ -642,6 +681,7 @@ export function TriageList({
   onMarkRead,
   onMarkUnread,
   onSetPinned,
+  onRename,
   hideHostFilter = false,
   onShowAll,
   footer = "last",
@@ -834,6 +874,7 @@ export function TriageList({
                 onMarkRead={onMarkRead}
                 onMarkUnread={onMarkUnread}
                 onSetPinned={onSetPinned}
+                onRename={onRename}
               />
               )}
             </Fragment>

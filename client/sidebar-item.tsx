@@ -101,6 +101,7 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
     onMarkRead: store.markRead,
     onMarkUnread: store.markUnread,
     onSetPinned: store.setPinned,
+    onRename: store.renameChat,
     hideHostFilter: true,
     onShowAll: () => openScreen({ screenId: RECENT_SCREEN_ID, params: searching ? { q: query } : {} }),
   };

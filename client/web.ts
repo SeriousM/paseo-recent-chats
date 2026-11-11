@@ -126,3 +126,14 @@ export function watchShown(node: unknown, onChange: (shown: boolean) => void): (
   observer.observe(node);
   return () => observer.disconnect();
 }
+
+/** Calls `handler` on a double-click of a web element. Returns a cleanup; a no-op off the web. */
+export function onDoubleClick(node: unknown, handler: () => void): () => void {
+  if (Platform.OS !== "web" || !isDomTarget(node)) return () => {};
+  const listener = (event: DomPointerEvent) => {
+    event.preventDefault();
+    handler();
+  };
+  node.addEventListener("dblclick", listener);
+  return () => node.removeEventListener("dblclick", listener);
+}
