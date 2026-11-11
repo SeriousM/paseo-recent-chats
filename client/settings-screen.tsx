@@ -9,6 +9,7 @@ import { SectionEditor } from "./section-editor";
 import { Slider } from "./slider";
 import { sameLayout } from "./row-layout";
 import { useRecents } from "./use-recents";
+import type { UpdateCheck } from "./store";
 
 export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
   const { store, snapshot } = useRecents();
@@ -28,6 +29,8 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
       if (wasClean) setDraft([...prefs.layout]);
     }
   }, [prefs.layout, draft]);
+  const [checking, setChecking] = useState(false);
+  const [updateResults, setUpdateResults] = useState<UpdateCheck[] | null>(null);
   const where = snapshot.storageHosts.length
     ? `These settings, pins and read marks are saved on every connected host that runs Recent Chats (${snapshot.storageHosts.join(", ")}), so every device shows the same view. Pins and read marks of a chat are kept on that chat's host.`
     : "Connecting to the hosts that keep these settings.";
@@ -190,6 +193,48 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
             value={prefs.autoUpdate}
             onValueChange={(next) => change({ autoUpdate: next })}
           />
+          <View style={{ padding: 12, gap: 8 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ busy: checking }}
+              disabled={checking}
+              onPress={() => {
+                setChecking(true);
+                setUpdateResults(null);
+                void store
+                  .checkForUpdates()
+                  .then(setUpdateResults)
+                  .finally(() => setChecking(false));
+              }}
+              style={{
+                alignSelf: "flex-start",
+                minHeight: screen.compact ? 44 : 34,
+                paddingHorizontal: 16,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                justifyContent: "center",
+                opacity: checking ? 0.5 : 1,
+              }}
+            >
+              <Text style={{ color: theme.colors.foreground }}>{checking ? "Checking\u2026" : "Check now"}</Text>
+            </Pressable>
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+              Checks every connected host that runs Recent Chats, whether or not the switch above is on. A host that
+              finds a newer version installs it and reloads the plugin; this screen may reload with it.
+            </Text>
+            {updateResults?.length === 0 ? (
+              <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>No host answered.</Text>
+            ) : null}
+            {updateResults?.map((entry) => (
+              <Text
+                key={entry.host}
+                style={{ color: entry.failed ? theme.colors.statusDanger : theme.colors.foreground, fontSize: 12 }}
+              >
+                {`${entry.host}: ${entry.result}`}
+              </Text>
+            ))}
+          </View>
         </SettingsCard>
       </SettingsSection>
       <SettingsSection title="Composer pills">

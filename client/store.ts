@@ -14,8 +14,16 @@ import { DEFAULT_PREFS, parseStoredPrefs, toggleHiddenHost, withNormalizedLayout
 import { overlaySettings, prefsSettings, type Prefs } from "../shared/settings";
 import type { Section } from "../shared/sections";
 import { renameChat } from "../shared/rename";
+import { checkForUpdate } from "../shared/updates";
 
 export type Rpc = PluginCommandCapabilities["rpc"];
+
+/** What one host's update check reported. */
+export interface UpdateCheck {
+  host: string;
+  result: string;
+  failed: boolean;
+}
 
 export interface HostChip {
   id: string;
@@ -58,6 +66,8 @@ export interface RecentsStore {
   toggleSort(section: Section): void;
   /** Sets a chat's title, through the plugin copy of the chat's own host. Rejects with a readable reason. */
   renameChat(key: string, title: string): Promise<void>;
+  /** Asks every reachable host's copy to check for a plugin update now. One entry per host. */
+  checkForUpdates(): Promise<UpdateCheck[]>;
   /** Stops observation and drops every listener. Called when the plugin unloads. */
   dispose(): void;
 }
@@ -684,6 +694,19 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
       // Only that host's plugin can rename its chat; an older version there has no rename yet.
       if (!peer) throw new Error("That chat's host does not run a current Recent Chats.");
       await peer.rpc(renameChat, { agentId: key.slice(key.indexOf(":") + 1), title });
+    },
+    async checkForUpdates() {
+      const label = (hostId: string) => hosts.find((host) => host.serverId === hostId)?.label ?? hostId;
+      return Promise.all(
+        reachablePeers().map(async (peer) => {
+          try {
+            const { result } = await peer.rpc(checkForUpdate, {});
+            return { host: label(peer.serverId), result, failed: false };
+          } catch (error) {
+            return { host: label(peer.serverId), result: message(error), failed: true };
+          }
+        }),
+      );
     },
     dispose() {
       if (stopTimer !== undefined) {

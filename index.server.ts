@@ -2,6 +2,7 @@ import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { runCli } from "./server/cli";
 import { updateIfBehind } from "./server/auto-update";
 import { renameChat } from "./shared/rename";
+import { checkForUpdate } from "./shared/updates";
 import { overlaySettings, prefsSettings } from "./shared/settings";
 
 /** First check a little after start, so a host that just started is not slowed down; then every few hours. */
@@ -33,6 +34,12 @@ export default function contribute(server: PluginServerContext) {
       checking = false;
     }
   };
+  // "Check now" in the settings: runs whether or not the scheduled checks are switched on.
+  server.handle(checkForUpdate, async () => {
+    const result = await updateIfBehind();
+    console.log(`Recent Chats update check (asked from the settings): ${result}`);
+    return { result };
+  });
   const first = setTimeout(() => void check(), FIRST_CHECK_MS);
   const every = setInterval(() => void check(), CHECK_EVERY_MS);
   return () => {
