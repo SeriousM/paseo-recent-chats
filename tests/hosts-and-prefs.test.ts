@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PREFS, parseStoredPrefs, toggleHiddenHost } from "../client/prefs";
 import { buildTriage, type ChatInput, type TriageLimits } from "../client/triage";
+import { prefsSettings } from "../shared/settings";
 
 const NOW = Date.UTC(2026, 10, 5, 12, 0, 0);
 const MIN = 60_000;
@@ -138,5 +139,20 @@ describe("host filter", () => {
 
   it("keeps other switched-off hosts and drops ids of hosts that no longer exist", () => {
     expect(toggleHiddenHost(["a", "gone"], "b", ["a", "b"])).toEqual(["a", "b"]);
+  });
+});
+
+describe("settings written by a newer version", () => {
+  it("drops row items and sections this version does not know instead of becoming invalid", () => {
+    const newer = prefsSettings.schema.safeParse({
+      layout: [
+        { id: "title", enabled: true, line: 1, maxChars: 0 },
+        { id: "cost", enabled: true, line: 1, maxChars: 0 },
+      ],
+      sectionOrder: ["unread", "archived", "pinned", "running", "inactive"],
+    });
+    expect(newer.success).toBe(true);
+    expect(newer.data?.layout.map((token) => token.id)).toEqual(["title"]);
+    expect(newer.data?.sectionOrder).toEqual(["unread", "pinned", "running", "inactive"]);
   });
 });

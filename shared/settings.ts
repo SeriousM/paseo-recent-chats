@@ -1,7 +1,15 @@
 import { defineSettings } from "@getpaseo/plugin";
 import { z } from "zod";
-import { DEFAULT_LAYOUT, rowTokenSchema } from "./layout";
+import { DEFAULT_LAYOUT, ROW_TOKEN_IDS, rowTokenSchema } from "./layout";
 import { DEFAULT_SECTION_SORT, SECTIONS } from "./sections";
+
+/**
+ * Drops list entries a newer version of this plugin knows and this one does not (a new row item, a new
+ * section), so settings written by a newer version stay readable here instead of becoming invalid.
+ */
+function knownOnly(known: readonly string[], idOf: (entry: unknown) => unknown) {
+  return (value: unknown) => (Array.isArray(value) ? value.filter((entry) => known.includes(idOf(entry) as string)) : value);
+}
 
 /**
  * User-facing view options. Every host that runs this plugin keeps a copy, and the client writes each
@@ -24,7 +32,7 @@ export const prefsSettings = defineSettings({
     sidebarExpanded: z.boolean().default(true),
     /** Order of the Pinned, Needs you, Running and Inactive sections; each listed exactly once. */
     sectionOrder: z
-      .array(z.enum(SECTIONS))
+      .preprocess(knownOnly(SECTIONS, (entry) => entry), z.array(z.enum(SECTIONS)))
       .refine((order) => order.length === SECTIONS.length && SECTIONS.every((section) => order.includes(section)), {
         message: "every section exactly once",
       })
@@ -53,7 +61,12 @@ export const prefsSettings = defineSettings({
     showInboxPill: z.boolean().default(true),
     showLaterPill: z.boolean().default(true),
     /** What each list row shows, in which order and how long. See shared/layout.ts. */
-    layout: z.array(rowTokenSchema).default(() => DEFAULT_LAYOUT.map((token) => ({ ...token }))),
+    layout: z
+      .preprocess(
+        knownOnly(ROW_TOKEN_IDS, (entry) => (typeof entry === "object" && entry !== null && "id" in entry ? entry.id : undefined)),
+        z.array(rowTokenSchema),
+      )
+      .default(() => DEFAULT_LAYOUT.map((token) => ({ ...token }))),
     /** Show the card with full names while hovering or long-pressing a row. */
     showTooltip: z.boolean().default(true),
     /** How see-through the full-names card is, in percent. 0 = solid. */

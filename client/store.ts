@@ -42,6 +42,8 @@ export interface StoreSnapshot {
   hosts: readonly HostChip[];
   /** Labels of the hosts whose copy of the read marks and settings this device reaches right now. */
   storageHosts: readonly string[];
+  /** Labels of the hosts that refused the settings because they run an older Recent Chats. */
+  outdatedHosts: readonly string[];
   /** serverId -> colour name chosen for the host in Paseo (web and desktop only). */
   hostColors: Readonly<Record<string, string>>;
   loading: boolean;
@@ -177,6 +179,8 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
   /** serverId -> that host's copy of the read marks, as last read or written. */
   const docs = new Map<string, { revision: string; entries: Overlay }>();
   const docErrors = new Map<string, string>();
+  /** Hosts that refused the settings because they run an older Recent Chats (serverIds). */
+  const outdated = new Set<string>();
   let hostColors: Record<string, string> = {};
   let pendingOps: OverlayOp[] = [];
   /** The batch being written; still shown as applied until the write is done. */
@@ -247,6 +251,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
           hidden: prefs.hiddenHosts.includes(host.serverId),
         })),
       storageHosts: [...docs.keys()].map(label),
+      outdatedHosts: [...outdated].map(label),
       hostColors,
       loading,
       errors,
@@ -567,19 +572,33 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     } else if (newest && newest.updatedAt > prefs.updatedAt) {
       prefs = newest;
     }
-    let error: string | null = failures[0] ?? null;
+    // A host that refuses the settings runs an older Recent Chats that does not know a newer option
+    // (a new row item, say). Not an error: it keeps its previous settings until it has updated.
+    const error: string | null = failures[0] ?? null;
     let wrote = false;
     for (const copy of copies) {
       if (copy.prefs ? copy.prefs.updatedAt === prefs.updatedAt : !prefsEdited) continue;
       const result = await copy.peer.rpc(prefsContracts.write, { revision: copy.revision, values: { ...prefs } });
-      if (result.status === "saved") wrote = true;
-      else if (result.status === "conflict") prefsAgain = true;
-      else error = result.error;
+      if (result.status === "saved") {
+        wrote = true;
+        outdated.delete(copy.peer.serverId);
+      } else if (result.status === "conflict") prefsAgain = true;
+      else nudgeOutdated(copy.peer);
     }
     prefsError = error;
     // The hosts hold the settings now; the copy earlier versions kept on this device is no longer needed.
     if (deviceRaw !== null && !error) clearDevicePrefs();
     if (wrote) directory.notify("prefs", origin);
+  }
+
+  /** Asks a host that runs an older Recent Chats to update itself, once per app session. */
+  function nudgeOutdated(peer: Peer) {
+    if (outdated.has(peer.serverId)) return;
+    outdated.add(peer.serverId);
+    emitNow();
+    void peer.rpc(checkForUpdate, {}).catch(() => {
+      // Too old for "check now": its own scheduled check, or `paseo plugin update`, brings it up to date.
+    });
   }
 
   async function syncPrefs(): Promise<void> {

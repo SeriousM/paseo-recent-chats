@@ -34,10 +34,14 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
   const where = snapshot.storageHosts.length
     ? `These settings, pins and read marks are saved on every connected host that runs Recent Chats (${snapshot.storageHosts.join(", ")}), so every device shows the same view. Pins and read marks of a chat are kept on that chat's host.`
     : "Connecting to the hosts that keep these settings.";
+  const outdatedNote = snapshot.outdatedHosts.length
+    ? `${snapshot.outdatedHosts.join(", ")} ${snapshot.outdatedHosts.length === 1 ? "runs" : "run"} an older Recent Chats and keeps its previous settings until it has updated. It was asked to update now.`
+    : null;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.colors.surface0 }} contentContainerStyle={{ padding, gap: 16 }}>
       <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{where}</Text>
+      {outdatedNote ? <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{outdatedNote}</Text> : null}
       {snapshot.errors
         .filter((error) => error.startsWith("Settings:"))
         .map((error) => (
