@@ -50,22 +50,27 @@ export function ledColor(theme: PluginTheme, led: Led): string {
   }
 }
 
+/** Running pulses slowly; waiting for you (a permission or question) pulses fast and grows, to stand out. */
+const PULSE_MS: Partial<Record<Led, number>> = { running: 700, permission: 260 };
+
 export function LedDot({ led, theme, size = 10 }: { led: Led; theme: PluginTheme; size?: number }) {
   const pulse = useRef(new Animated.Value(1)).current;
+  const duration = PULSE_MS[led];
   useEffect(() => {
-    if (led !== "running") {
+    if (duration === undefined) {
       pulse.setValue(1);
       return;
     }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.35, duration: 700, useNativeDriver: NATIVE_DRIVER }),
-        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(pulse, { toValue: 0.35, duration, useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(pulse, { toValue: 1, duration, useNativeDriver: NATIVE_DRIVER }),
       ]),
     );
     loop.start();
     return () => loop.stop();
-  }, [led, pulse]);
+  }, [duration, pulse]);
+  const urgent = led === "permission";
   return (
     <Animated.View
       style={{
@@ -74,6 +79,8 @@ export function LedDot({ led, theme, size = 10 }: { led: Led; theme: PluginTheme
         borderRadius: size / 2,
         backgroundColor: ledColor(theme, led),
         opacity: led === "idle" ? 0.55 : pulse,
+        // Larger while bright: the dot throbs instead of only fading.
+        ...(urgent ? { transform: [{ scale: pulse.interpolate({ inputRange: [0.35, 1], outputRange: [0.8, 1.3] }) }] } : null),
       }}
     />
   );
