@@ -1,7 +1,7 @@
 import type { PluginSidebarItemProps } from "@getpaseo/plugin/client";
 import { Icon, ScrollView, SidebarRow } from "@getpaseo/plugin/client/ui";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { PanResponder, Platform, Pressable, Text, useWindowDimensions, View, type ViewStyle } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PanResponder, Platform, Pressable, Text, useWindowDimensions, View, type ScrollView as NativeScrollView, type ViewStyle } from "react-native";
 import { searchRows } from "./fuzzy";
 import { openPluginSettings } from "./runtime";
 import { SearchBox } from "./search-box";
@@ -39,7 +39,17 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   const expanded = snapshot.prefs.sidebarExpanded;
   const { unread, running } = result.counts;
   const { height: windowHeight } = useWindowDimensions();
-  const searching = showSearch && query.trim().length > 0;
+  // Projects mode has its own search over projects, workspaces and chats.
+  const projects = useViewMode().view === "projects";
+  const searching = !projects && showSearch && query.trim().length > 0;
+  const scroll = useRef<NativeScrollView>(null);
+  const scrollContent = useRef<View>(null);
+  /** Scrolls the list so a node (a project or workspace a search jumped to) is near the top. */
+  const reveal = useCallback((node: View) => {
+    const content = scrollContent.current;
+    if (!content) return;
+    node.measureLayout(content, (_x, y) => scroll.current?.scrollTo({ y: Math.max(0, y - 8), animated: true }), () => {});
+  }, []);
 
   const matches = useMemo(() => (searching ? searchRows(query, result.all) : []), [searching, query, result]);
   const heightKey = layout.compact ? "sidebarHeightPhone" : "sidebarHeightDesktop";
@@ -107,8 +117,6 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
     hideHostFilter: true,
     onShowAll: () => openScreen({ screenId: RECENT_SCREEN_ID, params: searching ? { q: query } : {} }),
   };
-  // Projects mode (a trial, kept on this device); search results are always the plain list.
-  const projects = useViewMode().view === "projects" && !searching;
 
   const cog = layout.compact ? 36 : 24;
   const summary = (
@@ -156,10 +164,12 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
       {expanded ? (
         <View>
           <ScrollView
+            ref={scroll}
             nestedScrollEnabled
             showsVerticalScrollIndicator={false}
             style={{ height: listHeight }}
           >
+          <View ref={scrollContent}>
           <ViewModeBar theme={theme} compact={layout.compact} />
           <HostFilter
             theme={theme}
@@ -169,15 +179,16 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
             onToggle={store.toggleHost}
             groupByHost={snapshot.prefs.groupByHost}
             onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
-            search={{ open: showSearch, onToggle: toggleSearch }}
+            search={projects ? undefined : { open: showSearch, onToggle: toggleSearch }}
           />
-          {showSearch ? (
+          {showSearch && !projects ? (
             <View style={{ paddingHorizontal: 8, paddingBottom: 4 }}>
               <SearchBox theme={theme} compact={layout.compact} value={query} onChange={setQuery} autoFocus />
             </View>
           ) : null}
           {projects ? (
             <ProjectsView
+              reveal={reveal}
               snapshot={snapshot}
               rows={result.all}
               rowShared={{
@@ -195,6 +206,7 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
           ) : (
             <TriageList {...listProps} footer="none" />
           )}
+          </View>
           </ScrollView>
           {/* Outside the scroll area, so the chips, Mark all read and All chats stay at the bottom of the list. */}
           {projects ? null : <TriageList {...listProps} footer="only" />}

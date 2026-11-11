@@ -15,9 +15,11 @@ export interface ViewMode {
   pins: readonly string[];
   /** Tree nodes switched from their default: folded hosts, projects and workspaces, opened "+N older" and quiet lists. */
   toggled: readonly string[];
+  /** Group the projects tree by host. Off: one list of projects, each with its host's tag. */
+  groupHosts: boolean;
 }
 
-const DEFAULTS: ViewMode = { view: "triage", activeOnly: true, pins: [], toggled: [] };
+const DEFAULTS: ViewMode = { view: "triage", activeOnly: true, pins: [], toggled: [], groupHosts: true };
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
 
 interface Shared {
@@ -35,6 +37,7 @@ function load(): ViewMode {
       activeOnly: parsed.activeOnly !== false,
       pins: strings(parsed.pins),
       toggled: strings(parsed.toggled),
+      groupHosts: parsed.groupHosts !== false,
     };
   } catch {
     return DEFAULTS;
@@ -63,6 +66,12 @@ const flip = (list: readonly string[], key: string) => (list.includes(key) ? lis
 
 export const togglePin = (key: string): void => updateViewMode({ pins: flip(shared().value.pins, key) });
 export const toggleNode = (key: string): void => updateViewMode({ toggled: flip(shared().value.toggled, key) });
+
+/** Unfolds the given tree nodes (and opens the listed toggles) so a search result can be shown. */
+export function revealNodes(unfold: readonly string[], open: readonly string[] = []): void {
+  const toggled = shared().value.toggled.filter((key) => !unfold.includes(key));
+  updateViewMode({ toggled: [...toggled, ...open.filter((key) => !toggled.includes(key))] });
+}
 
 export const currentViewMode = (): ViewMode => shared().value;
 

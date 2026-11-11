@@ -27,7 +27,7 @@ const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "ui-
 const NATIVE_DRIVER = Platform.OS !== "web";
 
 /** Hex surface colour -> true when it is a dark theme. Unparseable values count as dark. */
-function isDark(hex: string): boolean {
+export function isDark(hex: string): boolean {
   const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!match?.[1]) return true;
   const value = parseInt(match[1], 16);

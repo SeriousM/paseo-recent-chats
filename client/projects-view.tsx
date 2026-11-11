@@ -4,7 +4,7 @@
 // the mode are kept on this device (view-mode.ts). Chat pins are the synced ones every list shares.
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/ui";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { RowTokenId } from "../shared/layout";
 import { useOpenChat } from "./open-chat";
@@ -12,8 +12,11 @@ import { buildTree, needsYou, pinnedTree, type TreeHost, type TreeProject, type 
 import { columnChars, visibleLines } from "./row-layout";
 import type { StoreSnapshot, WorkspaceInfo } from "./store";
 import type { TriageRow } from "./triage";
-import { HostHeading, LedDot, TriageRowView, type RowViewProps } from "./triage-list";
-import { toggleNode, togglePin, updateViewMode, useViewMode } from "./view-mode";
+import { hostColors } from "./format";
+import { HostHeading, isDark, LedDot, TriageRowView, type RowViewProps } from "./triage-list";
+import { SearchBox } from "./search-box";
+import { searchTree, type TreeHit } from "./tree-search";
+import { revealNodes, toggleNode, togglePin, updateViewMode, useViewMode } from "./view-mode";
 
 /** Chats listed per workspace before "+N older"; chats that need you, run or are pinned always show. */
 const CHATS_PER_WORKSPACE = 3;
@@ -89,6 +92,26 @@ export function ViewModeBar({ theme, compact }: { theme: PluginTheme; compact: b
           </Text>
         </Pressable>
       ) : null}
+      {mode.view === "projects" ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={mode.groupHosts ? "Grouped by host. Show one list of projects" : "One list of projects. Group by host"}
+          accessibilityState={{ selected: mode.groupHosts }}
+          onPress={() => updateViewMode({ groupHosts: !mode.groupHosts })}
+          style={({ pressed }) => ({
+            width: compact ? 36 : 26,
+            height: compact ? 36 : 26,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 7,
+            borderWidth: 1,
+            borderColor: mode.groupHosts ? theme.colors.border : "transparent",
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Icon name="Server" size={13} color={mode.groupHosts ? theme.colors.foreground : theme.colors.foregroundMuted} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -97,16 +120,27 @@ export function ProjectsView({
   snapshot,
   rows,
   rowShared,
+  reveal,
 }: {
   snapshot: StoreSnapshot;
   rows: readonly TriageRow[];
   rowShared: RowShared;
+  /** Scrolls the list so `node` is in view. */
+  reveal(node: View): void;
 }) {
   const { theme, compact } = rowShared;
   const { prefs } = snapshot;
   const mode = useViewMode();
   const openKey = useOpenChat();
   const [stripAll, setStripAll] = useState(false);
+  const [query, setQuery] = useState("");
+  /** Tree key of the node a search result jumped to; it scrolls into view and is marked briefly. */
+  const [focus, setFocus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focus) return;
+    const timer = setTimeout(() => setFocus(null), FOCUS_MS);
+    return () => clearTimeout(timer);
+  }, [focus]);
   const toggled = useMemo(() => new Set(mode.toggled), [mode.toggled]);
   const pins = useMemo(() => new Set(mode.pins), [mode.pins]);
   const pinnedWorkspaces = useMemo(
@@ -138,21 +172,21 @@ export function ProjectsView({
       }),
     [rows, listed, prefs.inactiveWindowDays, mode.activeOnly, pinnedWorkspaces, pinnedProjects],
   );
-  const pinned = useMemo(
+  // Everything, unfiltered: the base of the Pinned section and of search.
+  const full = useMemo(
     () =>
-      pinnedTree(
-        buildTree(rows, listed, {
-          now: Date.now(),
-          inactiveWindowDays: prefs.inactiveWindowDays,
-          activeOnly: false,
-          chatsPerWorkspace: Number.MAX_SAFE_INTEGER,
-          pinnedWorkspaces,
-          pinnedProjects,
-        }),
+      buildTree(rows, listed, {
+        now: Date.now(),
+        inactiveWindowDays: prefs.inactiveWindowDays,
+        activeOnly: false,
+        chatsPerWorkspace: Number.MAX_SAFE_INTEGER,
+        pinnedWorkspaces,
         pinnedProjects,
-      ),
+      }),
     [rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects],
   );
+  const pinned = useMemo(() => pinnedTree(full, pinnedProjects), [full, pinnedProjects]);
+  const hits = useMemo(() => searchTree(query, full), [query, full]);
 
   // Chats that wait for you or finished unseen, plus an opened one held in place (grey).
   const urgent = useMemo(() => rows.filter((row) => row.bucket === "unread"), [rows]);
@@ -187,95 +221,255 @@ export function ProjectsView({
     color: theme.colors.foregroundMuted,
   };
 
-  /** prefix keeps the Pinned section's folds apart from the tree's. */
-  const renderHost = (host: TreeHost, prefix: string, inPinned: boolean) => (
-    <HostNode
-      key={prefix + host.hostId}
-      host={host}
+  /** Jumps to a search result: a chat opens, a project or workspace is unfolded and scrolled to. */
+  const jump = (hit: TreeHit) => {
+    setQuery("");
+    if (hit.kind === "chat") {
+      rowShared.onOpen(hit.row);
+      return;
+    }
+    const host = tree.find((candidate) => candidate.hostId === hit.hostId);
+    const inTree = host?.projects.some((project) => project.key === hit.projectKey) ?? false;
+    const unfold = [`host:${hit.hostId}`, `project:${hit.projectKey}`];
+    const open: string[] = [];
+    if (!inTree) open.push(`quiet:${hit.hostId}`);
+    if (hit.kind === "workspace") {
+      unfold.push(`workspace:${hit.workspaceKey}`);
+      // A workspace that "active only" hides inside a shown project: show everything.
+      const shown = host?.projects.find((project) => project.key === hit.projectKey)?.workspaces.some((ws) => ws.key === hit.workspaceKey);
+      if (inTree && !shown) updateViewMode({ activeOnly: false });
+    }
+    revealNodes(unfold, open);
+    setFocus(hit.kind === "project" ? `project:${hit.projectKey}` : `workspace:${hit.workspaceKey}`);
+  };
+
+  const flat = !mode.groupHosts;
+  const renderProject = (project: TreeProject, prefix: string, inPinned: boolean) => (
+    <ProjectNode
+      key={prefix + project.key}
+      project={project}
       prefix={prefix}
+      pinned={pins.has(`project:${project.key}`)}
       theme={theme}
       compact={compact}
-      colorName={snapshot.hostColors[host.hostId]}
       toggled={toggled}
-      renderProject={(project) => (
-        <ProjectNode
-          key={prefix + project.key}
-          project={project}
+      hostTag={flat ? hostOfProject(project, snapshot) : undefined}
+      focused={!prefix && focus === `project:${project.key}`}
+      reveal={reveal}
+    >
+      {project.workspaces.map((workspace) => (
+        <WorkspaceNode
+          key={prefix + workspace.key}
+          workspace={workspace}
+          info={workspace.workspaceId ? workspaceInfo.get(workspace.key) : undefined}
           prefix={prefix}
-          pinned={pins.has(`project:${project.key}`)}
+          pinned={pins.has(`workspace:${workspace.key}`)}
+          theme={theme}
+          compact={compact}
+          folded={toggled.has(`${prefix}workspace:${workspace.key}`)}
+          showOlder={inPinned || toggled.has(`${prefix}older:${workspace.key}`)}
+          focused={!prefix && focus === `workspace:${workspace.key}`}
+          reveal={reveal}
+          renderChat={(row) => chatRow(row, false)}
+        />
+      ))}
+    </ProjectNode>
+  );
+  /** prefix keeps the Pinned section's folds apart from the tree's. */
+  const renderHosts = (hosts: readonly TreeHost[], prefix: string, inPinned: boolean) => {
+    if (flat) {
+      const merged = mergeHosts(hosts);
+      return (
+        <FlatProjects
+          key={prefix + "flat"}
+          merged={merged}
+          prefix={prefix}
           theme={theme}
           compact={compact}
           toggled={toggled}
-        >
-          {project.workspaces.map((workspace) => (
-            <WorkspaceNode
-              key={prefix + workspace.key}
-              workspace={workspace}
-              info={workspace.workspaceId ? workspaceInfo.get(workspace.key) : undefined}
-              prefix={prefix}
-              pinned={pins.has(`workspace:${workspace.key}`)}
-              theme={theme}
-              compact={compact}
-              folded={toggled.has(`${prefix}workspace:${workspace.key}`)}
-              showOlder={inPinned || toggled.has(`${prefix}older:${workspace.key}`)}
-              renderChat={(row) => chatRow(row, false)}
-            />
-          ))}
-        </ProjectNode>
-      )}
-    />
-  );
+          renderProject={(project) => renderProject(project, prefix, inPinned)}
+        />
+      );
+    }
+    return hosts.map((host) => (
+      <HostNode
+        key={prefix + host.hostId}
+        host={host}
+        prefix={prefix}
+        theme={theme}
+        compact={compact}
+        colorName={snapshot.hostColors[host.hostId]}
+        toggled={toggled}
+        renderProject={(project) => renderProject(project, prefix, inPinned)}
+      />
+    ));
+  };
 
   const pinnedFolded = toggled.has("pinned");
   return (
     <View>
-      {urgent.length > 0 ? (
-        <View
-          style={{
-            marginHorizontal: 8,
-            marginBottom: 6,
-            paddingVertical: 4,
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: theme.colors.statusDanger,
-            backgroundColor: theme.colors.surface1,
-          }}
-        >
-          <Text style={[heading, { paddingHorizontal: 10, paddingBottom: 2 }]}>
-            {`Needs you \u00B7 ${urgent.filter(needsYou).length}`}
-          </Text>
-          {stripShown.map((row) => chatRow(row, true))}
-          {urgent.length > stripShown.length ? (
-            <Pressable accessibilityRole="button" onPress={() => setStripAll(true)}>
-              <Text style={link}>{`+${urgent.length - stripShown.length} more`}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-      {pinned.length > 0 ? (
-        <View style={{ marginBottom: 6 }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: !pinnedFolded }}
-            onPress={() => toggleNode("pinned")}
-            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: compact ? 8 : 4 }}
-          >
-            <Icon name={pinnedFolded ? "ChevronRight" : "ChevronDown"} size={12} color={theme.colors.foregroundMuted} />
-            <Icon name="Pin" size={12} color={theme.colors.accent} />
-            <Text style={heading}>Pinned</Text>
-          </Pressable>
-          {pinnedFolded ? null : (
-            <View style={{ marginLeft: 8, borderLeftWidth: 2, borderLeftColor: theme.colors.accent }}>
-              {pinned.map((host) => renderHost(host, "pinned/", true))}
-            </View>
-          )}
-        </View>
+      <View style={{ paddingHorizontal: 8, paddingBottom: 6 }}>
+        <SearchBox theme={theme} compact={compact} value={query} onChange={setQuery} placeholder="Search projects, workspaces, chats" />
+      </View>
+      {query.trim() ? (
+        <SearchResults theme={theme} compact={compact} hits={hits} onSelect={jump} />
       ) : (
-        <Text style={{ fontSize: 11.5, color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingBottom: 6 }}>
-          Pin a project, workspace or chat to keep it here, with what is around it.
-        </Text>
+        <>
+          {urgent.length > 0 ? (
+            <View
+              style={{
+                marginHorizontal: 8,
+                marginBottom: 6,
+                paddingVertical: 4,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: theme.colors.statusDanger,
+                backgroundColor: theme.colors.surface1,
+              }}
+            >
+              <Text style={[heading, { paddingHorizontal: 10, paddingBottom: 2 }]}>
+                {`Needs you \u00B7 ${urgent.filter(needsYou).length}`}
+              </Text>
+              {stripShown.map((row) => chatRow(row, true))}
+              {urgent.length > stripShown.length ? (
+                <Pressable accessibilityRole="button" onPress={() => setStripAll(true)}>
+                  <Text style={link}>{`+${urgent.length - stripShown.length} more`}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+          {pinned.length > 0 ? (
+            <View style={{ marginBottom: 6 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: !pinnedFolded }}
+                onPress={() => toggleNode("pinned")}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: compact ? 8 : 4 }}
+              >
+                <Icon name={pinnedFolded ? "ChevronRight" : "ChevronDown"} size={12} color={theme.colors.foregroundMuted} />
+                <Icon name="Pin" size={12} color={theme.colors.accent} />
+                <Text style={heading}>Pinned</Text>
+              </Pressable>
+              {pinnedFolded ? null : (
+                <View style={{ marginLeft: 8, borderLeftWidth: 2, borderLeftColor: theme.colors.accent }}>
+                  {renderHosts(pinned, "pinned/", true)}
+                </View>
+              )}
+            </View>
+          ) : (
+            <Text style={{ fontSize: 11.5, color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingBottom: 6 }}>
+              Pin a project, workspace or chat to keep it here, with what is around it.
+            </Text>
+          )}
+          {renderHosts(tree, "", false)}
+        </>
       )}
-      {tree.map((host) => renderHost(host, "", false))}
+    </View>
+  );
+}
+
+/** How long a jumped-to project or workspace stays marked. */
+const FOCUS_MS = 1_800;
+
+/** Host label and colour of a project (its key starts with the host id). */
+function hostOfProject(project: TreeProject, snapshot: StoreSnapshot): { label: string; colorName: string | undefined } {
+  const hostId = project.key.slice(0, project.key.indexOf(":"));
+  const host = snapshot.hosts.find((candidate) => candidate.id === hostId);
+  return { label: host?.label ?? hostId, colorName: snapshot.hostColors[hostId] };
+}
+
+/** All hosts' projects as one list, by name; quiet ones likewise. */
+function mergeHosts(hosts: readonly TreeHost[]): { projects: TreeProject[]; quiet: TreeProject[] } {
+  const byName = (a: TreeProject, b: TreeProject) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  return {
+    projects: hosts.flatMap((host) => host.projects).sort(byName),
+    quiet: hosts.flatMap((host) => host.quiet).sort(byName),
+  };
+}
+
+function FlatProjects({
+  merged,
+  prefix,
+  theme,
+  compact,
+  toggled,
+  renderProject,
+}: {
+  merged: { projects: TreeProject[]; quiet: TreeProject[] };
+  prefix: string;
+  theme: PluginTheme;
+  compact: boolean;
+  toggled: ReadonlySet<string>;
+  renderProject(project: TreeProject): ReactNode;
+}) {
+  const quietKey = `${prefix}quiet:all`;
+  const quietOpen = toggled.has(quietKey);
+  const names = merged.quiet.map((project) => project.name);
+  const muted = { fontSize: 12, color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: compact ? 10 : 4 };
+  return (
+    <View>
+      {merged.projects.map(renderProject)}
+      {merged.quiet.length > 0 ? (
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: quietOpen }} onPress={() => toggleNode(quietKey)}>
+          <Text numberOfLines={1} style={muted}>
+            {quietOpen
+              ? "Hide quiet projects"
+              : `${names.length} quiet project${names.length > 1 ? "s" : ""}: ${names.slice(0, 3).join(", ")}${names.length > 3 ? " \u2026" : ""}`}
+          </Text>
+        </Pressable>
+      ) : null}
+      {quietOpen ? merged.quiet.map(renderProject) : null}
+    </View>
+  );
+}
+
+function SearchResults({
+  theme,
+  compact,
+  hits,
+  onSelect,
+}: {
+  theme: PluginTheme;
+  compact: boolean;
+  hits: readonly TreeHit[];
+  onSelect(hit: TreeHit): void;
+}) {
+  if (!hits.length) {
+    return <Text style={{ fontSize: 12, color: theme.colors.foregroundMuted, padding: 12 }}>Nothing matches.</Text>;
+  }
+  return (
+    <View>
+      {hits.map((hit) => (
+        <Pressable
+          key={hit.key}
+          accessibilityRole="button"
+          accessibilityLabel={`${hit.kind} ${hit.label}, ${hit.detail}`}
+          onPress={() => onSelect(hit)}
+          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingHorizontal: 10,
+            minHeight: compact ? 48 : 34,
+            borderRadius: 7,
+            backgroundColor: pressed || hovered ? theme.colors.surface2 : "transparent",
+          })}
+        >
+          {hit.kind === "chat" ? (
+            <LedDot led={hit.row.led} theme={theme} size={9} />
+          ) : (
+            <Icon name={hit.kind === "project" ? "Folder" : "GitBranch"} size={13} color={theme.colors.foregroundMuted} />
+          )}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text numberOfLines={1} style={{ fontSize: 13, color: theme.colors.foreground }}>
+              {hit.label}
+            </Text>
+            <Text numberOfLines={1} style={{ fontSize: 11, color: theme.colors.foregroundMuted }}>
+              {`${hit.kind === "chat" ? "chat" : hit.kind} \u00B7 ${hit.detail}`}
+            </Text>
+          </View>
+        </Pressable>
+      ))}
     </View>
   );
 }
@@ -349,6 +543,30 @@ function HostNode({
   );
 }
 
+/** Marks a node a search jumped to, and scrolls it into view once it is laid out. */
+function useFocus(focused: boolean, reveal: (node: View) => void) {
+  const node = useRef<View>(null);
+  useEffect(() => {
+    if (!focused) return;
+    const timer = setTimeout(() => {
+      if (node.current) reveal(node.current);
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [focused, reveal]);
+  return node;
+}
+
+function HostPill({ theme, label, colorName }: { theme: PluginTheme; label: string; colorName: string | undefined }) {
+  const tint = hostColors(colorName, isDark(theme.colors.surface0));
+  return (
+    <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, backgroundColor: tint?.background ?? theme.colors.surface2 }}>
+      <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: "600", color: tint?.text ?? theme.colors.foregroundMuted }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 function ProjectNode({
   project,
   prefix,
@@ -356,6 +574,9 @@ function ProjectNode({
   theme,
   compact,
   toggled,
+  hostTag,
+  focused,
+  reveal,
   children,
 }: {
   project: TreeProject;
@@ -364,13 +585,26 @@ function ProjectNode({
   theme: PluginTheme;
   compact: boolean;
   toggled: ReadonlySet<string>;
+  /** Shown at the right when projects are not grouped by host. */
+  hostTag: { label: string; colorName: string | undefined } | undefined;
+  focused: boolean;
+  reveal(node: View): void;
   children: ReactNode;
 }) {
   const key = `${prefix}project:${project.key}`;
   const folded = toggled.has(key);
+  const node = useFocus(focused, reveal);
   return (
-    <View style={{ marginTop: 4 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6 }}>
+    <View ref={node} style={{ marginTop: 4 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingRight: 6,
+          borderRadius: 7,
+          backgroundColor: focused ? theme.colors.surface2 : "transparent",
+        }}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${folded ? "Show" : "Hide"} ${project.name}`}
@@ -392,6 +626,7 @@ function ProjectNode({
             {project.name}
           </Text>
         </Pressable>
+        {hostTag ? <HostPill theme={theme} label={hostTag.label} colorName={hostTag.colorName} /> : null}
         <PinButton theme={theme} compact={compact} pinned={pinned} label={`project ${project.name}`} onPress={() => togglePin(`project:${project.key}`)} />
       </View>
       {folded ? null : <View style={{ paddingLeft: 12 }}>{children}</View>}
@@ -408,6 +643,8 @@ function WorkspaceNode({
   compact,
   folded,
   showOlder,
+  focused,
+  reveal,
   renderChat,
 }: {
   workspace: TreeWorkspace;
@@ -418,14 +655,25 @@ function WorkspaceNode({
   compact: boolean;
   folded: boolean;
   showOlder: boolean;
+  focused: boolean;
+  reveal(node: View): void;
   renderChat(row: TriageRow): ReactNode;
 }) {
   const chats = showOlder ? [...workspace.chats, ...workspace.older] : workspace.chats;
   const kind = info ? KIND_LABEL[info.kind] : undefined;
   const small = { fontSize: 10.5, color: theme.colors.foregroundMuted };
+  const node = useFocus(focused, reveal);
   return (
-    <View style={{ marginBottom: 2 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6 }}>
+    <View ref={node} style={{ marginBottom: 2 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingRight: 6,
+          borderRadius: 7,
+          backgroundColor: focused ? theme.colors.surface2 : "transparent",
+        }}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${folded ? "Show" : "Hide"} ${info?.title ?? workspace.name}`}
