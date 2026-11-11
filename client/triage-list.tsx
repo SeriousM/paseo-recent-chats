@@ -1,7 +1,7 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/ui";
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
-import { Animated, Platform, Pressable, Text, View } from "react-native";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { Animated, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
 import { chatTitle, hostColors, withAlpha } from "./format";
 import { columnChars, tokenMono, tokenText, tokenValue, visibleLines } from "./row-layout";
 import { openPluginSettings } from "./runtime";
@@ -517,13 +517,13 @@ export function HostHeading({
   label: string;
   colorName: string | undefined;
   unread: number;
-  /** With a handler, a chevron on the right folds the host's rows away. */
+  /** With a handler, the heading folds the host's rows away when pressed; a chevron shows the state. */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
 }) {
   const tint = hostColors(colorName, isDark(theme.colors.surface0));
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, paddingTop: 10, paddingBottom: 2 }}>
+  const content = (
+    <>
       <View
         style={{
           paddingHorizontal: 8,
@@ -539,36 +539,51 @@ export function HostHeading({
       {unread > 0 ? (
         <Text style={{ fontSize: 11, color: theme.colors.foregroundMuted }}>{`${unread} unread`}</Text>
       ) : null}
-      {onToggleCollapsed ? (
-        <CollapseChevron theme={theme} label={label} collapsed={collapsed ?? false} onPress={onToggleCollapsed} />
-      ) : null}
-    </View>
+      {onToggleCollapsed ? <CollapseChevron theme={theme} collapsed={collapsed ?? false} /> : null}
+    </>
+  );
+  const style = { flexDirection: "row" as const, alignItems: "center" as const, gap: 8, paddingHorizontal: 8, paddingTop: 10, paddingBottom: 2 };
+  return (
+    <HeadingRow style={style} label={label} collapsed={collapsed ?? false} onToggleCollapsed={onToggleCollapsed}>
+      {content}
+    </HeadingRow>
   );
 }
 
-/** Chevron on the right of a heading: down while the group is open, right while it is folded. */
-function CollapseChevron({
-  theme,
+/** A heading row; with a handler it folds its group when pressed. Buttons inside (the sort icon) keep their own press. */
+function HeadingRow({
   label,
   collapsed,
-  onPress,
+  onToggleCollapsed,
+  style,
+  children,
 }: {
-  theme: PluginTheme;
   label: string;
   collapsed: boolean;
-  onPress(): void;
+  onToggleCollapsed: (() => void) | undefined;
+  style: ViewStyle;
+  children: ReactNode;
 }) {
+  if (!onToggleCollapsed) return <View style={style}>{children}</View>;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${collapsed ? "Show" : "Hide"} ${label}`}
       accessibilityState={{ expanded: !collapsed }}
-      onPress={onPress}
-      hitSlop={10}
-      style={({ pressed }) => ({ marginLeft: "auto", padding: 2, borderRadius: 4, opacity: pressed ? 0.5 : 1 })}
+      onPress={onToggleCollapsed}
+      style={({ pressed }) => [style, pressed ? { opacity: 0.6 } : null]}
     >
-      <Icon name={collapsed ? "ChevronRight" : "ChevronDown"} size={14} color={theme.colors.foregroundMuted} />
+      {children}
     </Pressable>
+  );
+}
+
+/** Chevron on the right of a heading: down while the group is open, right while it is folded. */
+function CollapseChevron({ theme, collapsed }: { theme: PluginTheme; collapsed: boolean }) {
+  return (
+    <View style={{ marginLeft: "auto", padding: 2 }}>
+      <Icon name={collapsed ? "ChevronRight" : "ChevronDown"} size={14} color={theme.colors.foregroundMuted} />
+    </View>
   );
 }
 
@@ -771,7 +786,12 @@ export function TriageList({
                 />
               ) : null}
               {headings && !hostFolded && (hostChanged || previousSection !== section) ? (
-                <View style={styles.headingRow}>
+                <HeadingRow
+                  style={styles.headingRow}
+                  label={HEADINGS[section]}
+                  collapsed={sectionFolded}
+                  onToggleCollapsed={foldable ? () => toggleCollapsed(sectionKey) : undefined}
+                >
                   {/* Same icons as the sort toggle in the settings; pressing it switches the direction. */}
                   <Pressable
                     accessibilityRole="button"
@@ -787,15 +807,8 @@ export function TriageList({
                     />
                   </Pressable>
                   <Text style={styles.heading}>{HEADINGS[section]}</Text>
-                  {foldable ? (
-                    <CollapseChevron
-                      theme={theme}
-                      label={HEADINGS[section]}
-                      collapsed={sectionFolded}
-                      onPress={() => toggleCollapsed(sectionKey)}
-                    />
-                  ) : null}
-                </View>
+                  {foldable ? <CollapseChevron theme={theme} collapsed={sectionFolded} /> : null}
+                </HeadingRow>
               ) : null}
               {hostFolded || sectionFolded ? null : (
               <TriageRowView
