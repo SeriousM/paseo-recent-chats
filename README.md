@@ -26,6 +26,7 @@ The settings screen, where every row item can be shown, reordered, split over li
 - Rename a chat in place: long press its row, or double-click it on desktop and web. The new title is saved on the chat's host through its `paseo agent update`, so that host needs a current Recent Chats.
 - Opening a waiting chat leaves it in Needs you with a grey light until another chat is open or its state changes, so the list does not jump under the pointer.
 - Lights: red waiting for you (fast pulse, also for an open question or permission request while the chat runs) or failed, orange running, green finished and unseen, grey inactive.
+- **Sidebar view** (Settings, Sidebar, Sidebar view, "Recent Chats"): replaces the sidebar content with a Projects mode, a Needs you strip above a host, project, workspace and chat tree, and a Triage mode, the usual sections. Workspaces show their branch, checkout or worktree, the most urgent light of their chats, and buttons to pin the workspace in Paseo and to open it. Each workspace lists its three newest chats plus every chat that needs you, runs or is pinned; "Active only" folds projects with nothing inside the inactive window into a quiet list. The mode, Active only and folded nodes are kept per device.
 - **Inbox pill** in every chat's composer with live counts and the same list as a popup.
 - **Later pill** marks the chat you are in as unread and opens the next one.
 - Check button on unread rows marks read without opening; clock button on inactive rows marks unread;
@@ -75,7 +76,7 @@ API. If a future Paseo release isolates them, each host simply keeps its own mar
 
 ## Limits
 
-- Needs Paseo 0.14.0 or later (daemon and app). Hosts running an older version of this plugin keep their
+- Needs Paseo 0.16.0 or later (daemon and app). Hosts running an older version of this plugin keep their
   own marks and settings until updated.
 - Host colours are read from the app's saved host list, so they show on web and desktop only.
 - No keyboard shortcuts: plugins cannot register them. Use the Command Center.

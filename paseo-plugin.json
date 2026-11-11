@@ -3,7 +3,7 @@
   "name": "Recent Chats",
   "description": "A triage inbox for your chats: what needs you, what is running, what you touched last",
   "requirements": {
-    "paseo": ">=0.14.0"
+    "paseo": ">=0.16.0"
   },
   "media": [
     "assets/screenshot-layout.png"

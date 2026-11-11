@@ -128,7 +128,8 @@ const compare = (a: TriageRow, b: TriageRow, direction: 1 | -1): number =>
   a.hostId.localeCompare(b.hostId) ||
   a.agentId.localeCompare(b.agentId);
 
-const LED_RANK: Record<Led, number> = { permission: 0, error: 1, finished: 2, running: 3, idle: 4 };
+/** Most urgent first: waiting for you, failed, finished and unseen, running, inactive. */
+export const LED_RANK: Record<Led, number> = { permission: 0, error: 1, finished: 2, running: 3, idle: 4 };
 
 export interface TriageOptions {
   /** Triage each host on its own: caps apply per host and rows come out host by host. */
