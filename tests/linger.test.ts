@@ -20,3 +20,13 @@ describe("letting go of an opened chat", () => {
     expect(currentLinger()).toEqual({ key: "h1:c", sortAt: 7, status: "running" });
   });
 });
+
+describe("hold shared between plugin copies", () => {
+  it("keeps the hold where another host's copy of the plugin finds it", () => {
+    holdOpened("h2:x", 3, "idle");
+    const shared = (globalThis as unknown as Record<string, { linger: { key: string } | null } | undefined>)[
+      "__paseoRecentChats.openedHold.v1"
+    ];
+    expect(shared?.linger?.key).toBe("h2:x");
+  });
+});
