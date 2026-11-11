@@ -24,9 +24,9 @@ function set(next: Linger | null) {
   for (const listener of [...listeners]) listener();
 }
 
-/** Keeps `key` in Needs you after it was opened; replaces any earlier one. */
 export const currentLinger = (): Linger | null => linger;
 
+/** Keeps `key` in Needs you after it was opened; replaces any earlier one. */
 export const holdOpened = (key: string, sortAt: number, status: AgentStatus): void => set({ key, sortAt, status });
 
 /** Lets go once another chat than the held one is on screen. Called with the open chat whenever it changes. */

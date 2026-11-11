@@ -24,6 +24,8 @@ The settings screen, where every row item can be shown, reordered, split over li
 - A chevron on the Pinned, Running and Inactive headings, and on each host heading when grouped by host, folds that group away until you unfold it or restart the app.
 - The chat open on screen is highlighted in every list. Plugins are not told which chat is open, so this works while the Inbox or Later pill is shown in its composer.
 - Rename a chat in place: long press its row, or double-click it on desktop and web. The new title is saved on the chat's host through its `paseo agent update`, so that host needs a current Recent Chats.
+- Opening a waiting chat leaves it in Needs you with a grey light until another chat is open or its state changes, so the list does not jump under the pointer.
+- Lights: red waiting for you (fast pulse) or failed, orange running, green finished and unseen, grey inactive.
 - **Inbox pill** in every chat's composer with live counts and the same list as a popup.
 - **Later pill** marks the chat you are in as unread and opens the next one.
 - Check button on unread rows marks read without opening; clock button on inactive rows marks unread;
