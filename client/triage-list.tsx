@@ -205,13 +205,20 @@ export function TriageRowView({
         gap,
         minHeight: compact ? 48 : 32,
         paddingVertical: 3,
-        // A 3px bar on the left marks the open chat; every row keeps the same width for it.
-        paddingLeft: (compact ? 10 : 8) - 3,
+        paddingLeft: compact ? 10 : 8,
         paddingRight: 6,
         borderRadius: 8,
-        borderLeftWidth: 3,
-        borderLeftColor: current ? theme.colors.accent : "transparent",
+        // The open chat's bar is straight, so the corners next to it are square too.
+        ...(current ? { borderTopLeftRadius: 0, borderBottomLeftRadius: 0 } : null),
         backgroundColor: current ? theme.colors.surface2 : "transparent",
+      },
+      currentBar: {
+        position: "absolute" as const,
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 3,
+        backgroundColor: theme.colors.accent,
       },
       body: { flex: 1, minWidth: 0, gap: 2 },
       line: { flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, columnGap: gap, rowGap: 2 },
@@ -337,6 +344,7 @@ export function TriageRowView({
       onLongPress={fullNames ? () => setShowFull((value) => !value) : undefined}
       style={[styles.row, showFull ? { position: "relative", zIndex: 20 } : null]}
     >
+      {current ? <View pointerEvents="none" style={styles.currentBar} /> : null}
       <View style={styles.body}>
         {lines.map((line, index) =>
           index === 0 || hasContent(line) ? (
