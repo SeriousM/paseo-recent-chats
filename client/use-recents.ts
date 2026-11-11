@@ -3,6 +3,8 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { getStore } from "./runtime";
 import type { RecentsStore, StoreSnapshot } from "./store";
 import { buildTriage, type TriageLimits, type TriageResult, type TriageRow } from "./triage";
+import { followOpenChat, holdOpened, useLinger } from "./linger";
+import { useOpenChat } from "./open-chat";
 import type { Prefs } from "../shared/settings";
 
 export const GO_SCREEN_ID = "go";
@@ -30,6 +32,9 @@ export function useRecents(): Recents {
   useEffect(() => store.setHosts(hosts), [store, hosts]);
   useEffect(() => store.retain(), [store]);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+  const linger = useLinger();
+  const openKey = useOpenChat();
+  useEffect(() => followOpenChat(openKey), [openKey]);
   const result = useMemo(
     () =>
       buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), {
@@ -37,8 +42,9 @@ export function useRecents(): Recents {
         hostOrder: snapshot.hosts.map((host) => host.id),
         sectionOrder: snapshot.prefs.sectionOrder,
         sectionSort: snapshot.prefs.sectionSort,
+        linger,
       }),
-    [snapshot],
+    [snapshot, linger],
   );
   return { store, snapshot, result };
 }
@@ -57,5 +63,10 @@ export function openChat(store: RecentsStore, row: TriageRow, target: OpenTarget
   if (navigation) navigation.openAgent({ agentId: row.agentId, serverId: row.hostId });
   else if (openScreen) openScreen({ screenId: GO_SCREEN_ID, params: { agentId: row.agentId, serverId: row.hostId } });
   else return;
+  // A waiting chat keeps its place in Needs you (grey) until another chat is open; see linger.ts.
+  if (row.bucket === "unread") {
+    const status = store.getSnapshot().chats.find((chat) => chat.hostId === row.hostId && chat.agentId === row.agentId)?.status;
+    if (status) holdOpened(row.key, row.sortAt, status);
+  }
   store.markRead([row.key]);
 }

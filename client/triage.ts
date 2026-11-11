@@ -130,6 +130,11 @@ export interface TriageOptions {
   sectionOrder?: readonly Section[];
   /** Order of the chats inside each section. Default: oldest first, Inactive newest first. */
   sectionSort?: Readonly<Record<Section, SortDirection>>;
+  /**
+   * A waiting chat that was just opened: it keeps its Needs you place with a grey light while its status
+   * is what it was when it was opened. A new turn or new attention moves it as usual.
+   */
+  linger?: { key: string; sortAt: number; status: AgentStatus } | null;
 }
 
 export function buildTriage(
@@ -191,7 +196,7 @@ function triageOne(
   overlay: Overlay,
   limits: TriageLimits,
   now: number,
-  { sectionOrder = SECTIONS, sectionSort = DEFAULT_SECTION_SORT }: TriageOptions,
+  { sectionOrder = SECTIONS, sectionSort = DEFAULT_SECTION_SORT, linger = null }: TriageOptions,
 ): TriageResult {
   const unread: TriageRow[] = [];
   const running: TriageRow[] = [];
@@ -222,6 +227,9 @@ function triageOne(
     // chat that waits for a permission needs you while it runs.
     if (state && !(chat.status === "running" && !state.blocked)) {
       row = { ...base, bucket: "unread", pinned: isPinned, led: state.led, sortAt: state.sortAt };
+      unread.push(row);
+    } else if (linger?.key === key && linger.status === chat.status) {
+      row = { ...base, bucket: "unread", pinned: isPinned, led: "idle", sortAt: linger.sortAt };
       unread.push(row);
     } else if (chat.status === "running") {
       row = {
@@ -277,15 +285,17 @@ function triageOne(
   };
   const rows = sectionOrder.flatMap((section) => shownBy[section]);
 
+  // A held chat (opened, grey) sits in Needs you but is read: it neither counts nor colours the inbox.
+  const waiting = unread.filter((row) => row.led !== "idle");
   let worstUnread: Led | null = null;
-  for (const row of unread) {
+  for (const row of waiting) {
     if (worstUnread === null || LED_RANK[row.led] < LED_RANK[worstUnread]) worstUnread = row.led;
   }
 
   return {
     rows,
     all: sectionOrder.flatMap((section) => allBy[section]),
-    counts: { unread: unread.length, running: running.length, inactive: inactive.length },
+    counts: { unread: waiting.length, running: running.length, inactive: inactive.length },
     pinned: pinnedRows.length,
     hidden: {
       unread: Math.max(0, looseUnread.length - limits.maxUnread),

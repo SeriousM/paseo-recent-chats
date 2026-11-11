@@ -480,3 +480,21 @@ describe("pinned chats", () => {
     expect(pruneOverlay(overlay, new Set(["h1:pin", "h1:old"]), NOW)).toEqual({ "h1:pin": overlay["h1:pin"] });
   });
 });
+
+describe("an opened waiting chat stays in Needs you", () => {
+  const opened: Overlay = { "h1:a": { dismissedAt: ago(1 * MIN) } };
+  const chats = [chat("a", { attention: attention(5) }), chat("b")];
+
+  it("keeps its place with a grey light, without counting as unread", () => {
+    const result = buildTriage(chats, opened, limits, NOW, { linger: { key: "h1:a", sortAt: ago(5 * MIN), status: "idle" } });
+    expect(result.rows[0]).toMatchObject({ agentId: "a", bucket: "unread", led: "idle", sortAt: ago(5 * MIN) });
+    expect(result.counts.unread).toBe(0);
+    expect(result.worstUnread).toBeNull();
+  });
+
+  it("moves on when its status changes", () => {
+    const running = [chat("a", { status: "running", startedAt: ago(1 * MIN), attention: attention(5) })];
+    const result = buildTriage(running, opened, limits, NOW, { linger: { key: "h1:a", sortAt: ago(5 * MIN), status: "idle" } });
+    expect(result.rows[0]).toMatchObject({ agentId: "a", bucket: "running", led: "running" });
+  });
+});

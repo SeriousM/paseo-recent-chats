@@ -35,15 +35,15 @@ function isDark(hex: string): boolean {
   return luminance < 140;
 }
 
+/** Waiting for you red (and pulsing fast), running orange, finished and unseen green, inactive grey. */
 export function ledColor(theme: PluginTheme, led: Led): string {
   switch (led) {
     case "permission":
-      return theme.colors.statusWarning;
     case "error":
       return theme.colors.statusDanger;
-    case "finished":
-      return theme.colors.accent;
     case "running":
+      return theme.colors.statusWarning;
+    case "finished":
       return theme.colors.statusSuccess;
     default:
       return theme.colors.foregroundMuted;
