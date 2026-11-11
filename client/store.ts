@@ -14,7 +14,7 @@ import { DEFAULT_PREFS, parseStoredPrefs, toggleHiddenHost, withNormalizedLayout
 import { overlaySettings, prefsSettings, type Prefs } from "../shared/settings";
 import type { Section } from "../shared/sections";
 import { renameChat } from "../shared/rename";
-import { checkForUpdate } from "../shared/updates";
+import { checkForUpdate, installedVersionRpc } from "../shared/updates";
 
 export type Rpc = PluginCommandCapabilities["rpc"];
 
@@ -602,6 +602,24 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     } finally {
       prefsSyncing = false;
     }
+    await publishLatestVersion();
+  }
+
+  /**
+   * Records the newest version installed on any reachable host in the synced settings. Each host's
+   * plugin watches that value and updates itself when it is newer than its own. Hosts on an older
+   * version of this plugin do not answer and are skipped.
+   */
+  async function publishLatestVersion(): Promise<void> {
+    if (!prefsLoaded) return;
+    const versions = await Promise.all(
+      reachablePeers().map((peer) => peer.rpc(installedVersionRpc, {}).catch(() => null)),
+    );
+    let newest = prefs.latestVersion;
+    for (const version of versions) {
+      if (version && version.installedAt > (newest?.installedAt ?? 0)) newest = version;
+    }
+    if (newest && newest !== prefs.latestVersion) updatePrefs({ latestVersion: newest });
   }
 
   function updatePrefs(patch: Partial<Prefs>) {

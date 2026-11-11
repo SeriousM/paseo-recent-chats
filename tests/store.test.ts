@@ -73,7 +73,10 @@ function fakeRpc() {
     prefs: { revision: 1, values: DEFAULTS, down: false, writes: [], gate: null },
   };
   const reads = { overlay: 0, prefs: 0 };
+  /** What the host reports as its installed version (null: a local folder install). */
+  const version: { current: { commit: string; installedAt: number } | null } = { current: null };
   const rpc = (async (contract: { name: string }, input: { revision?: string; values?: unknown }) => {
+    if (contract.name === "updates.version") return version.current;
     const [, id, op] = contract.name.split(".") as [string, "overlay" | "prefs", string];
     const doc = docs[id];
     if (op === "read") {
@@ -90,7 +93,7 @@ function fakeRpc() {
     return { status: "saved", revision: String(doc.revision), values: doc.values };
   }) as unknown as Rpc;
   const entries = () => overlaySettings.schema.parse(docs.overlay.values).entries;
-  return { rpc, docs, reads, entries };
+  return { rpc, docs, reads, entries, version };
 }
 
 let directory: PeerDirectory;
@@ -577,6 +580,33 @@ describe("view settings across hosts", () => {
     store.updatePrefs({ maxUnread: 12 });
     await vi.advanceTimersByTimeAsync(600);
     expect(a.docs.prefs.writes.at(-1)).toMatchObject({ maxUnread: 12 });
+    store.dispose();
+  });
+});
+
+describe("newest plugin version across hosts", () => {
+  it("records the most recently installed version in every host's settings", async () => {
+    const a = storeOn("a");
+    const b = storeOn("b");
+    a.version.current = { commit: "old", installedAt: 100 };
+    b.version.current = { commit: "new", installedAt: 200 };
+    a.store.setHosts([host("a"), host("b")]);
+    a.store.retain();
+    await vi.advanceTimersByTimeAsync(2_000);
+    for (const docs of [a.docs, b.docs]) expect(docs.prefs.values).toMatchObject({ latestVersion: { commit: "new", installedAt: 200 } });
+    a.store.dispose();
+    b.store.dispose();
+  });
+
+  it("does not replace a newer recorded version with an older one", async () => {
+    const a = fakeRpc();
+    a.docs.prefs.values = { ...DEFAULTS, latestVersion: { commit: "newest", installedAt: 900 }, updatedAt: 50 };
+    a.version.current = { commit: "old", installedAt: 100 };
+    const { store } = storeOn("a", a);
+    store.setHosts([host("a")]);
+    store.retain();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(a.docs.prefs.values).toMatchObject({ latestVersion: { commit: "newest", installedAt: 900 } });
     store.dispose();
   });
 });

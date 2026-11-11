@@ -43,7 +43,7 @@ paseo plugin install github:SeriousM/paseo-recent-chats
 ```
 
 `--ref <branch, tag or commit>` pins a revision (the default is the repository's default branch), and
-The plugin updates itself: every host that installed it from GitHub checks a few minutes after start and every 6 hours, and runs `paseo plugin update` when a newer commit exists (Settings, Recent Chats, Updates switches this off). `paseo plugin update paseo-recent-chats` still updates at once. Plugins must be enabled on the daemon
+The plugin updates itself: every host that installed it from GitHub checks a few minutes after start and every 6 hours, and runs `paseo plugin update` when a newer commit exists (Settings, Recent Chats, Updates switches this off). The newest version installed on any host is kept in the synced settings, so as soon as one host updates, the others follow within about a minute while a Paseo app is open. `paseo plugin update paseo-recent-chats` still updates at once. Plugins must be enabled on the daemon
 (Settings, Plugins). In a desktop or web client the plugin then appears as "Recent Chats" in the sidebar.
 
 ## How unread works

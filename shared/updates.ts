@@ -7,3 +7,10 @@ export const checkForUpdate = defineRpc({
   input: z.object({}),
   output: z.object({ result: z.string() }),
 });
+
+/** The version of this plugin installed from GitHub on the host; null for a local folder install. */
+export const installedVersionRpc = defineRpc({
+  name: "updates.version",
+  input: z.object({}),
+  output: z.object({ commit: z.string(), installedAt: z.number() }).nullable(),
+});
