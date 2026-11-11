@@ -36,5 +36,5 @@ export const DEFAULT_LAYOUT: readonly RowToken[] = [
   { id: "title", enabled: true, line: 1, maxChars: 0, mono: false },
   { id: "branch", enabled: true, line: 2, maxChars: 24, mono: true },
   { id: "agent", enabled: true, line: 2, maxChars: 0, mono: false },
-  { id: "age", enabled: false, line: 2, maxChars: 0, mono: true },
+  { id: "age", enabled: false, line: 2, maxChars: 6, mono: true },
 ];

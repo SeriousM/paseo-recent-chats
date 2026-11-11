@@ -6,6 +6,7 @@ import type { Section } from "../shared/sections";
 import type { Prefs } from "../shared/settings";
 import { listDropIndex } from "./drag-target";
 import { IconButton } from "./layout-editor";
+import { measureIn } from "./measure";
 
 const LABELS: Record<Section, string> = {
   pinned: "Pinned",
@@ -71,6 +72,8 @@ interface SectionEditorProps {
 export function SectionEditor({ theme, compact, prefs, onChange }: SectionEditorProps): ReactElement {
   const order = prefs.sectionOrder;
   const boxes = useRef<Record<string, { top: number; height: number }>>({});
+  const container = useRef<View>(null);
+  const nodes = useRef(new Map<string, View | null>());
   const [drag, setDrag] = useState<{ section: Section; dy: number; to: number } | null>(null);
   const latest = useRef({ order, onChange });
   latest.current = { order, onChange };
@@ -89,6 +92,9 @@ export function SectionEditor({ theme, compact, prefs, onChange }: SectionEditor
   const handlers = useRef({
     start(section: Section) {
       setDrag({ section, dy: 0, to: latest.current.order.indexOf(section) });
+      measureIn(container.current, nodes.current, (fresh) => {
+        for (const [key, box] of fresh) boxes.current[key] = box;
+      });
     },
     move(section: Section, dy: number) {
       const from = latest.current.order.indexOf(section);
@@ -114,7 +120,7 @@ export function SectionEditor({ theme, compact, prefs, onChange }: SectionEditor
   }
 
   return (
-    <View style={{ position: "relative" }}>
+    <View ref={container} style={{ position: "relative" }}>
       {order.map((section, index) => (
         <SectionBlock
           key={section}
@@ -129,6 +135,9 @@ export function SectionEditor({ theme, compact, prefs, onChange }: SectionEditor
           onMove={(by) => moveTo(section, index + by)}
           onMeasure={(top, height) => {
             boxes.current[section] = { top, height };
+          }}
+          nodeRef={(node) => {
+            nodes.current.set(section, node);
           }}
           drag={handlers}
         />
@@ -161,6 +170,7 @@ function SectionBlock({
   onChange,
   onMove,
   onMeasure,
+  nodeRef,
   drag,
 }: {
   theme: PluginTheme;
@@ -174,6 +184,8 @@ function SectionBlock({
   onChange(patch: Partial<Prefs>): void;
   onMove(by: -1 | 1): void;
   onMeasure(top: number, height: number): void;
+  /** The block's view, measured afresh when a drag starts. */
+  nodeRef(node: View | null): void;
   drag: SectionDrag;
 }) {
   const pan = useMemo(
@@ -193,6 +205,7 @@ function SectionBlock({
   const dragging = dragDy !== null;
   return (
     <View
+      ref={nodeRef}
       onLayout={(event) => onMeasure(event.nativeEvent.layout.y, event.nativeEvent.layout.height)}
       style={{
         borderTopWidth: isFirst ? 0 : 1,

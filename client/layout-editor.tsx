@@ -4,6 +4,7 @@ import { Fragment, useMemo, useRef, useState, type ReactElement } from "react";
 import { PanResponder, Platform, Pressable, Text, TextInput, View, type ViewStyle } from "react-native";
 import { MAX_TOKEN_CHARS, type RowToken, type RowTokenId } from "../shared/layout";
 import { dropTarget, markerY, type DragGeometry, type Drop } from "./drag-target";
+import { measureIn, type Box } from "./measure";
 import { PREVIEW_HOST_COLORS, PREVIEW_ROWS } from "./preview-data";
 import {
   columnChars,
@@ -196,6 +197,7 @@ function TokenRow({
   dragDy,
   onChange,
   onMeasure,
+  nodeRef,
   drag,
 }: {
   theme: PluginTheme;
@@ -208,6 +210,8 @@ function TokenRow({
   dragDy: number | null;
   onChange(layout: RowToken[]): void;
   onMeasure(id: RowTokenId, y: number, height: number): void;
+  /** The row's view, measured afresh when a drag starts. */
+  nodeRef(node: View | null): void;
   drag: DragHandlers;
 }) {
   const box = compact ? 28 : 22;
@@ -230,6 +234,7 @@ function TokenRow({
   const dragging = dragDy !== null;
   return (
     <View
+      ref={nodeRef}
       onLayout={(event) => onMeasure(token.id, event.nativeEvent.layout.y, event.nativeEvent.layout.height)}
       style={{
         flexDirection: "row",
@@ -388,6 +393,11 @@ export function LayoutEditor({ theme, compact, layout, onChange }: EditorProps):
   const sectionTops = useRef<Record<number, number>>({});
   const rowBoxes = useRef<Record<string, { y: number; h: number }>>({});
   const zoneTop = useRef(0);
+  const container = useRef<View>(null);
+  /** Views to measure when a drag starts: `row:<id>`, `line:<n>` and `zone`. */
+  const nodes = useRef(new Map<string, View | null>());
+  /** Positions measured at drag start, relative to the editor; null outside a drag. */
+  const fresh = useRef<Map<string, Box> | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const startCenter = useRef(0);
   const latest = useRef({ layout, onChange, lines });
@@ -395,25 +405,38 @@ export function LayoutEditor({ theme, compact, layout, onChange }: EditorProps):
 
   const geometry = (): DragGeometry => {
     const current = latest.current.lines;
+    const measured = fresh.current;
     const rows = current.flatMap((line) =>
       line.map((token) => {
+        const box = measured?.get(`row:${token.id}`);
+        if (box) return { id: token.id, line: token.line, top: box.top, height: box.height };
         const section = sectionTops.current[token.line] ?? 0;
-        const box = rowBoxes.current[token.id] ?? { y: 0, h: 0 };
-        return { id: token.id, line: token.line, top: section + box.y, height: box.h };
+        const laidOut = rowBoxes.current[token.id] ?? { y: 0, h: 0 };
+        return { id: token.id, line: token.line, top: section + laidOut.y, height: laidOut.h };
       }),
     );
     return {
       rows,
-      lineTops: current.map((_line, index) => sectionTops.current[index + 1] ?? 0),
-      newLineTop: zoneTop.current,
+      lineTops: current.map((_line, index) => measured?.get(`line:${index + 1}`)?.top ?? sectionTops.current[index + 1] ?? 0),
+      newLineTop: measured?.get("zone")?.top ?? zoneTop.current,
     };
+  };
+
+  const centreOf = (id: RowTokenId) => {
+    const row = geometry().rows.find((candidate) => candidate.id === id);
+    return row ? row.top + row.height / 2 : 0;
   };
 
   const handlers: DragHandlers = {
     start(id) {
-      const row = geometry().rows.find((candidate) => candidate.id === id);
-      startCenter.current = row ? row.top + row.height / 2 : 0;
+      fresh.current = null;
+      startCenter.current = centreOf(id);
       setDrag({ id, dy: 0, drop: dropTarget(startCenter.current, geometry(), id) });
+      measureIn(container.current, nodes.current, (boxes) => {
+        fresh.current = boxes;
+        startCenter.current = centreOf(id);
+        setDrag((current) => (current?.id === id ? { ...current, drop: dropTarget(startCenter.current + current.dy, geometry(), id) } : current));
+      });
     },
     move(id, dy) {
       const geo = geometry();
@@ -421,11 +444,15 @@ export function LayoutEditor({ theme, compact, layout, onChange }: EditorProps):
     },
     end(id, dy) {
       const drop = dropTarget(startCenter.current + dy, geometry(), id);
+      fresh.current = null;
       setDrag(null);
       const { layout: now, onChange: emit } = latest.current;
       emit("newLineAt" in drop ? placeTokenOnNewLine(now, id, drop.newLineAt) : placeToken(now, id, drop.line, drop.index));
     },
-    cancel: () => setDrag(null),
+    cancel: () => {
+      fresh.current = null;
+      setDrag(null);
+    },
   };
 
   const heading = { color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "600" as const, letterSpacing: 0.7 };
@@ -437,10 +464,13 @@ export function LayoutEditor({ theme, compact, layout, onChange }: EditorProps):
       <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
         Drag the grip to reorder, or use the arrows. Drop below the last line to start a new line. Changes apply after Save.
       </Text>
-      <View style={{ position: "relative" }}>
+      <View ref={container} style={{ position: "relative" }}>
         {lines.map((tokens, lineIndex) => (
           <View
             key={lineIndex}
+            ref={(node) => {
+              nodes.current.set(`line:${lineIndex + 1}`, node);
+            }}
             onLayout={(event) => {
               sectionTops.current[lineIndex + 1] = event.nativeEvent.layout.y;
             }}
@@ -464,12 +494,18 @@ export function LayoutEditor({ theme, compact, layout, onChange }: EditorProps):
                     rowBoxes.current[id] = { y, h: height };
                   }}
                   drag={handlers}
+                  nodeRef={(node) => {
+                    nodes.current.set(`row:${token.id}`, node);
+                  }}
                 />
               );
             })}
           </View>
         ))}
         <View
+          ref={(node) => {
+            nodes.current.set("zone", node);
+          }}
           onLayout={(event) => {
             zoneTop.current = event.nativeEvent.layout.y;
           }}

@@ -51,7 +51,7 @@ describe("default layout", () => {
     const layout = resetLayout();
     expect(ids(tokensOfLine(layout, 1))).toEqual(["host", "led", "project", "workspace", "title"]);
     expect(ids(tokensOfLine(layout, 2))).toEqual(["branch", "agent", "age"]);
-    expect(layout.map((token) => token.maxChars)).toEqual([6, 0, 10, 10, 0, 24, 0, 0]);
+    expect(layout.map((token) => token.maxChars)).toEqual([6, 0, 10, 10, 0, 24, 0, 6]);
     expect(layout.filter((token) => !token.enabled).map((token) => token.id)).toEqual(["age"]);
   });
 
