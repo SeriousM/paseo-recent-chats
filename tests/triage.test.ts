@@ -498,3 +498,13 @@ describe("an opened waiting chat stays in Needs you", () => {
     expect(result.rows[0]).toMatchObject({ agentId: "a", bucket: "running", led: "running" });
   });
 });
+
+describe("pending questions and permissions", () => {
+  it("count as waiting for you while the chat runs, even without the daemon's attention flag and after opening", () => {
+    const asking = chat("ask", { status: "running", startedAt: ago(3 * MIN), pendingPermissions: 2 });
+    const opened: Overlay = { "h1:ask": { dismissedAt: ago(1 * MIN) } };
+    const result = buildTriage([asking], opened, limits, NOW);
+    expect(result.rows[0]).toMatchObject({ bucket: "unread", led: "permission", sortAt: ago(3 * MIN) });
+    expect(result.counts.unread).toBe(1);
+  });
+});

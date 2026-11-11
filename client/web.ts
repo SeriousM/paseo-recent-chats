@@ -137,3 +137,31 @@ export function onDoubleClick(node: unknown, handler: () => void): () => void {
   node.addEventListener("dblclick", listener);
   return () => node.removeEventListener("dblclick", listener);
 }
+
+interface DomKeyEvent {
+  key: string;
+  target: unknown;
+  preventDefault(): void;
+  stopPropagation(): void;
+}
+
+declare const document: {
+  addEventListener(type: "keydown", listener: (event: DomKeyEvent) => void, capture: boolean): void;
+  removeEventListener(type: "keydown", listener: (event: DomKeyEvent) => void, capture: boolean): void;
+};
+
+/**
+ * Calls `handler` when Escape is pressed while `node` has the focus. Listens in the capture phase, ahead
+ * of the app's own Escape handling, which would otherwise take the key first. A no-op off the web.
+ */
+export function onEscapeKey(node: unknown, handler: () => void): () => void {
+  if (Platform.OS !== "web" || !node) return () => {};
+  const listener = (event: DomKeyEvent) => {
+    if (event.key !== "Escape" || event.target !== node) return;
+    event.preventDefault();
+    event.stopPropagation();
+    handler();
+  };
+  document.addEventListener("keydown", listener, true);
+  return () => document.removeEventListener("keydown", listener, true);
+}

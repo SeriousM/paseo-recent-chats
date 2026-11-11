@@ -26,6 +26,11 @@ export interface ChatInput {
   updatedAt: number;
   /** Present when the daemon flags the chat (requiresAttention). `at` is attentionTimestamp. */
   attention: { reason: AttentionReason | null; at: number } | null;
+  /**
+   * Questions and permission requests the chat is waiting on. The daemon does not always raise its
+   * attention flag for these (an ask tool during a running turn), so they count as waiting by themselves.
+   */
+  pendingPermissions?: number;
 }
 
 export type OverlayEntry = {
@@ -97,6 +102,10 @@ function unreadState(
   limits: TriageLimits,
   now: number,
 ): { sortAt: number; led: Led; blocked: boolean } | null {
+  // Waiting on you, whether or not it was opened: it stays that way until the request is answered.
+  if ((chat.pendingPermissions ?? 0) > 0) {
+    return { sortAt: chat.attention?.at ?? chat.startedAt ?? chat.updatedAt, led: "permission", blocked: true };
+  }
   const dismissedAt = entry?.dismissedAt ?? 0;
   const cutoff = now - limits.unreadExpiryDays * DAY_MS;
   const fresh = (at: number) => at > dismissedAt && at >= cutoff;

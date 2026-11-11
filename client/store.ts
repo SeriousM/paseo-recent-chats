@@ -150,6 +150,7 @@ function toChat(
     attention: agent.requiresAttention
       ? { reason: agent.attentionReason ?? null, at: epoch(agent.attentionTimestamp) ?? updatedAt }
       : null,
+    pendingPermissions: agent.pendingPermissions?.length ?? 0,
   };
 }
 
