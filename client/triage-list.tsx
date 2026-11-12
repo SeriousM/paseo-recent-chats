@@ -780,14 +780,16 @@ export function TriageList({
   const columns = useMemo(() => columnChars(shown, prefs.layout), [shown, prefs.layout]);
   const styles = useMemo(
     () => ({
+      // Same spacing as the Projects view's Pinned heading: chevron first, rows indented under it.
       headingRow: {
         flexDirection: "row" as const,
         alignItems: "center" as const,
-        gap: 4,
+        gap: 6,
         paddingHorizontal: 10,
-        paddingTop: 8,
-        paddingBottom: 2,
+        paddingVertical: compact ? 8 : 4,
+        marginTop: 4,
       },
+      section: { paddingLeft: 12 },
       heading: {
         fontSize: 10.5,
         letterSpacing: 0.7,
@@ -916,6 +918,11 @@ export function TriageList({
                   collapsed={sectionFolded}
                   onToggleCollapsed={foldable ? () => toggleCollapsed(sectionKey) : undefined}
                 >
+                  {foldable ? (
+                    <Icon name={sectionFolded ? "ChevronRight" : "ChevronDown"} size={12} color={theme.colors.foregroundMuted} />
+                  ) : (
+                    <View style={{ width: 12 }} />
+                  )}
                   {/* Same icons as the sort toggle in the settings; pressing it switches the direction. */}
                   <Pressable
                     accessibilityRole="button"
@@ -931,10 +938,10 @@ export function TriageList({
                     />
                   </Pressable>
                   <Text style={styles.heading}>{HEADINGS[section]}</Text>
-                  {foldable ? <CollapseChevron theme={theme} collapsed={sectionFolded} /> : null}
                 </HeadingRow>
               ) : null}
               {hostFolded || sectionFolded ? null : (
+              <View style={headings ? styles.section : null}>
               <TriageRowView
                 row={row}
                 theme={theme}
@@ -952,6 +959,7 @@ export function TriageList({
                 onSetPinned={onSetPinned}
                 onRename={onRename}
               />
+              </View>
               )}
             </Fragment>
           );
