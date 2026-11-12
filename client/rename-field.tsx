@@ -3,6 +3,7 @@ import { Icon } from "@getpaseo/plugin/client/ui";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { onEscapeKey } from "./web";
+import { useFontScale } from "./font-scale";
 
 /** In place of a row's text while its chat is renamed. Enter or ✓ saves; Escape, ✕ or leaving the field cancels. */
 export function RenameField({
@@ -18,6 +19,7 @@ export function RenameField({
   onSave(title: string): Promise<void>;
   onClose(): void;
 }) {
+  const fs = useFontScale();
   const [value, setValue] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export function RenameField({
           style={{
             flex: 1,
             minWidth: 0,
-            fontSize: compact ? 14 : 13,
+            fontSize: fs(compact ? 14 : 13),
             paddingVertical: compact ? 8 : 4,
             paddingHorizontal: 8,
             borderRadius: 6,
@@ -124,7 +126,7 @@ export function RenameField({
           </>
         )}
       </View>
-      {error ? <Text style={{ fontSize: 11, color: theme.colors.statusDanger }}>{`Not renamed: ${error}`}</Text> : null}
+      {error ? <Text style={{ fontSize: fs(11), color: theme.colors.statusDanger }}>{`Not renamed: ${error}`}</Text> : null}
     </View>
   );
 }

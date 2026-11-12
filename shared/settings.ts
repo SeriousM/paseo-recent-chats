@@ -82,6 +82,8 @@ export const prefsSettings = defineSettings({
     treePins: z.array(z.string()).default([]),
     /** Projects view: group the tree by host. Off: one list of projects, each with its host's tag. */
     projectsGroupByHost: z.boolean().default(true),
+    /** Project keys (`<host>:<project>`) in the order dragged in the Projects view; the rest follow by name. */
+    projectOrder: z.array(z.string()).default([]),
     /** What the Projects tree shows around its chats. Each switch is on by default except the agent. */
     projectsShow: z
       .object({

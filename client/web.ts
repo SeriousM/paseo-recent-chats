@@ -25,6 +25,26 @@ export function readHostColorNames(): Record<string, string> {
   }
 }
 
+/** Where the Paseo web and desktop app save its own settings, including the interface font size. */
+const APP_SETTINGS_KEY = "@paseo:app-settings";
+
+/**
+ * The interface font size chosen in Paseo (Settings, Appearance), in px; null when it cannot be read
+ * (phones, or never changed). The plugin SDK does not expose it, so it is read from the app's settings.
+ */
+export function readUiFontSize(): number | null {
+  if (Platform.OS !== "web") return null;
+  try {
+    const raw = localStorage.getItem(APP_SETTINGS_KEY);
+    const settings: unknown = raw ? JSON.parse(raw) : null;
+    if (typeof settings !== "object" || settings === null || !("uiBaseFontSize" in settings)) return null;
+    const size = settings.uiBaseFontSize;
+    return typeof size === "number" && size > 0 ? size : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Where earlier versions kept the view preferences on web and desktop. Read once to move them to the hosts. */
 const PREFS_KEY = "paseo-recent-chats:prefs:v1";
 
@@ -199,26 +219,32 @@ interface DomScrollable {
   scrollTop: number;
   scrollHeight: number;
   clientHeight: number;
-  addEventListener(type: "wheel", listener: (event: DomWheelEvent) => void, options: { passive: boolean }): void;
-  removeEventListener(type: "wheel", listener: (event: DomWheelEvent) => void): void;
+}
+
+interface DomWheelTarget {
+  addEventListener(type: "wheel", listener: (event: DomWheelEvent) => void, options: { passive: boolean; capture: boolean }): void;
+  removeEventListener(type: "wheel", listener: (event: DomWheelEvent) => void, options: { capture: boolean }): void;
 }
 
 function scrollableNode(scrollView: unknown): DomScrollable | null {
   if (typeof scrollView !== "object" || scrollView === null || !("getScrollableNode" in scrollView)) return null;
   const getter = scrollView.getScrollableNode;
   const node: unknown = typeof getter === "function" ? getter.call(scrollView) : null;
-  return typeof node === "object" && node !== null && "scrollTop" in node && "addEventListener" in node ? (node as DomScrollable) : null;
+  return typeof node === "object" && node !== null && "scrollTop" in node ? (node as DomScrollable) : null;
 }
 
 /**
- * Scrolls a React Native ScrollView by the mouse wheel on the web. Inside the app's sidebar the wheel
- * otherwise reaches the list only after it has been clicked once. At either end the wheel is left to
- * the page. Returns a cleanup; a no-op off the web.
+ * Scrolls a React Native ScrollView by the mouse wheel on the web, wherever the pointer is inside `area`
+ * (the whole list, its headings and gaps too, not only its buttons). Inside the app's sidebar the wheel
+ * otherwise reaches the list only in some places, or after it has been clicked once. Listens in the
+ * capture phase, ahead of anything inside the list. At either end the wheel is left to the page.
+ * Returns a cleanup; a no-op off the web.
  */
-export function attachWheelScroll(scrollView: unknown): () => void {
+export function attachWheelScroll(scrollView: unknown, area: unknown): () => void {
   if (Platform.OS !== "web") return () => {};
   const node = scrollableNode(scrollView);
-  if (!node) return () => {};
+  if (!node || typeof area !== "object" || area === null || !("addEventListener" in area)) return () => {};
+  const target = area as DomWheelTarget;
   const listener = (event: DomWheelEvent) => {
     const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaMode === 2 ? event.deltaY * node.clientHeight : event.deltaY;
     const next = Math.min(Math.max(0, node.scrollTop + delta), node.scrollHeight - node.clientHeight);
@@ -227,6 +253,6 @@ export function attachWheelScroll(scrollView: unknown): () => void {
     event.preventDefault();
     event.stopPropagation();
   };
-  node.addEventListener("wheel", listener, { passive: false });
-  return () => node.removeEventListener("wheel", listener);
+  target.addEventListener("wheel", listener, { passive: false, capture: true });
+  return () => target.removeEventListener("wheel", listener, { capture: true });
 }

@@ -10,6 +10,7 @@ import { openChat, useRecents } from "./use-recents";
 import { ProjectsView, ViewModeBar } from "./projects-view";
 import { resolvedView, updateViewMode, useViewMode } from "./view-mode";
 import { attachVerticalDrag, attachWheelScroll } from "./web";
+import { useFontScale } from "./font-scale";
 
 export const RECENT_SCREEN_ID = "recent";
 
@@ -50,8 +51,9 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   const searching = searchText.trim().length > 0;
   const [hostsOpen, setHostsOpen] = useState(false);
   const scroll = useRef<NativeScrollView>(null);
-  // The wheel scrolls the list even before the panel has been clicked once.
-  useEffect(() => attachWheelScroll(scroll.current), [expanded]);
+  const listArea = useRef<View>(null);
+  // The wheel scrolls the list anywhere over it, even before the panel has been clicked once.
+  useEffect(() => attachWheelScroll(scroll.current, listArea.current), [expanded]);
 
   // Triage: every matching chat, in its section, uncapped.
   const matches = useMemo(
@@ -124,17 +126,18 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   };
 
   const cog = layout.compact ? 36 : 24;
+  const fs = useFontScale();
   const summary = (
     <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
       {unread > 0 ? (
-        <Text style={{ color: ledColor(theme, result.worstUnread ?? "finished"), fontWeight: "600", fontSize: 12 }}>
+        <Text style={{ color: ledColor(theme, result.worstUnread ?? "finished"), fontWeight: "600", fontSize: fs(12) }}>
           {unread}
         </Text>
       ) : null}
       {running > 0 ? (
-        <Text style={{ color: ledColor(theme, "running"), fontWeight: "600", fontSize: 12 }}>{running}</Text>
+        <Text style={{ color: ledColor(theme, "running"), fontWeight: "600", fontSize: fs(12) }}>{running}</Text>
       ) : null}
-      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 10 }}>{expanded ? "\u25BE" : "\u25B8"}</Text>
+      <Text style={{ color: theme.colors.foregroundMuted, fontSize: fs(10) }}>{expanded ? "\u25BE" : "\u25B8"}</Text>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Recent Chats settings"
@@ -167,7 +170,7 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
         trailing={summary}
       />
       {expanded ? (
-        <View>
+        <View ref={listArea}>
           <ViewModeBar
             theme={theme}
             compact={layout.compact}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTree, pinnedTree } from "../client/project-tree";
+import { buildTree, moveProject, pinnedTree } from "../client/project-tree";
 import type { TriageRow } from "../client/triage";
 
 const NOW = Date.UTC(2026, 10, 11, 21);
@@ -127,5 +127,22 @@ describe("pinned section", () => {
     const [host] = buildTree(rows, HOSTS, { ...options, pinnedProjects: new Set(["h1:Other"]) });
     expect(host?.projects.map((project) => project.name)).toContain("Other");
     expect(host?.quiet).toEqual([]);
+  });
+});
+
+describe("project order", () => {
+  const rows = ["delta", "alpha", "charlie", "bravo"].map((name) => row(name, { projectName: name, workspaceId: `w-${name}` }));
+  const names = (order: readonly string[]) =>
+    buildTree(rows, HOSTS, { ...options, projectOrder: order })[0]?.projects.map((project) => project.name);
+
+  it("lists dragged projects first in their order and the rest by name; unknown keys are ignored", () => {
+    expect(names([])).toEqual(["alpha", "bravo", "charlie", "delta"]);
+    expect(names(["h1:delta", "h9:gone", "h1:bravo"])).toEqual(["delta", "bravo", "alpha", "charlie"]);
+  });
+
+  it("moving a project puts the shown ones in their new order and keeps the others behind", () => {
+    const shown = ["h1:alpha", "h1:bravo", "h1:charlie"];
+    expect(moveProject(["h2:x", "h1:charlie"], shown, "h1:charlie", 0)).toEqual(["h1:charlie", "h1:alpha", "h1:bravo", "h2:x"]);
+    expect(moveProject([], shown, "h1:alpha", 99)).toEqual(["h1:bravo", "h1:charlie", "h1:alpha"]);
   });
 });

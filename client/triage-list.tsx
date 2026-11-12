@@ -12,6 +12,7 @@ import { hostGroupKey, sectionGroupKey, toggleCollapsed, useCollapsed } from "./
 import { useOpenChat } from "./open-chat";
 import { RenameField } from "./rename-field";
 import { onDoubleClick } from "./web";
+import { useFontScale } from "./font-scale";
 import type { Section } from "../shared/sections";
 
 const HEADINGS: Record<Section, string> = {
@@ -220,7 +221,8 @@ export function FullNamesCard({
     }),
     [theme, alpha, floating],
   );
-  const line = { fontSize: 12, color: theme.colors.foreground };
+  const fs = useFontScale();
+  const line = { fontSize: fs(12), color: theme.colors.foreground };
   const label = { color: theme.colors.foregroundMuted };
   return (
     <View pointerEvents="none" style={style}>
@@ -298,8 +300,9 @@ export function TriageRowView({
 }: RowViewProps) {
   const hostTint = hostColors(hostColor, isDark(theme.colors.surface0));
   const title = chatTitle(row.title, row.provider, row.agentId);
-  const fontSize = compact ? 14 : 13;
-  const smallFont = compact ? 12 : 11;
+  const fs = useFontScale();
+  const fontSize = fs(compact ? 14 : 13);
+  const smallFont = fs(compact ? 12 : 11);
   const gap = compact ? 8 : 6;
   const styles = useMemo(
     () => ({
@@ -318,7 +321,7 @@ export function TriageRowView({
       body: { flex: 1, minWidth: 0, gap: 2 },
       line: { flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, columnGap: gap, rowGap: 2 },
       host: { paddingVertical: 1, paddingHorizontal: 5, borderRadius: 5, alignItems: "center" as const },
-      hostText: { fontSize: 10, fontWeight: "600" as const },
+      hostText: { fontSize: fs(10), fontWeight: "600" as const },
       // Plain icons, the size of the tree's pin buttons: no outline, so they do not compete with the row.
       check: {
         width: compact ? 32 : 20,
@@ -327,7 +330,7 @@ export function TriageRowView({
         justifyContent: "center" as const,
       },
     }),
-    [theme, compact, current, gap],
+    [theme, compact, current, gap, fs],
   );
   const state = row.bucket === "unread" ? "unread" : row.bucket === "running" ? "running" : "inactive";
   // The full names appear while the pointer rests on the row (desktop) or after a long press (touch, where
@@ -549,6 +552,7 @@ export function HostFilter({
   onToggleGroupByHost(): void;
 }) {
   const dark = isDark(theme.colors.surface0);
+  const fs = useFontScale();
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, paddingHorizontal: 8, paddingVertical: 6 }}>
       {hosts.length >= 2 ? (
@@ -571,7 +575,7 @@ export function HostFilter({
       >
         <Icon name="Layers" size={12} color={groupByHost ? theme.colors.accent : theme.colors.foregroundMuted} />
         <Text
-          style={{ fontSize: 11, fontWeight: "600", color: groupByHost ? theme.colors.accent : theme.colors.foregroundMuted }}
+          style={{ fontSize: fs(11), fontWeight: "600", color: groupByHost ? theme.colors.accent : theme.colors.foregroundMuted }}
         >
           Group
         </Text>
@@ -600,7 +604,7 @@ export function HostFilter({
             <Text
               numberOfLines={1}
               style={{
-                fontSize: 11,
+                fontSize: fs(11),
                 fontWeight: "600",
                 color: on ? (tint?.text ?? theme.colors.foreground) : theme.colors.foregroundMuted,
                 textDecorationLine: on ? "none" : "line-through",
@@ -633,6 +637,7 @@ export function HostHeading({
   onToggleCollapsed?: () => void;
 }) {
   const tint = hostColors(colorName, isDark(theme.colors.surface0));
+  const fs = useFontScale();
   const content = (
     <>
       <View
@@ -643,12 +648,12 @@ export function HostHeading({
           backgroundColor: tint?.background ?? theme.colors.surface2,
         }}
       >
-        <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "700", color: tint?.text ?? theme.colors.foreground }}>
+        <Text numberOfLines={1} style={{ fontSize: fs(12), fontWeight: "700", color: tint?.text ?? theme.colors.foreground }}>
           {label}
         </Text>
       </View>
       {unread > 0 ? (
-        <Text style={{ fontSize: 11, color: theme.colors.foregroundMuted }}>{`${unread} unread`}</Text>
+        <Text style={{ fontSize: fs(11), color: theme.colors.foregroundMuted }}>{`${unread} unread`}</Text>
       ) : null}
       {onToggleCollapsed ? <CollapseChevron theme={theme} collapsed={collapsed ?? false} /> : null}
     </>
@@ -768,6 +773,7 @@ export function TriageList({
   }, [result]);
   const lines = useMemo(() => visibleLines(prefs.layout), [prefs.layout]);
   const columns = useMemo(() => columnChars(shown, prefs.layout), [shown, prefs.layout]);
+  const fs = useFontScale();
   const styles = useMemo(
     () => ({
       // Same spacing as the Projects view's Pinned heading: chevron first, rows indented under it.
@@ -781,14 +787,14 @@ export function TriageList({
       },
       section: { paddingLeft: 12 },
       heading: {
-        fontSize: 10.5,
+        fontSize: fs(10.5),
         letterSpacing: 0.7,
         textTransform: "uppercase" as const,
         fontWeight: "600" as const,
         color: theme.colors.foregroundMuted,
       },
-      muted: { padding: 12, fontSize: 13, color: theme.colors.foregroundMuted },
-      error: { paddingHorizontal: 12, paddingVertical: 4, fontSize: 12, color: theme.colors.statusDanger },
+      muted: { padding: 12, fontSize: fs(13), color: theme.colors.foregroundMuted },
+      error: { paddingHorizontal: 12, paddingVertical: 4, fontSize: fs(12), color: theme.colors.statusDanger },
       footer: {
         flexDirection: "row" as const,
         flexWrap: "wrap" as const,
@@ -811,10 +817,10 @@ export function TriageList({
         borderColor: theme.colors.border,
         backgroundColor: theme.colors.surface2,
       },
-      chipText: { fontSize: 12, color: theme.colors.foreground },
-      link: { fontSize: 12, color: theme.colors.accent, paddingVertical: compact ? 10 : 4, paddingHorizontal: 4 },
+      chipText: { fontSize: fs(12), color: theme.colors.foreground },
+      link: { fontSize: fs(12), color: theme.colors.accent, paddingVertical: compact ? 10 : 4, paddingHorizontal: 4 },
     }),
-    [theme, compact],
+    [theme, compact, fs],
   );
 
   const chips: { bucket: Bucket; led: Led; text: string }[] = [];

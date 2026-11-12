@@ -1,6 +1,7 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon, TextInput } from "@getpaseo/plugin/client/ui";
 import { Pressable, View } from "react-native";
+import { useFontScale } from "./font-scale";
 
 /** Search field with a clear button. Used by the sidebar list and the all-chats screen. */
 export function SearchBox({
@@ -19,6 +20,7 @@ export function SearchBox({
   autoFocus?: boolean;
 }) {
   const height = compact ? 44 : 32;
+  const fs = useFontScale();
   return (
     <View
       style={{
@@ -42,7 +44,7 @@ export function SearchBox({
         autoCorrect={false}
         autoCapitalize="none"
         autoFocus={autoFocus}
-        style={{ flex: 1, minWidth: 0, height, paddingHorizontal: 8, color: theme.colors.foreground, fontSize: 13 }}
+        style={{ flex: 1, minWidth: 0, height, paddingHorizontal: 8, color: theme.colors.foreground, fontSize: fs(13) }}
       />
       {value.length > 0 ? (
         <Pressable

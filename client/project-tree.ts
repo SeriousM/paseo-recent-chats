@@ -52,6 +52,8 @@ export interface TreeOptions {
   pinnedWorkspaces: ReadonlySet<string>;
   /** `${hostId}:${projectName}` of pinned projects: never quiet. */
   pinnedProjects?: ReadonlySet<string>;
+  /** Project keys (`${hostId}:${projectName}`) in the order the user dragged them; the rest follow by name. */
+  projectOrder?: readonly string[];
 }
 
 /** A chat that waits for you or finished unseen; a held (opened, grey) chat no longer counts. */
@@ -120,9 +122,27 @@ export function buildTree(
       if (shown.length > 0) projects.push({ key, name, workspaces: shown });
       else quiet.push({ key, name, workspaces: all });
     }
-    const byName = (a: TreeProject, b: TreeProject) => names.compare(a.name, b.name);
-    return { hostId: id, label, need, projects: projects.sort(byName), quiet: quiet.sort(byName) };
+    const byOrder = projectComparator(options.projectOrder ?? []);
+    return { hostId: id, label, need, projects: projects.sort(byOrder), quiet: quiet.sort(byOrder) };
   });
+}
+
+/** Projects listed in `order` first, in that order; the others after them by name. */
+export function projectComparator(order: readonly string[]): (a: TreeProject, b: TreeProject) => number {
+  const rank = new Map(order.map((key, index) => [key, index]));
+  return (a, b) =>
+    (rank.get(a.key) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.key) ?? Number.MAX_SAFE_INTEGER) || names.compare(a.name, b.name);
+}
+
+/**
+ * The stored project order after dragging `key` to position `to` among the projects on screen (`shown`,
+ * in their current order). The shown projects take that order at the front; projects not on screen
+ * (another host, folded away as quiet) keep their stored order behind them.
+ */
+export function moveProject(order: readonly string[], shown: readonly string[], key: string, to: number): string[] {
+  const moved = shown.filter((candidate) => candidate !== key);
+  moved.splice(Math.max(0, Math.min(to, moved.length)), 0, key);
+  return [...moved, ...order.filter((candidate) => !moved.includes(candidate))];
 }
 
 /**
