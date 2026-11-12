@@ -41,7 +41,7 @@ const KIND_LABEL: Partial<Record<WorkspaceInfo["kind"], string>> = {
 };
 
 /**
- * The first row of the sidebar list: Triage / Projects, the Hosts dropdown (which hosts are listed and
+ * The first row of the sidebar list: Projects / Triage, the Hosts dropdown (which hosts are listed and
  * whether rows group by host), Active only (Projects), and the search button.
  */
 export function ViewModeBar({
@@ -91,7 +91,7 @@ export function ViewModeBar({
           backgroundColor: theme.colors.surface1,
         }}
       >
-        {(["triage", "projects"] as const).map((option) => (
+        {(["projects", "triage"] as const).map((option) => (
           <Pressable
             key={option}
             accessibilityRole="tab"
