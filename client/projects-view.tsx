@@ -4,7 +4,7 @@
 // choice, "active only" and folds are kept on this device (view-mode.ts).
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/ui";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Easing, PanResponder, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
 import type { RowTokenId } from "../shared/layout";
 import type { Prefs } from "../shared/settings";
@@ -880,7 +880,9 @@ function ShiftingItem({
   children: ReactNode;
 }) {
   const offset = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
+  // Before paint: after a drop the list is drawn in its new order, and every offset must already match it in
+  // that first frame, or the moved items show one frame at their old offset (a visible jump).
+  useLayoutEffect(() => {
     const glide = (toValue: number) =>
       Animated.timing(offset, { toValue, duration: 140, easing: Easing.out(Easing.quad), useNativeDriver: Platform.OS !== "web" });
     if (landFrom !== null) {

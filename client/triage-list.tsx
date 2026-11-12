@@ -14,6 +14,10 @@ import { RenameField } from "./rename-field";
 import { onDoubleClick } from "./web";
 import { useFontScale } from "./font-scale";
 import type { Section } from "../shared/sections";
+import { PROVIDER_ICONS } from "./provider-icons";
+
+/** Hover this long on a row before its full-names card shows. */
+const CARD_DELAY_MS = 450;
 
 const HEADINGS: Record<Section, string> = {
   pinned: "Pinned",
@@ -189,6 +193,13 @@ function columnPixels(mono: boolean, chars: number, fontSize: number): number {
   return Math.ceil(chars * fontSize * (mono ? 0.6 : 0.56));
 }
 
+/** The harness icon of an agent's provider, as Paseo draws it; Paseo's Bot fallback for other providers. */
+export function ProviderIcon({ provider, size, color }: { provider: string; size: number; color: string }) {
+  const markup = PROVIDER_ICONS[provider];
+  const svg = useMemo(() => markup?.replaceAll("currentColor", color), [markup, color]);
+  return svg ? <Icon icon={{ svg }} size={size} color={color} /> : <Icon name="Bot" size={size} color={color} />;
+}
+
 /** Card with the untruncated names of a row. Shown under the row while it is hovered or long-pressed. */
 export function FullNamesCard({
   row,
@@ -237,7 +248,7 @@ export function FullNamesCard({
         </View>
       ) : null}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <Icon name="Bot" size={11} color={muted} />
+        <ProviderIcon provider={row.provider} size={11} color={muted} />
         <Text numberOfLines={1} style={[small, { flexShrink: 0 }]}>
           {row.agentName}
         </Text>
@@ -459,6 +470,15 @@ export function TriageRowView({
   // The full names appear while the pointer rests on the row (desktop) or after a long press (touch, where
   // long press renames instead when renaming is offered).
   const [showFull, setShowFull] = useState(false);
+  // The card waits a moment, so moving the pointer across the list does not flash cards.
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelHover = () => {
+    if (hoverTimer.current !== null) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+  };
+  useEffect(() => cancelHover, []);
   const [editing, setEditing] = useState(false);
   const rowNode = useRef<View>(null);
   const layer = useContext(CardLayerContext);
@@ -518,22 +538,29 @@ export function TriageRowView({
         ? { flexGrow: 1, flexShrink: 1, flexBasis: MIN_FLEX_WIDTH, minWidth: 0 }
         : { width: columnPixels(mono, chars, smallFont) };
     const isTitle = token.id === "title";
-    if (token.id === "branch") {
-      // No branch: no icon. A capped column keeps its width so the tokens after it stay in column.
+    // Branch and agent carry an icon (git branch, the agent's harness) before their text.
+    const lead =
+      token.id === "branch" ? (
+        <Icon name="GitBranch" size={BRANCH_ICON_SIZE} color={theme.colors.foregroundMuted} />
+      ) : token.id === "agent" ? (
+        <ProviderIcon provider={row.provider} size={BRANCH_ICON_SIZE} color={theme.colors.foregroundMuted} />
+      ) : null;
+    if (lead) {
+      // No value: no icon. A capped column keeps its width so the tokens after it stay in column.
       if (text.length === 0) {
         return chars === undefined ? null : (
-          <View key="branch" style={{ width: columnPixels(mono, chars, smallFont) + BRANCH_ICON_SPACE }} />
+          <View key={token.id} style={{ width: columnPixels(mono, chars, smallFont) + BRANCH_ICON_SPACE }} />
         );
       }
       return (
         <View
-          key="branch"
+          key={token.id}
           style={[
             chars === undefined ? fixed : { width: columnPixels(mono, chars, smallFont) + BRANCH_ICON_SPACE },
             { flexDirection: "row", alignItems: "center", gap: BRANCH_ICON_GAP },
           ]}
         >
-          <Icon name="GitBranch" size={BRANCH_ICON_SIZE} color={theme.colors.foregroundMuted} />
+          {lead}
           <Text
             numberOfLines={1}
             style={{ flex: 1, minWidth: 0, fontSize: smallFont, fontFamily: mono ? MONO : undefined, color: theme.colors.foregroundMuted }}
@@ -585,12 +612,27 @@ export function TriageRowView({
         editing
           ? undefined
           : () => {
+              cancelHover();
               setShowFull(false);
               onOpen(row);
             }
       }
-      onHoverIn={fullNames && !editing ? () => setShowFull(true) : undefined}
-      onHoverOut={fullNames ? () => setShowFull(false) : undefined}
+      onHoverIn={
+        fullNames && !editing
+          ? () => {
+              cancelHover();
+              hoverTimer.current = setTimeout(() => setShowFull(true), CARD_DELAY_MS);
+            }
+          : undefined
+      }
+      onHoverOut={
+        fullNames
+          ? () => {
+              cancelHover();
+              setShowFull(false);
+            }
+          : undefined
+      }
       onLongPress={editing ? undefined : (startRename ?? (fullNames ? () => setShowFull((value) => !value) : undefined))}
       style={[styles.row, cardShown && !layer ? { position: "relative", zIndex: 20 } : null]}
     >
