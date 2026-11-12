@@ -9,7 +9,7 @@ import { HostFilter, ledColor, TriageList, type TriageListProps } from "./triage
 import { openChat, useRecents } from "./use-recents";
 import { ProjectsView, ViewModeBar } from "./projects-view";
 import { resolvedView, updateViewMode, useViewMode } from "./view-mode";
-import { attachVerticalDrag, attachWheelScroll } from "./web";
+import { attachVerticalDrag, attachWheelScroll, markWindowContent } from "./web";
 import { useFontScale } from "./font-scale";
 
 export const RECENT_SCREEN_ID = "recent";
@@ -52,8 +52,12 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   const [hostsOpen, setHostsOpen] = useState(false);
   const scroll = useRef<NativeScrollView>(null);
   const listArea = useRef<View>(null);
-  // The wheel scrolls the list anywhere over it, even before the panel has been clicked once.
-  useEffect(() => attachWheelScroll(scroll.current, listArea.current), [expanded]);
+  // The list is window content, not the desktop window's drag area (which would swallow drags and the
+  // wheel), and the wheel scrolls it anywhere over it, even before the panel has been clicked once.
+  useEffect(() => {
+    markWindowContent(listArea.current);
+    return attachWheelScroll(scroll.current, listArea.current);
+  }, [expanded]);
 
   // Triage: every matching chat, in its section, uncapped.
   const matches = useMemo(

@@ -56,6 +56,29 @@ export interface TreeOptions {
   projectOrder?: readonly string[];
 }
 
+/** Collapse every project, expand everything, or open only what is active (see foldAll). */
+export type FoldAll = "collapse" | "expand" | "active";
+
+/**
+ * The tree's folds after a fold-all action, from the device's switched folds (`toggled`, see
+ * view-mode.ts). Hosts open; "collapse" folds every project; "active" folds every project and workspace
+ * with nothing running, asking you or finished unseen, and opens the rest. Folds of the Pinned section,
+ * "+N older" and the quiet lists stay as they are.
+ */
+export function foldAll(hosts: readonly TreeHost[], toggled: readonly string[], mode: FoldAll): string[] {
+  const kept = toggled.filter((key) => !/^(project|workspace|host):/.test(key));
+  if (mode === "expand") return kept;
+  const folded: string[] = [];
+  for (const host of hosts) {
+    for (const project of [...host.projects, ...host.quiet]) {
+      const busy = project.workspaces.filter((workspace) => workspace.led !== "idle");
+      if (mode === "collapse" || busy.length === 0) folded.push(`project:${project.key}`);
+      else for (const workspace of project.workspaces) if (!busy.includes(workspace)) folded.push(`workspace:${workspace.key}`);
+    }
+  }
+  return [...kept, ...folded];
+}
+
 /** A chat that waits for you or finished unseen; a held (opened, grey) chat no longer counts. */
 export const needsYou = (row: TriageRow): boolean => row.bucket === "unread" && row.led !== "idle";
 

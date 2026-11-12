@@ -11,6 +11,8 @@ import type { Prefs } from "../shared/settings";
 import { useOpenChat } from "./open-chat";
 import {
   buildTree,
+  foldAll,
+  type FoldAll,
   moveProject,
   needsYou,
   pinnedTree,
@@ -395,6 +397,31 @@ export function ProjectsView({
               Pin a project, workspace or chat to keep it here, with what is around it.
             </Text>
           )}
+          {searching ? null : (
+            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 2, paddingHorizontal: 6, paddingTop: 2 }}>
+              {FOLD_ACTIONS.map(([action, icon, label, hint]) => (
+                <Pressable
+                  key={action}
+                  accessibilityRole="button"
+                  accessibilityLabel={hint}
+                  onPress={() => updateViewMode({ toggled: foldAll(full, mode.toggled, action) })}
+                  hitSlop={4}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    paddingHorizontal: 6,
+                    paddingVertical: compact ? 8 : 2,
+                    borderRadius: 6,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Icon name={icon} size={12} color={theme.colors.foregroundMuted} />
+                  <Text style={{ fontSize: fs(11), color: theme.colors.foregroundMuted }}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
           {renderHosts(shownTree, "", false)}
           {searching && shownTree.length === 0 && pinned.length === 0 && urgent.length === 0 ? (
             <Text style={{ fontSize: fs(12), color: theme.colors.foregroundMuted, padding: 12 }}>Nothing matches.</Text>
@@ -402,6 +429,13 @@ export function ProjectsView({
     </View>
   );
 }
+
+/** The fold-all buttons above the tree: action, icon, label, accessibility label. */
+const FOLD_ACTIONS: readonly [FoldAll, string, string, string][] = [
+  ["collapse", "ChevronsDownUp", "Collapse", "Collapse all projects"],
+  ["expand", "ChevronsUpDown", "Expand", "Expand all projects and workspaces"],
+  ["active", "Activity", "Active", "Collapse everything, then open what is active"],
+];
 
 /** Host label and colour of a project (its key starts with the host id). */
 function hostOfProject(project: TreeProject, snapshot: StoreSnapshot): { label: string; colorName: string | undefined } {

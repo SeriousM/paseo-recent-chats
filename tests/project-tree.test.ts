@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTree, moveProject, pinnedTree } from "../client/project-tree";
+import { buildTree, foldAll, moveProject, pinnedTree } from "../client/project-tree";
 import type { TriageRow } from "../client/triage";
 
 const NOW = Date.UTC(2026, 10, 11, 21);
@@ -144,5 +144,24 @@ describe("project order", () => {
     const shown = ["h1:alpha", "h1:bravo", "h1:charlie"];
     expect(moveProject(["h2:x", "h1:charlie"], shown, "h1:charlie", 0)).toEqual(["h1:charlie", "h1:alpha", "h1:bravo", "h2:x"]);
     expect(moveProject([], shown, "h1:alpha", 99)).toEqual(["h1:bravo", "h1:charlie", "h1:alpha"]);
+  });
+});
+
+describe("fold all", () => {
+  const rows = [
+    row("busy", { projectName: "live", workspaceId: "w1", workspaceName: "on", bucket: "running", led: "running" }),
+    row("idle-ws", { projectName: "live", workspaceId: "w2", workspaceName: "off" }),
+    row("still", { projectName: "quiet", workspaceId: "w3", workspaceName: "q" }),
+  ];
+  const tree = buildTree(rows, HOSTS, { ...options, activeOnly: false });
+  const kept = ["pinned/project:h1:live", "older:h1:w1", "quiet:h1"];
+
+  it("collapses every project, expands everything, and keeps the Pinned section's, older and quiet folds", () => {
+    expect(foldAll(tree, [...kept, "workspace:h1:w1", "host:h1"], "collapse")).toEqual([...kept, "project:h1:live", "project:h1:quiet"]);
+    expect(foldAll(tree, [...kept, "project:h1:live"], "expand")).toEqual(kept);
+  });
+
+  it("opens only what is active: idle projects folded, idle workspaces of active projects folded", () => {
+    expect(foldAll(tree, kept, "active")).toEqual([...kept, "workspace:h1:w2", "project:h1:quiet"]);
   });
 });

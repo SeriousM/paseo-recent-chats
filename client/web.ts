@@ -145,6 +145,18 @@ export function attachVerticalDrag(
   };
 }
 
+/**
+ * Marks a web element as window content. In the desktop app the sidebar is part of the window's drag
+ * area: everything that is not a button drags the window and swallows the mouse wheel. Paseo opts its
+ * own content out with this attribute (app index.html: `[data-window-content] { -webkit-app-region:
+ * initial }`). A no-op off the web.
+ */
+export function markWindowContent(node: unknown): void {
+  if (Platform.OS !== "web" || typeof node !== "object" || node === null || !("setAttribute" in node)) return;
+  const setAttribute = node.setAttribute;
+  if (typeof setAttribute === "function") setAttribute.call(node, "data-window-content", "");
+}
+
 interface DomSizeEntry {
   contentRect: { width: number; height: number };
 }
