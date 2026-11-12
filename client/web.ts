@@ -146,15 +146,18 @@ export function attachVerticalDrag(
 }
 
 /**
- * Marks a web element as window content. In the desktop app the sidebar is part of the window's drag
- * area: everything that is not a button drags the window and swallows the mouse wheel. Paseo opts its
- * own content out with this attribute (app index.html: `[data-window-content] { -webkit-app-region:
- * initial }`). A no-op off the web.
+ * Takes a web element out of the desktop window's drag area. In the desktop app the sidebar is part of
+ * that area: everything that is not a button drags the window and swallows the mouse wheel. Inline
+ * `no-drag` on the element carves its whole box out, buttons inside included. (Paseo's
+ * `data-window-content` marker is not usable here: it resets every descendant to `initial`, which
+ * removes the buttons' own no-drag and makes the whole list a drag area.) A no-op off the web.
  */
-export function markWindowContent(node: unknown): void {
-  if (Platform.OS !== "web" || typeof node !== "object" || node === null || !("setAttribute" in node)) return;
-  const setAttribute = node.setAttribute;
-  if (typeof setAttribute === "function") setAttribute.call(node, "data-window-content", "");
+export function excludeFromWindowDrag(node: unknown): void {
+  if (Platform.OS !== "web" || typeof node !== "object" || node === null || !("style" in node)) return;
+  const style = node.style;
+  if (typeof style === "object" && style !== null && "setProperty" in style && typeof style.setProperty === "function") {
+    style.setProperty.call(style, "-webkit-app-region", "no-drag");
+  }
 }
 
 interface DomSizeEntry {
