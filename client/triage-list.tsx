@@ -61,42 +61,120 @@ export function ledColor(theme: PluginTheme, led: Led): string {
   }
 }
 
-/** Time per turn of the spinning circle: running turns steadily, asking for you turns fast to stand out. */
-const SPIN_MS: Partial<Record<Led, number>> = { running: 1100, permission: 450 };
+/** Paseo's running ring: one turn in 0.9 s, as in its session tabs (app components/status-ring). */
+const RING_PERIOD_MS = 900;
+/** The "?" of a chat asking you fades out and back in this slowly. */
+const ASK_PULSE_MS = 900;
 
-export function LedDot({ led, theme, size = 10 }: { led: Led; theme: PluginTheme; size?: number }) {
-  const spin = useRef(new Animated.Value(0)).current;
-  const duration = SPIN_MS[led];
+// Done and failed as 12x12 SVG paths. Loaded: filled, the check or "!" cut out (even-odd), so it works
+// on any row background. Released: outlined.
+const GLYPHS = {
+  done: {
+    loaded: (c: string) =>
+      `<path fill="${c}" fill-rule="evenodd" d="M6 .5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11ZM2.83 6.77 5.2 9.13 9.29 4.74 8.11 3.66 5.2 6.87 3.97 5.63Z"/>`,
+    released: (c: string) =>
+      `<circle cx="6" cy="6" r="5" fill="none" stroke="${c}" stroke-width="1.2"/><path d="M3.6 6.2 5.3 7.9 8.5 4.4" fill="none" stroke="${c}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+  },
+  failed: {
+    loaded: (c: string) =>
+      `<path fill="${c}" fill-rule="evenodd" d="M6 .6 11.5 10.9H.5ZM5.25 4.2h1.5v3.4h-1.5ZM6 8.25a.8.8 0 1 0 0 1.6a.8.8 0 1 0 0-1.6Z"/>`,
+    released: (c: string) =>
+      `<path d="M6 1.3 11 10.5H1Z" fill="none" stroke="${c}" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 4.6V7.1" stroke="${c}" stroke-width="1.3" stroke-linecap="round"/><circle cx="6" cy="8.8" r=".75" fill="${c}"/>`,
+  },
+} as const;
+
+function useLoop(active: boolean, duration: number, run: (value: Animated.Value) => Animated.CompositeAnimation) {
+  const value = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (duration === undefined) return;
-    spin.setValue(0);
-    const loop = Animated.loop(
-      Animated.timing(spin, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER }),
-    );
+    if (!active) return;
+    value.setValue(0);
+    const loop = Animated.loop(run(value));
     loop.start();
     return () => loop.stop();
-  }, [duration, spin]);
+    // `run` only builds the animation; the loop restarts when the state or its timing changes.
+  }, [active, duration, value]);
+  return value;
+}
+
+/**
+ * A chat's state as a symbol: Paseo's turning ring while it runs, a pulsing "?" while it asks you (a
+ * question or permission request), a check when done, a warning triangle when failed. Done and failed are
+ * filled while the agent is in memory and outlined once Paseo has released it. Inactive chats show how
+ * they last ended, in grey.
+ */
+export function LedDot({
+  led,
+  theme,
+  size = 12,
+  released = false,
+  failed = false,
+}: {
+  led: Led;
+  theme: PluginTheme;
+  size?: number;
+  released?: boolean;
+  failed?: boolean;
+}) {
   const color = ledColor(theme, led);
-  if (duration === undefined) {
+  const spin = useLoop(led === "running", RING_PERIOD_MS, (value) =>
+    Animated.timing(value, { toValue: 1, duration: RING_PERIOD_MS, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER }),
+  );
+  const pulse = useLoop(led === "permission", ASK_PULSE_MS, (value) =>
+    Animated.sequence([
+      Animated.timing(value, { toValue: 1, duration: ASK_PULSE_MS, easing: Easing.inOut(Easing.ease), useNativeDriver: NATIVE_DRIVER }),
+      Animated.timing(value, { toValue: 0, duration: ASK_PULSE_MS, easing: Easing.inOut(Easing.ease), useNativeDriver: NATIVE_DRIVER }),
+    ]),
+  );
+  const glyph = led === "error" || (led === "idle" && failed) ? "failed" : "done";
+  const svg = useMemo(
+    () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">${GLYPHS[glyph][released ? "released" : "loaded"](color)}</svg>`,
+    [glyph, released, color],
+  );
+  const box = { width: size, height: size, alignItems: "center" as const, justifyContent: "center" as const };
+
+  if (led === "running") {
+    // Paseo's proportions: a centre dot of half the size, a faint track, and a brighter quarter turning on it.
+    const stroke = size / 8;
+    const circle = { position: "absolute" as const, width: size, height: size, borderRadius: size / 2, borderWidth: stroke };
     return (
-      <View
-        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity: led === "idle" ? 0.55 : 1 }}
-      />
+      <View style={box}>
+        <View style={[circle, { borderColor: color, opacity: 0.3 }]} />
+        <Animated.View
+          style={[
+            circle,
+            {
+              borderColor: "transparent",
+              borderTopColor: color,
+              opacity: 0.9,
+              transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
+            },
+          ]}
+        />
+        <View style={{ width: size / 2, height: size / 2, borderRadius: size / 4, backgroundColor: color }} />
+      </View>
     );
   }
-  // A ring with one quarter open, turning: the same box as the dot, so rows do not shift.
+  if (led === "permission") {
+    return (
+      <View style={box}>
+        <Animated.Text
+          style={{
+            color,
+            fontSize: size + 2,
+            lineHeight: size + 2,
+            fontWeight: "800",
+            opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.5] }),
+          }}
+        >
+          ?
+        </Animated.Text>
+      </View>
+    );
+  }
   return (
-    <Animated.View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        borderWidth: Math.max(1.5, size / 6),
-        borderColor: color,
-        borderTopColor: "transparent",
-        transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
-      }}
-    />
+    <View style={[box, led === "idle" ? { opacity: 0.7 } : null]}>
+      <Icon icon={{ svg }} size={size} color={color} />
+    </View>
   );
 }
 
@@ -276,7 +354,7 @@ export function TriageRowView({
   latestStart.current = startRename;
   useEffect(() => onDoubleClick(rowNode.current, () => latestStart.current?.()), []);
   const renderToken = (token: RowToken): ReactElement | null => {
-    if (token.id === "led") return <LedDot key="led" led={row.led} theme={theme} />;
+    if (token.id === "led") return <LedDot key="led" led={row.led} released={row.released} failed={row.failed} theme={theme} />;
     if (token.id === "host" && !showHost) return null;
     const text = tokenText(row, token);
     const mono = tokenMono(token);
@@ -761,7 +839,7 @@ export function TriageList({
     <View style={styles.footer}>
       {chips.map((chip) => (
         <Pressable key={chip.bucket} accessibilityRole="button" onPress={onShowAll} style={styles.chip}>
-          <LedDot led={chip.led} theme={theme} size={8} />
+          <LedDot led={chip.led} theme={theme} size={10} />
           <Text style={styles.chipText}>{chip.text}</Text>
         </Pressable>
       ))}

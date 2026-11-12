@@ -35,7 +35,7 @@ The settings screen, where every row item can be shown, reordered, split over li
 - The chat open on screen is highlighted in every list. Plugins are not told which chat is open, so this works while the Inbox or Later pill is shown in its composer.
 - Rename a chat in place: long press its row, or double-click it on desktop and web. The new title is saved on the chat's host through its `paseo agent update`, so that host needs a current Recent Chats.
 - Opening a waiting chat leaves it in Needs you with a grey light until another chat is open or its state changes, so the list does not jump under the pointer.
-- Lights in Paseo's own status colours: amber asking you (a question or permission request, also while the chat runs; a fast-spinning circle), blue running (a spinning circle), green finished and unseen, red failed, grey inactive.
+- Status symbols in Paseo's own colours: Paseo's turning blue ring while a chat runs, a pulsing amber "?" while it asks you (a question or permission request, also while it runs), a green check when done and unseen, a red warning triangle when failed. Check and triangle are filled while the agent is in memory and outlined once Paseo has released it; inactive chats show how they last ended, in grey.
 - **Inbox pill** in every chat's composer with live counts and the same list as a popup.
 - **Later pill** marks the chat you are in as unread and opens the next one.
 - Check button on unread rows marks read without opening; clock button on inactive rows marks unread;

@@ -7,7 +7,7 @@ export const PREVIEW_HOST_COLORS: Readonly<Record<string, string>> = {
   "preview-buildbox": "teal",
 };
 
-const base = { workspaceId: null, provider: "omp" } as const;
+const base = { workspaceId: null, provider: "omp", released: false, failed: false } as const;
 
 export const PREVIEW_ROWS: readonly TriageRow[] = [
   {
@@ -56,6 +56,7 @@ export const PREVIEW_ROWS: readonly TriageRow[] = [
     bucket: "inactive",
     pinned: true,
     led: "idle",
+    released: true,
     sortAt: 1,
   },
 ];

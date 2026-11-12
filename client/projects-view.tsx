@@ -595,7 +595,7 @@ function WorkspaceNode({
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          <LedDot led={workspace.led} theme={theme} size={9} />
+          <LedDot led={workspace.led} released={workspace.released} failed={workspace.failed} theme={theme} size={11} />
           <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: theme.colors.foreground }}>
             {info?.title ?? workspace.name}
           </Text>

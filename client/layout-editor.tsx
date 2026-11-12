@@ -35,7 +35,7 @@ const LABELS: Record<RowTokenId, string> = {
 
 const HINTS: Record<RowTokenId, string> = {
   host: "Tag in the colour set for the host in Paseo. Hidden when only one host is listed.",
-  led: "Unread, running or inactive.",
+  led: "Running, asking you, done or failed; outlined once Paseo has released the agent.",
   project: "Project of the chat's workspace.",
   workspace: "Workspace name.",
   title: "The chat's tab name.",

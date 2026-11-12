@@ -11,8 +11,10 @@ export interface TreeWorkspace {
   workspaceId: string | null;
   name: string;
   branch: string;
-  /** Most urgent light of its chats. */
+  /** Most urgent light of its chats, and whether that chat's agent is released or last failed. */
   led: Led;
+  released: boolean;
+  failed: boolean;
   /** Pinned in Paseo (a workspace pin, not a chat pin). */
   pinned: boolean;
   /** Newest time any of its chats sorts on. */
@@ -94,6 +96,8 @@ export function buildTree(
       name: first.workspaceName,
       branch: first.branch,
       led: first.led,
+      released: first.released,
+      failed: first.failed,
       pinned: first.workspaceId !== null && options.pinnedWorkspaces.has(`${first.hostId}:${first.workspaceId}`),
       lastAt: Math.max(...list.map((row) => row.sortAt)),
       chats,

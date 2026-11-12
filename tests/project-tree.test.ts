@@ -22,6 +22,8 @@ function row(agentId: string, change: Partial<TriageRow> = {}): TriageRow {
     bucket: "inactive",
     pinned: false,
     led: "idle",
+    released: false,
+    failed: false,
     sortAt: NOW - HOUR,
     ...change,
   };

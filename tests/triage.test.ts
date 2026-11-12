@@ -508,3 +508,16 @@ describe("pending questions and permissions", () => {
     expect(result.counts.unread).toBe(1);
   });
 });
+
+describe("released agents and failed turns", () => {
+  it("marks a chat whose agent Paseo released, and remembers a failed last turn after release", () => {
+    const result = buildTriage(
+      [chat("loaded"), chat("released", { status: "closed" }), chat("broke", { status: "closed", failed: true }), chat("err", { status: "error" })],
+      {},
+      { ...limits, maxInactive: 10 },
+      NOW,
+    );
+    const flags = Object.fromEntries(result.rows.map((row) => [row.agentId, [row.released, row.failed]]));
+    expect(flags).toEqual({ loaded: [false, false], released: [true, false], broke: [true, true], err: [false, true] });
+  });
+});

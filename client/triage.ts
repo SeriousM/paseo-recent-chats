@@ -31,6 +31,8 @@ export interface ChatInput {
    * attention flag for these (an ask tool during a running turn), so they count as waiting by themselves.
    */
   pendingPermissions?: number;
+  /** The last turn ended in an error (the daemon keeps `lastError` until the next turn, also after releasing the agent). */
+  failed?: boolean;
 }
 
 export type OverlayEntry = {
@@ -65,6 +67,10 @@ export interface TriageRow {
   /** Pinned chats form their own section, in the order they were pinned. `bucket` and `led` still show their state. */
   pinned: boolean;
   led: Led;
+  /** Paseo released the agent from memory (status "closed"); it loads again when the chat is opened. */
+  released: boolean;
+  /** The chat's last turn ended in an error; inactive chats show it in grey. */
+  failed: boolean;
   /** Value the bucket sorts on, epoch ms. */
   sortAt: number;
 }
@@ -227,6 +233,8 @@ function triageOne(
       agentName: chat.agentName,
       title: chat.title,
       provider: chat.provider,
+      released: chat.status === "closed",
+      failed: chat.status === "error" || chat.failed === true,
     };
     const pinnedAt = overlay[key]?.pinnedAt;
     const isPinned = pinnedAt !== undefined;

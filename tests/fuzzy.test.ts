@@ -19,6 +19,8 @@ function row(id: string, patch: Partial<TriageRow> = {}): TriageRow {
     bucket: "inactive",
     pinned: false,
     led: "idle",
+    released: false,
+    failed: false,
     sortAt: 1,
     ...patch,
   };

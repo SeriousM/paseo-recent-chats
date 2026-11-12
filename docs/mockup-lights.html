@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recent Chats: lights for released agents (mockup)</title>
+<style>
+  body { margin: 0; padding: 24px; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: #0f1115; color: #e6e8eb; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { color: #8b929c; max-width: 70ch; }
+  .themes { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 16px; }
+  .panel { width: 380px; border-radius: 12px; padding: 10px; border: 1px solid; }
+  .dark { --bg: #16181d; --fg: #e6e8eb; --muted: #8b929c; --border: #2c313a; --asking: #db932e; --failed: #f7796d; --running: #5caaf6; --ready: #35c264; --idle: #8b929c; }
+  .light { --bg: #ffffff; --fg: #18181b; --muted: #71717a; --border: #e4e4e7; --asking: #b37824; --failed: #f12e2f; --running: #268ae0; --ready: #299f51; --idle: #71717a; }
+  .panel { background: var(--bg); color: var(--fg); border-color: var(--border); }
+  .panel h2 { font-size: 11px; letter-spacing: .7px; text-transform: uppercase; color: var(--muted); margin: 4px 6px 8px; }
+  .row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 7px; }
+  .title { flex: 1; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tag { font-size: 11px; color: var(--muted); }
+  .led { width: 10px; height: 10px; border-radius: 50%; flex: none; box-sizing: border-box; }
+  .dot { background: var(--c); }
+  .ring { border: 1.7px solid var(--c); }
+  .spin { border: 1.7px solid var(--c); border-top-color: transparent; animation: spin var(--t) linear infinite; }
+  .idle.dot { opacity: .55; } .idle.ring { opacity: .55; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .sep { height: 1px; background: var(--border); margin: 6px; }
+  .dot.dim { opacity: .45; } .dot.dim.idle { opacity: .3; }
+  .slot { width: 16px; height: 12px; flex: none; display: flex; align-items: center; justify-content: center; }
+  .typing { display: flex; gap: 2px; align-items: center; height: 10px; }
+  .typing i { width: 3.5px; height: 3.5px; border-radius: 50%; background: var(--c); animation: hop 1.1s ease-in-out infinite; }
+  .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes hop { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-3px); opacity: 1; } }
+  .ask { font-size: 14px; font-weight: 800; line-height: 1; color: var(--c); animation: breathe 1.8s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+  .sym { width: 12px; height: 12px; display: block; }
+  .slot.gray { color: var(--idle); opacity: .7; }
+  /* Paseo's StatusRing (packages/app/src/components/status-ring): 6 px dot, 1.5 gap, 1.5 stroke, track .3, quarter .9, 900 ms. */
+  .pring { position: relative; width: 12px; height: 12px; display: grid; place-items: center; }
+  .pring b { position: absolute; box-sizing: border-box; border-radius: 50%; }
+  .pring .track { inset: 0; border: 1.5px solid var(--c); opacity: .3; }
+  .pring .arc { inset: 0; border: 1.5px solid transparent; border-top-color: var(--c); opacity: .9; animation: spin .9s linear infinite; }
+  .pring .core { width: 6px; height: 6px; background: var(--c); position: static; }
+  table { border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #2c313a; }
+  th { color: #8b929c; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Lights: agent in memory vs. released</h1>
+<h2 style="font-size:16px;margin:18px 0 4px">A: dot = loaded, ring = released</h2>
+<p>A filled dot means the agent is still loaded. A ring of the same colour, not spinning and with no gap, means Paseo has released it (status <code>closed</code>). Running and asking chats keep the spinning ring with a gap; they are never released.</p>
+
+<div class="themes">
+  <div class="panel dark">
+    <h2>Dark</h2>
+    <div class="row"><span class="led spin" style="--c:var(--asking);--t:.45s"></span><span class="title">Asks for permission to run tests</span><span class="tag">asking</span></div>
+    <div class="row"><span class="led spin" style="--c:var(--running);--t:1.1s"></span><span class="title">Refactor the host observer</span><span class="tag">running</span></div>
+    <div class="sep"></div>
+    <div class="row"><span class="led dot" style="--c:var(--ready)"></span><span class="title">Adapt the settings screen</span><span class="tag">ready · loaded</span></div>
+    <div class="row"><span class="led ring" style="--c:var(--ready)"></span><span class="title">Hosts dropdown in the first row</span><span class="tag">ready · released</span></div>
+    <div class="row"><span class="led dot" style="--c:var(--failed)"></span><span class="title">Build the Android bundle</span><span class="tag">failed · loaded</span></div>
+    <div class="row"><span class="led ring" style="--c:var(--failed)"></span><span class="title">Migrate the overlay store</span><span class="tag">failed · released</span></div>
+    <div class="row"><span class="led dot idle" style="--c:var(--idle)"></span><span class="title">Pin the release channel</span><span class="tag">inactive · loaded</span></div>
+    <div class="row"><span class="led ring idle" style="--c:var(--idle)"></span><span class="title">Fix the drag marker</span><span class="tag">inactive · released</span></div>
+  </div>
+
+  <div class="panel light">
+    <h2>Light</h2>
+    <div class="row"><span class="led spin" style="--c:var(--asking);--t:.45s"></span><span class="title">Asks for permission to run tests</span><span class="tag">asking</span></div>
+    <div class="row"><span class="led spin" style="--c:var(--running);--t:1.1s"></span><span class="title">Refactor the host observer</span><span class="tag">running</span></div>
+    <div class="sep"></div>
+    <div class="row"><span class="led dot" style="--c:var(--ready)"></span><span class="title">Adapt the settings screen</span><span class="tag">ready · loaded</span></div>
+    <div class="row"><span class="led ring" style="--c:var(--ready)"></span><span class="title">Hosts dropdown in the first row</span><span class="tag">ready · released</span></div>
+    <div class="row"><span class="led dot" style="--c:var(--failed)"></span><span class="title">Build the Android bundle</span><span class="tag">failed · loaded</span></div>
+    <div class="row"><span class="led ring" style="--c:var(--failed)"></span><span class="title">Migrate the overlay store</span><span class="tag">failed · released</span></div>
+    <div class="row"><span class="led dot idle" style="--c:var(--idle)"></span><span class="title">Pin the release channel</span><span class="tag">inactive · loaded</span></div>
+    <div class="row"><span class="led ring idle" style="--c:var(--idle)"></span><span class="title">Fix the drag marker</span><span class="tag">inactive · released</span></div>
+  </div>
+</div>
+
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="done-loaded" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5.5" fill="currentColor"/><path d="M3.4 6.2 5.2 8 8.7 4.2" fill="none" stroke="var(--bg)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="done-released" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M3.6 6.2 5.3 7.9 8.5 4.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="failed-loaded" viewBox="0 0 12 12"><path d="M6 .8 11.4 10.8H.6Z" fill="currentColor" stroke="currentColor" stroke-width=".8" stroke-linejoin="round"/><path d="M6 4.3V7.2" stroke="var(--bg)" stroke-width="1.5" stroke-linecap="round"/><circle cx="6" cy="9" r=".8" fill="var(--bg)"/></symbol>
+  <symbol id="failed-released" viewBox="0 0 12 12"><path d="M6 1.3 11 10.5H1Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 4.6V7.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="6" cy="8.8" r=".75" fill="currentColor"/></symbol>
+</svg>
+<h2 style="font-size:16px;margin:28px 0 4px">A2: symbols instead of dots</h2>
+<p>Running shows Paseo's own running mark from the session tabs: a 6 px blue dot inside a ring (1.5 px gap, 1.5 px line) whose faint track carries a brighter quarter turning once every 0.9 s. A chat waiting for an answer (a question or a permission request) shows a slowly pulsing "?". Done is a check, failed a warning triangle. Filled while the agent is loaded, outlined once Paseo has released it, as in A. An inactive chat shows the symbol of how it last ended, in grey. Every symbol sits in a 16 px slot so the titles stay aligned.</p>
+<div class="themes">
+  <div class="panel dark a2"></div>
+  <div class="panel light a2"></div>
+</div>
+<template id="a2-rows">
+  <div class="row"><span class="slot"><span class="ask" style="--c:var(--asking)">?</span></span><span class="title">Asks for permission to run tests</span><span class="tag">asking</span></div>
+  <div class="row"><span class="slot"><span class="pring" style="--c:var(--running)"><b class="track"></b><b class="arc"></b><b class="core"></b></span></span><span class="title">Refactor the host observer</span><span class="tag">running</span></div>
+  <div class="sep"></div>
+  <div class="row"><span class="slot" style="color:var(--ready)"><svg class="sym"><use href="#done-loaded"/></svg></span><span class="title">Adapt the settings screen</span><span class="tag">done · loaded</span></div>
+  <div class="row"><span class="slot" style="color:var(--ready)"><svg class="sym"><use href="#done-released"/></svg></span><span class="title">Hosts dropdown in the first row</span><span class="tag">done · released</span></div>
+  <div class="row"><span class="slot" style="color:var(--failed)"><svg class="sym"><use href="#failed-loaded"/></svg></span><span class="title">Build the Android bundle</span><span class="tag">failed · loaded</span></div>
+  <div class="row"><span class="slot" style="color:var(--failed)"><svg class="sym"><use href="#failed-released"/></svg></span><span class="title">Migrate the overlay store</span><span class="tag">failed · released</span></div>
+  <div class="sep"></div>
+  <div class="row"><span class="slot gray"><svg class="sym"><use href="#done-loaded"/></svg></span><span class="title">Pin the release channel</span><span class="tag">inactive, was done · loaded</span></div>
+  <div class="row"><span class="slot gray"><svg class="sym"><use href="#done-released"/></svg></span><span class="title">Fix the drag marker</span><span class="tag">inactive, was done · released</span></div>
+  <div class="row"><span class="slot gray"><svg class="sym"><use href="#failed-released"/></svg></span><span class="title">Rename the chat in place</span><span class="tag">inactive, failed · released</span></div>
+</template>
+<script>
+  for (const panel of document.querySelectorAll(".a2")) {
+    const heading = document.createElement("h2");
+    heading.textContent = panel.classList.contains("dark") ? "Dark" : "Light";
+    panel.append(heading, document.getElementById("a2-rows").content.cloneNode(true));
+  }
+</script>
+
+<h2 style="font-size:16px;margin:28px 0 4px">B: ring = loaded, dim dot = released</h2>
+<p>A ring means the agent is open (loaded), like the spinning ring of a working one, only still. A dimmed filled dot means Paseo has released it. Since most chats are released, most rows get the quiet dim dot; a ring stands out as "still open".</p>
+<div class="themes">
+  <div class="panel dark">
+    <h2>Dark</h2>
+    <div class="row"><span class="led spin" style="--c:var(--asking);--t:.45s"></span><span class="title">Asks for permission to run tests</span><span class="tag">asking</span></div>
+    <div class="row"><span class="led spin" style="--c:var(--running);--t:1.1s"></span><span class="title">Refactor the host observer</span><span class="tag">running</span></div>
+    <div class="sep"></div>
+    <div class="row"><span class="led ring" style="--c:var(--ready)"></span><span class="title">Adapt the settings screen</span><span class="tag">ready · loaded</span></div>
+    <div class="row"><span class="led dot dim" style="--c:var(--ready)"></span><span class="title">Hosts dropdown in the first row</span><span class="tag">ready · released</span></div>
+    <div class="row"><span class="led ring" style="--c:var(--failed)"></span><span class="title">Build the Android bundle</span><span class="tag">failed · loaded</span></div>
+    <div class="row"><span class="led dot dim" style="--c:var(--failed)"></span><span class="title">Migrate the overlay store</span><span class="tag">failed · released</span></div>
+    <div class="row"><span class="led ring idle" style="--c:var(--idle)"></span><span class="title">Pin the release channel</span><span class="tag">inactive · loaded</span></div>
+    <div class="row"><span class="led dot dim idle" style="--c:var(--idle)"></span><span class="title">Fix the drag marker</span><span class="tag">inactive · released</span></div>
+  </div>
+
+  <div class="panel light">
+    <h2>Light</h2>
+    <div class="row"><span class="led spin" style="--c:var(--asking);--t:.45s"></span><span class="title">Asks for permission to run tests</span><span class="tag">asking</span></div>
+    <div class="row"><span class="led spin" style="--c:var(--running);--t:1.1s"></span><span class="title">Refactor the host observer</span><span class="tag">running</span></div>
+    <div class="sep"></div>
+    <div class="row"><span class="led ring" style="--c:var(--ready)"></span><span class="title">Adapt the settings screen</span><span class="tag">ready · loaded</span></div>
+    <div class="row"><span class="led dot dim" style="--c:var(--ready)"></span><span class="title">Hosts dropdown in the first row</span><span class="tag">ready · released</span></div>
+    <div class="row"><span class="led ring" style="--c:var(--failed)"></span><span class="title">Build the Android bundle</span><span class="tag">failed · loaded</span></div>
+    <div class="row"><span class="led dot dim" style="--c:var(--failed)"></span><span class="title">Migrate the overlay store</span><span class="tag">failed · released</span></div>
+    <div class="row"><span class="led ring idle" style="--c:var(--idle)"></span><span class="title">Pin the release channel</span><span class="tag">inactive · loaded</span></div>
+    <div class="row"><span class="led dot dim idle" style="--c:var(--idle)"></span><span class="title">Fix the drag marker</span><span class="tag">inactive · released</span></div>
+  </div>
+</div>
+
+<table>
+  <tr><th>State</th><th>A loaded</th><th>A released</th><th>B loaded</th><th>B released</th></tr>
+  <tr><td>Asking</td><td colspan="4">amber ring with a gap, spins fast (never released)</td></tr>
+  <tr><td>Running</td><td colspan="4">blue ring with a gap, spins (never released)</td></tr>
+  <tr><td>Ready</td><td>green dot</td><td>green ring</td><td>green ring</td><td>dim green dot</td></tr>
+  <tr><td>Failed</td><td>red dot</td><td>red ring</td><td>red ring</td><td>dim red dot</td></tr>
+  <tr><td>Inactive</td><td>grey dot</td><td>grey ring</td><td>grey ring</td><td>dimmer grey dot</td></tr>
+</table>
+<p>On this host right now: 2 running, 39 released, 0 loaded and idle. With A most rows show rings; with B most rows show dim dots.</p>
+</body>
+</html>

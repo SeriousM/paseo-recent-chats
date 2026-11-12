@@ -41,6 +41,8 @@ function row(patch: Partial<TriageRow> = {}): TriageRow {
     bucket: "unread",
     pinned: false,
     led: "finished",
+    released: false,
+    failed: false,
     sortAt: 1,
     ...patch,
   };
