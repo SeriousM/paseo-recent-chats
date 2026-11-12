@@ -5,7 +5,8 @@
 import { useSyncExternalStore } from "react";
 import { readDeviceValue, writeDeviceValue } from "./web";
 
-const KEY = "__paseoRecentChats.viewMode.v1";
+// The global key changes with the shape: after an update, the app may still hold the previous shape under the old key.
+const KEY = "__paseoRecentChats.viewMode.v2";
 const STORAGE_KEY = "paseo-recent-chats:view-mode:v1";
 
 export interface ViewMode {
