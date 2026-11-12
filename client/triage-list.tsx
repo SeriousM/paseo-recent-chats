@@ -312,9 +312,8 @@ export function TriageRowView({
         paddingLeft: compact ? 10 : 8,
         paddingRight: 6,
         borderRadius: 8,
-        // The open chat gets an accent border; every row reserves the width so nothing shifts.
-        borderWidth: 1,
-        borderColor: current ? theme.colors.accent : "transparent",
+        // The open chat gets a faint accent wash: no line, so it does not compete with the Needs you frame.
+        backgroundColor: current ? withAlpha(theme.colors.accent, 0.14) : "transparent",
       },
       body: { flex: 1, minWidth: 0, gap: 2 },
       line: { flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, columnGap: gap, rowGap: 2 },
