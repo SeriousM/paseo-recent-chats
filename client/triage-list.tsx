@@ -250,12 +250,10 @@ export function TriageRowView({
       line: { flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, columnGap: gap, rowGap: 2 },
       host: { paddingVertical: 1, paddingHorizontal: 5, borderRadius: 5, alignItems: "center" as const },
       hostText: { fontSize: 10, fontWeight: "600" as const },
+      // Plain icons, the size of the tree's pin buttons: no outline, so they do not compete with the row.
       check: {
-        width: compact ? 36 : 26,
-        height: compact ? 36 : 26,
-        borderRadius: 7,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
+        width: compact ? 32 : 20,
+        height: compact ? 32 : 20,
         alignItems: "center" as const,
         justifyContent: "center" as const,
       },
@@ -415,9 +413,10 @@ export function TriageRowView({
           accessibilityRole="button"
           accessibilityLabel={`Mark ${title} read`}
           onPress={() => onMarkRead([row.key])}
+          hitSlop={6}
           style={styles.check}
         >
-          <Icon name="Check" size={14} color={theme.colors.foregroundMuted} />
+          <Icon name="Check" size={12} color={theme.colors.foregroundMuted} />
         </Pressable>
       ) : null}
       {row.bucket === "inactive" ? (
@@ -425,9 +424,10 @@ export function TriageRowView({
           accessibilityRole="button"
           accessibilityLabel={`Later: mark ${title} unread`}
           onPress={() => onMarkUnread(row.key)}
+          hitSlop={6}
           style={styles.check}
         >
-          <Icon name="Clock" size={14} color={theme.colors.foregroundMuted} />
+          <Icon name="Clock" size={12} color={theme.colors.foregroundMuted} />
         </Pressable>
       ) : null}
       <Pressable
@@ -435,9 +435,10 @@ export function TriageRowView({
         accessibilityLabel={row.pinned ? `Unpin ${title}` : `Pin ${title} to the top`}
         accessibilityState={{ selected: row.pinned }}
         onPress={() => onSetPinned(row.key, !row.pinned)}
-        style={[styles.check, row.pinned ? { borderColor: theme.colors.accent } : null]}
+        hitSlop={6}
+        style={styles.check}
       >
-        <Icon name={row.pinned ? "PinOff" : "Pin"} size={14} color={row.pinned ? theme.colors.accent : theme.colors.foregroundMuted} />
+        <Icon name={row.pinned ? "PinOff" : "Pin"} size={12} color={row.pinned ? theme.colors.accent : theme.colors.foregroundMuted} />
       </Pressable>
         </>
       )}
