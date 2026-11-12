@@ -45,7 +45,7 @@ const SIZE_SETTINGS: Record<Section, readonly NumericSetting[]> = {
   ],
   inactive: [
     { key: "maxInactive", label: "Chats shown", hint: "0 hides them.", presets: [0, 2, 3, 4, 5, 8, 10, 15] },
-    { key: "inactiveWindowDays", label: "Window", hint: "Chats older than this stay out of the short list.", presets: [3, 7, 14, 30, 90], unit: " days" },
+    { key: "inactiveWindowDays", label: "Window", hint: "Chats older than this stay out of the short list. In Projects, the \u201CLast N days\u201D filter hides workspaces with nothing newer.", presets: [3, 7, 14, 30, 90], unit: " days" },
   ],
 };
 

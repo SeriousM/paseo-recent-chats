@@ -19,8 +19,8 @@ The settings screen, where every row item can be shown, reordered, split over li
 - Two views in the sidebar, switched in its first row. **Projects** (the default on wide screens): a
   Needs you strip, a Pinned section, then host → project → workspace → chat, with the branch, checkout
   or worktree and line changes per workspace and the newest 3 chats per workspace. **Triage** (the default
-  on phones): the sections below. The choice, **Active only** (hide workspaces outside the inactive window)
-  and folds are kept per device.
+  on phones): the sections below. The choice, the **Last N days** filter above the tree (hide workspaces with nothing
+  newer than the Inactive window setting, 14 days by default) and folds are kept per device.
 - Pin a project, a workspace or a chat. The Pinned section shows each pinned item with its parents and
   everything below it; pinned items also stay in place. Pins are synced to every device.
 - Drag a project by its folder icon, or a workspace by its grip, to reorder the Projects view; the order is

@@ -5,7 +5,7 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/ui";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { PanResponder, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
+import { Animated, Easing, PanResponder, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
 import type { RowTokenId } from "../shared/layout";
 import type { Prefs } from "../shared/settings";
 import { useOpenChat } from "./open-chat";
@@ -62,7 +62,7 @@ const KIND_LABEL: Partial<Record<WorkspaceInfo["kind"], string>> = {
 
 /**
  * The first row of the sidebar list: Projects / Triage, the Hosts dropdown (which hosts are listed and
- * whether rows group by host), Active only (Projects), and the search button.
+ * whether rows group by host), and the search button.
  */
 export function ViewModeBar({
   theme,
@@ -142,18 +142,6 @@ export function ViewModeBar({
         </Pressable>
       ) : null}
       <View style={{ flex: 1 }} />
-      {view === "projects" ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Active only: hide workspaces outside the inactive window"
-          accessibilityState={{ selected: mode.activeOnly }}
-          onPress={() => updateViewMode({ activeOnly: !mode.activeOnly })}
-          style={toggle(mode.activeOnly)}
-        >
-          <Icon name="ListFilter" size={13} color={tone(mode.activeOnly)} />
-          <Text style={{ fontSize: fs(11.5), color: tone(mode.activeOnly) }}>Active</Text>
-        </Pressable>
-      ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={searchOpen ? "Close search" : "Search"}
@@ -412,7 +400,33 @@ export function ProjectsView({
             </Text>
           )}
           {searching ? null : (
-            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 2, paddingHorizontal: 6, paddingTop: 2 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 6, paddingTop: 2 }}>
+              {/* Hides workspaces with nothing newer than the inactive window (Settings, Sections, Inactive, Window). */}
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityLabel={`Only workspaces active in the last ${prefs.inactiveWindowDays} days`}
+                accessibilityState={{ checked: mode.activeOnly }}
+                onPress={() => updateViewMode({ activeOnly: !mode.activeOnly })}
+                hitSlop={4}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  paddingHorizontal: 6,
+                  paddingVertical: compact ? 8 : 2,
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: mode.activeOnly ? theme.colors.border : "transparent",
+                  backgroundColor: mode.activeOnly ? theme.colors.surface2 : "transparent",
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Icon name="ListFilter" size={12} color={mode.activeOnly ? theme.colors.foreground : theme.colors.foregroundMuted} />
+                <Text style={{ fontSize: fs(11), color: mode.activeOnly ? theme.colors.foreground : theme.colors.foregroundMuted }}>
+                  {`Last ${prefs.inactiveWindowDays}d`}
+                </Text>
+              </Pressable>
+              <View style={{ flex: 1 }} />
               {FOLD_ACTIONS.map(([action, icon, label, hint]) => (
                 <Pressable
                   key={action}
@@ -718,8 +732,8 @@ function DragHandle({ drag, label, children }: { drag: ItemDrag; label: string; 
 const HEADING_HEIGHT = 26;
 
 /**
- * A list of projects or workspaces that can be reordered by dragging their handle. A marker shows where
- * the item lands; the new order is saved in `orderKey` for every device.
+ * A list of projects or workspaces that can be reordered by dragging their handle. The others glide out
+ * of the way while dragging; the new order is saved in `orderKey` for every device.
  */
 function SortableList<Item extends { key: string }>({
   items,
@@ -776,43 +790,74 @@ function SortableList<Item extends { key: string }>({
     return created;
   };
 
-  // The marker sits above the item that will follow the dropped one, or below the last.
-  let marker = 0;
-  if (drag) {
-    const others = items.filter((item) => item.key !== drag.key);
-    const after = others[drag.to];
-    const last = others[others.length - 1];
-    const box = after ? boxes.current.get(after.key) : last ? boxes.current.get(last.key) : undefined;
-    marker = box ? (after ? box.top : box.top + box.height) : 0;
-  }
+  // Shuffle: while dragging, the items between the dragged one's old and new place move aside by its height.
+  const dragFrom = drag ? items.findIndex((item) => item.key === drag.key) : -1;
+  const dragHeight = drag ? (boxes.current.get(drag.key)?.height ?? HEADING_HEIGHT) : 0;
+  const shiftOf = (index: number) => {
+    if (!drag || index === dragFrom) return 0;
+    const other = index < dragFrom ? index : index - 1;
+    if (dragFrom < drag.to && other >= dragFrom && other < drag.to) return -dragHeight;
+    if (drag.to < dragFrom && other >= drag.to && other < dragFrom) return dragHeight;
+    return 0;
+  };
 
   return (
     <View ref={container} style={{ position: "relative" }}>
-      {items.map((item) => {
+      {items.map((item, index) => {
         const dragged = drag?.key === item.key;
         return (
-          <View
+          <ShiftingItem
             key={item.key}
-            ref={(node) => {
+            shift={shiftOf(index)}
+            dragging={drag !== null}
+            nodeRef={(node) => {
               nodes.current.set(item.key, node);
             }}
             style={
               dragged
-                ? { transform: [{ translateY: drag.dy }], zIndex: 10, opacity: 0.85, backgroundColor: theme.colors.surface1, borderRadius: 8 }
+                ? { transform: [{ translateY: drag.dy }], zIndex: 10, opacity: 0.9, backgroundColor: theme.colors.surface1, borderRadius: 8 }
                 : null
             }
           >
             {render(item, handlersFor(item.key))}
-          </View>
+          </ShiftingItem>
         );
       })}
-      {drag ? (
-        <View
-          pointerEvents="none"
-          style={{ position: "absolute", left: 8, right: 8, top: marker - 1, height: 2, borderRadius: 1, backgroundColor: theme.colors.accent }}
-        />
-      ) : null}
     </View>
+  );
+}
+
+/**
+ * One item of a sortable list. While a drag is on, it glides to `shift` (out of the dragged item's way);
+ * when the drag ends it lands at once, because the list is then drawn in its new order.
+ */
+function ShiftingItem({
+  shift,
+  dragging,
+  nodeRef,
+  style,
+  children,
+}: {
+  shift: number;
+  dragging: boolean;
+  nodeRef(node: View | null): void;
+  style: ViewStyle | null;
+  children: ReactNode;
+}) {
+  const offset = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!dragging) {
+      offset.setValue(0);
+      return;
+    }
+    const glide = Animated.timing(offset, { toValue: shift, duration: 140, easing: Easing.out(Easing.quad), useNativeDriver: Platform.OS !== "web" });
+    glide.start();
+    return () => glide.stop();
+  }, [shift, dragging, offset]);
+  return (
+    <Animated.View ref={nodeRef} style={style ?? { transform: [{ translateY: offset }] }}>
+      {children}
+    </Animated.View>
   );
 }
 
