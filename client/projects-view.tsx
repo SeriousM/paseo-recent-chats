@@ -1,7 +1,7 @@
-// The Projects mode of the sidebar list: a Needs you strip, a Pinned section, then a
-// host -> project -> workspace -> chat tree. Ported from the Paseo 0.16 sidebar view (feat/paseo-0.16)
-// to the 0.15 plugin API: the data comes from the store, and pins of projects and workspaces, folds and
-// the mode are kept on this device (view-mode.ts). Chat pins are the synced ones every list shares.
+// The Projects view of the sidebar list: a Needs you strip, a Pinned section, then a
+// host -> project -> workspace -> chat tree. The data comes from the store; pins of projects and
+// workspaces are synced settings (prefs.treePins), chat pins the ones every list shares. The view
+// choice, "active only" and folds are kept on this device (view-mode.ts).
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/ui";
 import { useMemo, useState, type ReactNode } from "react";
@@ -16,7 +16,14 @@ import { hostColors } from "./format";
 import { HostHeading, isDark, LedDot, TriageRowView, type RowViewProps } from "./triage-list";
 import { scoreRow } from "./fuzzy";
 import { filterTree } from "./tree-search";
-import { toggleNode, togglePin, updateViewMode, useViewMode } from "./view-mode";
+import { getStore } from "./runtime";
+import { flip, resolvedView, toggleNode, updateViewMode, useViewMode } from "./view-mode";
+
+/** Pins or unpins a project (`project:` key) or workspace (`workspace:` key) on every device. */
+function togglePin(key: string): void {
+  const store = getStore();
+  store.updatePrefs({ treePins: flip(store.getSnapshot().prefs.treePins, key) });
+}
 
 /** Chats listed per workspace before "+N older"; chats that need you, run or are pinned always show. */
 const CHATS_PER_WORKSPACE = 3;
@@ -56,6 +63,7 @@ export function ViewModeBar({
   onSearch(): void;
 }) {
   const mode = useViewMode();
+  const view = resolvedView(mode, compact);
   const size = compact ? 36 : 26;
   const toggle = (on: boolean) => ({
     minHeight: size,
@@ -87,16 +95,16 @@ export function ViewModeBar({
           <Pressable
             key={option}
             accessibilityRole="tab"
-            accessibilityState={{ selected: mode.view === option }}
+            accessibilityState={{ selected: view === option }}
             onPress={() => updateViewMode({ view: option })}
             style={{
               paddingHorizontal: 10,
               paddingVertical: compact ? 8 : 3,
               borderRadius: 6,
-              backgroundColor: mode.view === option ? theme.colors.surface2 : "transparent",
+              backgroundColor: view === option ? theme.colors.surface2 : "transparent",
             }}
           >
-            <Text style={{ fontSize: 12, color: tone(mode.view === option) }}>{option === "projects" ? "Projects" : "Triage"}</Text>
+            <Text style={{ fontSize: 12, color: tone(view === option) }}>{option === "projects" ? "Projects" : "Triage"}</Text>
           </Pressable>
         ))}
       </View>
@@ -113,7 +121,7 @@ export function ViewModeBar({
         </Pressable>
       ) : null}
       <View style={{ flex: 1 }} />
-      {mode.view === "projects" ? (
+      {view === "projects" ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Active only: hide workspaces outside the inactive window"
@@ -158,14 +166,15 @@ export function ProjectsView({
   const searching = query.trim().length > 0;
   // While searching every match shows: folds are ignored.
   const toggled = useMemo(() => (searching ? new Set<string>() : new Set(mode.toggled)), [searching, mode.toggled]);
-  const pins = useMemo(() => new Set(mode.pins), [mode.pins]);
+  const treePins = prefs.treePins;
+  const pins = useMemo(() => new Set(treePins), [treePins]);
   const pinnedWorkspaces = useMemo(
-    () => new Set(mode.pins.filter((pin) => pin.startsWith("workspace:")).map((pin) => pin.slice("workspace:".length))),
-    [mode.pins],
+    () => new Set(treePins.filter((pin) => pin.startsWith("workspace:")).map((pin) => pin.slice("workspace:".length))),
+    [treePins],
   );
   const pinnedProjects = useMemo(
-    () => new Set(mode.pins.filter((pin) => pin.startsWith("project:")).map((pin) => pin.slice("project:".length))),
-    [mode.pins],
+    () => new Set(treePins.filter((pin) => pin.startsWith("project:")).map((pin) => pin.slice("project:".length))),
+    [treePins],
   );
   const workspaceInfo = useMemo(
     () => new Map(snapshot.workspaces.map((info) => [`${info.hostId}:${info.id}`, info])),
@@ -241,7 +250,7 @@ export function ProjectsView({
     color: theme.colors.foregroundMuted,
   };
 
-  const flat = !mode.groupHosts;
+  const flat = !prefs.projectsGroupByHost;
   const renderProject = (project: TreeProject, prefix: string, inPinned: boolean) => (
     <ProjectNode
       key={prefix + project.key}

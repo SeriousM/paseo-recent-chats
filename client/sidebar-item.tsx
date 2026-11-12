@@ -8,7 +8,7 @@ import { SearchBox } from "./search-box";
 import { HostFilter, ledColor, TriageList, type TriageListProps } from "./triage-list";
 import { openChat, useRecents } from "./use-recents";
 import { ProjectsView, ViewModeBar } from "./projects-view";
-import { updateViewMode, useViewMode } from "./view-mode";
+import { resolvedView, updateViewMode, useViewMode } from "./view-mode";
 import { attachVerticalDrag, attachWheelScroll } from "./web";
 
 export const RECENT_SCREEN_ID = "recent";
@@ -37,7 +37,14 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   const { unread, running } = result.counts;
   const { height: windowHeight } = useWindowDimensions();
   const viewMode = useViewMode();
-  const projects = viewMode.view === "projects";
+  const projects = resolvedView(viewMode, layout.compact) === "projects";
+  // Project and workspace pins made while pins were kept on this device: moved to the synced settings once.
+  useEffect(() => {
+    if (!viewMode.legacyPins.length) return;
+    const pins = snapshot.prefs.treePins;
+    store.updatePrefs({ treePins: [...pins, ...viewMode.legacyPins.filter((pin) => !pins.includes(pin))] });
+    updateViewMode({ legacyPins: [] });
+  }, [viewMode.legacyPins, snapshot.prefs.treePins, store]);
   // Search filters what either view shows, drawn the same way.
   const searchText = showSearch ? query : "";
   const searching = searchText.trim().length > 0;
@@ -177,10 +184,10 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
               hosts={snapshot.hosts}
               hostColors={snapshot.hostColors}
               onToggle={store.toggleHost}
-              groupByHost={projects ? viewMode.groupHosts : snapshot.prefs.groupByHost}
+              groupByHost={projects ? snapshot.prefs.projectsGroupByHost : snapshot.prefs.groupByHost}
               onToggleGroupByHost={() =>
                 projects
-                  ? updateViewMode({ groupHosts: !viewMode.groupHosts })
+                  ? store.updatePrefs({ projectsGroupByHost: !snapshot.prefs.projectsGroupByHost })
                   : store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })
               }
             />

@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recent Chats: pinning in the tree (mockup)</title>
+<style>
+  :root {
+    --bg: #0f1115; --surface0: #16181d; --surface1: #1c1f25; --surface2: #252931; --border: #2c313a;
+    --fg: #e6e8eb; --muted: #8b929c; --faint: #5b626c; --accent: #4f8cff;
+    --red: #f0524f; --orange: #f5a524; --green: #2fbf71; --grey: #6b7280;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .page { display: grid; grid-template-columns: auto 1fr; gap: 28px; padding: 24px; max-width: 1280px; margin: 0 auto; }
+  @media (max-width: 900px) { .page { grid-template-columns: 1fr; padding: 12px; } }
+
+  /* Sidebar */
+  .sidebar { width: 340px; background: var(--surface0); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; height: calc(100vh - 48px); position: sticky; top: 24px; transition: width .2s; }
+  .sidebar.phone { width: 390px; }
+  @media (max-width: 900px) { .sidebar, .sidebar.phone { width: 100%; height: auto; position: static; } }
+  .bar { display: flex; align-items: center; gap: 6px; padding: 12px 12px 8px; }
+  .bar h1 { font-size: 15px; margin: 0; color: var(--muted); font-weight: 600; flex: 1; }
+  .seg { display: flex; background: var(--surface1); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+  .seg button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 6px; cursor: pointer; }
+  .seg button.on { background: var(--surface2); color: var(--fg); }
+  .icon-btn { background: none; border: 1px solid transparent; color: var(--muted); border-radius: 7px; width: 28px; height: 28px; cursor: pointer; display: grid; place-items: center; }
+  .icon-btn:hover, .icon-btn.on { border-color: var(--border); color: var(--fg); }
+  .scroll { overflow: auto; flex: 1; padding: 0 10px 10px; }
+
+  /* Needs you strip */
+  .strip { margin: 2px 0 10px; border: 1px solid color-mix(in srgb, var(--red) 45%, var(--border)); background: color-mix(in srgb, var(--red) 8%, var(--surface1)); border-radius: 10px; padding: 6px 4px 4px; }
+  .strip .label { display: flex; align-items: center; gap: 6px; font-size: 10.5px; letter-spacing: .7px; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 0 8px 4px; }
+
+  /* Host */
+  .host { margin-top: 8px; }
+  .host-card { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--surface1); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; user-select: none; }
+  .host-card .name { font-weight: 700; }
+  .host-card .addr { color: var(--faint); font-family: var(--mono); font-size: 11.5px; }
+  .count { margin-left: auto; min-width: 22px; height: 20px; padding: 0 7px; border-radius: 10px; border: 1px solid var(--border); font-size: 11px; color: var(--muted); display: grid; place-items: center; }
+  .count.hot { color: #fff; background: var(--red); border-color: var(--red); }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 6px; }
+  .host.offline .host-card { opacity: .55; cursor: default; }
+
+  /* Project */
+  .project { margin: 8px 0 0 2px; }
+  .project-head { display: flex; align-items: center; gap: 7px; padding: 4px 6px; font-weight: 650; font-size: 14.5px; cursor: pointer; border-radius: 6px; }
+  .project-head:hover { background: var(--surface1); }
+  .chev { color: var(--faint); font-size: 10px; width: 10px; transition: transform .15s; }
+  .collapsed > .project-head .chev, .collapsed > .host-card .chev, .collapsed > .ws-head .chev { transform: rotate(-90deg); }
+  .collapsed > .body { display: none; }
+
+  /* Workspace */
+  .ws { margin: 4px 0 4px 12px; border: 1px solid transparent; border-radius: 10px; padding: 6px 6px 4px; }
+  .ws.current { border-color: var(--border); background: var(--surface1); }
+  .ws-head { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+  .ws-title { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+  .chip { font-size: 10.5px; padding: 1px 6px; border-radius: 5px; background: var(--surface2); color: var(--muted); white-space: nowrap; }
+  .branch { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin: 2px 0 3px 21px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; align-items: center; }
+
+  /* Chat row */
+  .chat { position: relative; display: flex; align-items: center; gap: 7px; padding: 4px 6px 4px 21px; border-radius: 7px; cursor: pointer; }
+  .chat:hover { background: var(--surface2); }
+  .chat.open { background: var(--surface2); }
+  .chat.open::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
+  .chat.open { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+  .chat .title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+  .chat.idle .title { color: var(--muted); }
+  .chat .model { font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
+  .chat .age { font-family: var(--mono); font-size: 11px; color: var(--faint); width: 30px; text-align: right; }
+  .chat .actions { display: none; gap: 3px; }
+  .chat:hover .actions { display: flex; }
+  .chat:hover .model { display: none; }
+  .act { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--border); display: grid; place-items: center; color: var(--muted); font-size: 11px; }
+  .glyph { width: 16px; height: 16px; border-radius: 4px; display: grid; place-items: center; font-size: 9.5px; font-weight: 800; color: #111; flex: none; }
+  .more { margin-left: 21px; padding: 2px 6px; font-size: 11.5px; color: var(--accent); cursor: pointer; }
+  .quiet { margin: 6px 0 0 8px; font-size: 12px; color: var(--faint); cursor: pointer; }
+
+  /* Lights */
+  .led { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .led.waiting { background: var(--red); animation: throb .52s ease-in-out infinite alternate; }
+  .led.error { background: var(--red); }
+  .led.running { background: var(--orange); animation: fade 1.4s ease-in-out infinite alternate; }
+  .led.finished { background: var(--green); }
+  .led.idle { background: var(--grey); opacity: .55; }
+  @keyframes throb { from { opacity: .35; transform: scale(.8); } to { opacity: 1; transform: scale(1.3); } }
+  @keyframes fade { from { opacity: .35; } to { opacity: 1; } }
+  .wsled { width: 11px; height: 11px; }
+
+  .pin { color: var(--accent); font-size: 11px; }
+  .wspin { color: var(--accent); font-size: 12px; }
+  .diff { font-family: var(--mono); font-size: 10.5px; white-space: nowrap; }
+  .diff .add { color: var(--green); } .diff .del { color: var(--red); }
+  .group-label { display: flex; align-items: center; gap: 6px; font-size: 10.5px; letter-spacing: .7px; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 10px 6px 4px; cursor: pointer; }
+  .pinned-group { border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); margin-left: 2px; padding-left: 4px; }
+  .crumb { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px; }
+  .hosttag { font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 5px; white-space: nowrap; }
+  .pinbtn { font-size: 11px; opacity: 0; cursor: pointer; filter: grayscale(1); padding: 0 2px; }
+  .chat:hover .pinbtn, .ws-head:hover .pinbtn, .project-head:hover .pinbtn, .quiet-row:hover .pinbtn { opacity: .55; }
+  .pinbtn:hover { opacity: 1 !important; }
+  .pinbtn.on { opacity: 1; filter: none; }
+  .pin-empty { margin: 4px 0 8px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 8px; color: var(--faint); font-size: 12px; }
+  .pin-host { padding: 6px 4px 0; }
+  .quiet-row { display: flex; gap: 6px; align-items: center; margin: 3px 0 0 12px; font-size: 13px; color: var(--muted); }
+  button.demo { background: var(--surface2); color: var(--fg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  .foot { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  .foot .grip { margin-left: auto; font-family: var(--mono); color: var(--faint); }
+
+  /* Notes */
+  .notes h2 { margin: 4px 0 6px; font-size: 22px; }
+  .notes h3 { margin: 22px 0 8px; font-size: 15px; }
+  .notes p, .notes li { color: #c9ced6; max-width: 72ch; }
+  .notes .lede { color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; max-width: 820px; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 9px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  .ok { color: var(--green); } .part { color: var(--orange); } .no { color: var(--red); }
+  code { font-family: var(--mono); font-size: 12px; background: var(--surface1); padding: 1px 5px; border-radius: 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted); margin: 8px 0; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <aside class="sidebar" id="sidebar">
+    <div class="bar">
+      <h1>Recent Chats</h1>
+      <div class="seg" role="tablist">
+        <button class="on" data-mode="projects">Projects</button>
+        <button data-mode="triage" title="Today's flat triage list">Triage</button>
+      </div>
+      <button class="icon-btn on" id="activeOnly" title="Active only: hide workspaces and chats outside the inactive window">◐</button>
+      <button class="icon-btn" id="phone" title="Phone width">▯</button>
+    </div>
+    <div class="scroll" id="tree"></div>
+    <div class="foot"><span>⚙</span><span id="summary"></span><span class="grip">═ drag</span></div>
+  </aside>
+
+  <main class="notes">
+    <h2>Pinning in the tree: any level, with its parents and children</h2>
+    <p class="lede">Your real hosts, projects, workspaces and chats (11 Nov 2026), as a Paseo 0.16 sidebar view. Nothing is pinned to start with. Hover a project, workspace or chat and press 📌, or press <b>Example pins</b> below for a mixed set. Diff counts are made up.</p>
+    <p><button id="examplePins" class="demo">Example pins</button></p>
+    <div class="legend">
+      <span><i class="led waiting"></i>waiting for you</span>
+      <span><i class="led running"></i>running</span>
+      <span><i class="led finished"></i>finished, unseen</span>
+      <span><i class="led error"></i>failed</span>
+      <span><i class="led idle"></i>inactive</span>
+    </div>
+
+    <h3>The rule</h3>
+    <table>
+      <tr><th>You pin</th><th>The Pinned section shows</th></tr>
+      <tr><td>a project</td><td>the project, all its workspaces, all their chats</td></tr>
+      <tr><td>a workspace</td><td>its project, the workspace, all its chats</td></tr>
+      <tr><td>a chat</td><td>its project, its workspace, that chat</td></tr>
+      <tr><td>a mix</td><td>the union: parents always, children of whatever is pinned. Two of four chats pinned → project, workspace and those two chats.</td></tr>
+    </table>
+    <ul>
+      <li>Pinned items <b>stay in the tree</b> as before and <b>also</b> appear in the Pinned section.</li>
+      <li>Parents shown only because of a pinned child are context, not pins: their 📌 stays off. Pinning the parent too then brings in its other children.</li>
+      <li>The Pinned section lists everything it covers (no “+N older”). In the tree, pinned chats never fold into “+N older”, and a pin keeps an old workspace visible under <b>Active only</b>.</li>
+      <li>Quiet projects can be pinned too: click “N quiet projects” to list them.</li>
+      <li>Triage mode's Pinned section lists every chat a pin covers, at any level.</li>
+    </ul>
+
+    <h3>Example pins</h3>
+    <ul>
+      <li><b>2 of 11 chats</b> of the IDP worktree → Everything, the worktree, those 2 chats.</li>
+      <li><b>The workspace</b> of this plugin → RecentChatsPaseoPlugin, the workspace, its chat.</li>
+      <li><b>The project</b> ajour-manager on paseo-pai → all 4 workspaces and their chats, including the two Active only hides in the tree.</li>
+    </ul>
+
+    <h3>Storage</h3>
+    <p>Pins become one list of keys (host, project, workspace or chat) in the synced settings, so every device shows the same Pinned section. Today's chat pins move over as chat-level pins. Paseo's own workspace pin stays separate: it orders Paseo's default view, and this view does not need it.</p>
+  </main>
+</div>
+
+<script>
+// Real data, 11 Nov 2026 ~21:00. state: waiting | running | finished | error | idle
+const HOSTS = [
+  { name: "DESKTOP-U12KP1A", addr: "this host", color: "#3b82f6", projects: [
+    { name: "Everything", workspaces: [
+      { title: "Resume IDP refactor, update from upstream master", diff: [1840, 612], kind: "worktree", branch: "chore/update-upstream-master-idp-refactor", chats: [
+        { title: "this is a continued work after months.", model: "opus-5.5", fam: "opus", age: "2m", state: "waiting", note: "2 open questions" },
+        { title: "IDP P5 Manager2 UI on stateless IDPs", model: "sonnet-5.5", fam: "sonnet", age: "4h", state: "idle" },
+        { title: "IDP P4 cleanup + DisableIfExpired tests", model: "haiku-5.5", fam: "haiku", age: "4h", state: "idle" },
+        { title: "IDP P3 Aditus Attendee API provider", model: "sonnet-5.5", fam: "sonnet", age: "4h", state: "idle" },
+        { title: "IDP P2 ExpoPlatform provider", model: "sonnet-5.5", fam: "sonnet", age: "4h", state: "idle" },
+        { title: "IDP P1-B15 Fwtm/BernExpo/Sweap/Verona", model: "sonnet-5.5", fam: "sonnet", age: "4h", state: "idle" },
+        { title: "IDP P1-B10/B11/B12 Mmg/Oos/Rubin", model: "sonnet-5.5", fam: "sonnet", age: "4h", state: "idle" },
+        { title: "IDP P1-B7/B8/B13 Dimedis/NextEvent/Pretix", model: "sonnet-5.5", fam: "sonnet", age: "4h", state: "idle" },
+        { title: "IDP P1-B6/B9/B14 Aditus/Converia/Axess", model: "sonnet-5.5", fam: "sonnet", age: "6h", state: "idle" },
+        { title: "IDP P1-B3-5 Dlg/Doo/Eventbrite prod shape", model: "sonnet-5.5", fam: "sonnet", age: "6h", state: "idle" },
+        { title: "IDP P1-A contract & DI", model: "sonnet-5.5", fam: "sonnet", age: "2d", state: "idle" },
+      ]},
+      { title: "mjml mail editor", stale: true, kind: "worktree", branch: "task-13434-implement-mjml-template-update-publish", chats: [
+        { title: "read the handoff nr 5. lets recap the whole implementation.", model: "opus-5.5", fam: "opus", age: "7d", state: "idle" },
+      ]},
+    ]},
+    { name: "RecentChatsPaseoPlugin", workspaces: [
+      { title: "Plan recent Paseo chats plugin with panel, pill, shortcuts", diff: [312, 48], kind: "checkout", branch: "main", current: true, chats: [
+        { title: "plugin changes", model: "opus-5.5", fam: "opus", age: "now", state: "running", open: true },
+      ]},
+    ]},
+    { name: "MultiHostManagerPaseoPlugin", workspaces: [
+      { title: "Plan Paseo host plugin and mockup", kind: "checkout", branch: "main", chats: [
+        { title: "host-plugin sdk check", model: "sonnet-5.5", fam: "sonnet", age: "6h", state: "idle" },
+      ]},
+    ]},
+    { name: "collector-battery", workspaces: [
+      { title: "Analyze and build PX20 collector battery CLI", kind: "checkout", branch: "master", chats: [
+        { title: "px20 collector report", model: "sonnet-5.5", fam: "sonnet", age: "1d", state: "idle" },
+      ]},
+    ]},
+    { name: "adv-apple-developer-mcp", stale: true, workspaces: [
+      { title: "Clone and security-audit Windows App Store Connect MCP", kind: "checkout", branch: "main", chats: [
+        { title: "Opus: runs cleanup + new-profile", model: "opus-5.5", fam: "opus", age: "9d", state: "idle" },
+      ]},
+    ]},
+    { name: "azure-ops", stale: true, workspaces: [
+      { title: "Inspect local connected AKS cluster", kind: "folder", branch: "", chats: [
+        { title: "can you read my local connected aks (k8s)?", model: "opus-5.5", fam: "opus", age: "9d", state: "idle" },
+      ]},
+    ]},
+    { name: "AzDevOpsPlugin", quiet: true, workspaces: [] },
+    { name: "SqliteManagerPaseoPlugin", quiet: true, workspaces: [] },
+    { name: "OrganicIDS", quiet: true, workspaces: [] },
+    { name: "randomstuff", quiet: true, workspaces: [] },
+  ]},
+  { name: "paseo-pai", addr: "relay · pai-home", color: "#a855f7", projects: [
+    { name: "coolify", workspaces: [
+      { title: "Scope Android SDK workbench for ff-share", kind: "checkout", branch: "main", chats: [
+        { title: "backup strategy", model: "sonnet-5.5", fam: "sonnet", age: "4h", state: "finished" },
+      ]},
+      { title: "Research onorca.dev versus Paseo setup", diff: [96, 4], kind: "worktree", branch: "puny-dog", chats: [
+        { title: "orca dev", model: "sonnet-5.5", fam: "sonnet", age: "17m", state: "idle" },
+        { title: "Tell me more about the isolation!", model: "opus-5.5", fam: "opus", age: "3h", state: "idle" },
+      ]},
+    ]},
+    { name: "Nedeljkov", workspaces: [
+      { title: "Business OSINT review of Autocenter Nedeljkov GmbH", kind: "folder", branch: "", chats: [
+        { title: "We're going for a osint hunt.", model: "deepseek-v4.1", fam: "deepseek", age: "2d", state: "idle" },
+      ]},
+    ]},
+    { name: "ajour-manager", workspaces: [
+      { title: "encryption", kind: "checkout", branch: "main", chats: [
+        { title: "sqlite encryption", model: "sonnet-5.5", fam: "sonnet", age: "5d", state: "idle" },
+      ]},
+      { title: "Analyze coachdesk.at as product name", kind: "checkout", branch: "main", chats: [
+        { title: "Thanks for the storytime, I learned something new.", model: "opus-5.5", fam: "opus", age: "6d", state: "idle" },
+        { title: "Analyze the new product name https://coachdesk.at", model: "opus-5.5", fam: "opus", age: "7d", state: "idle" },
+      ]},
+      { title: "Firefox AI extension", kind: "checkout", branch: "main", stale: true, chats: [
+        { title: "i want to extend the ajour firefox extension", model: "deepseek-v4.1", fam: "deepseek", age: "12d", state: "idle" },
+      ]},
+      { title: "Add appointment move and cancel with email", kind: "checkout", branch: "main", stale: true, chats: [
+        { title: "i have some request i would like to work with you out", model: "opus-5.5", fam: "opus", age: "15d", state: "idle" },
+      ]},
+    ]},
+    { name: "hasso", workspaces: [
+      { title: "Analyze used Willhaben radiator thermostats", kind: "folder", branch: "", chats: [
+        { title: "Hey, ich möchte mir gerne neue automatische Heizkörper-Thermostate", model: "deepseek-v4.1", fam: "deepseek", age: "7d", state: "idle" },
+      ]},
+    ]},
+    { name: "car-finder", workspaces: [
+      { title: "Analyse stricter car offer quality limits", kind: "folder", branch: "", chats: [
+        { title: "Looking at the current found offers, we can rise the quality", model: "deepseek-v4.1", fam: "deepseek", age: "7d", state: "idle" },
+      ]},
+    ]},
+    { name: "SignalPlatform", workspaces: [
+      { title: "Review current project state", kind: "folder", branch: "", chats: [
+        { title: "Let's review what we have.", model: "opus-5.5", fam: "opus", age: "7d", state: "idle" },
+      ]},
+    ]},
+    { name: "pluxee-budget", stale: true, workspaces: [
+      { title: "Review FINDINGS.md advice for pluxee-budget", kind: "folder", branch: "", chats: [
+        { title: "/advice", model: "opus-5.5", fam: "opus", age: "8d", state: "idle" },
+      ]},
+    ]},
+    { name: "mikaido", stale: true, workspaces: [
+      { title: "Create Astro landing page for Mikaido", kind: "checkout", branch: "main", chats: [
+        { title: "create me a astro page for my new brand", model: "sonnet-5.5", fam: "sonnet", age: "10d", state: "idle" },
+      ]},
+    ]},
+    { name: "magnet-browser", stale: true, workspaces: [
+      { title: "Mockup browser-only torrent magnet stream webapp", kind: "checkout", branch: "main", chats: [
+        { title: "please help me create a torrent magnet stream webapp", model: "deepseek-flash", fam: "deepseek", age: "19d", state: "idle", note: "failed 19d ago, past the unread expiry" },
+      ]},
+    ]},
+    { name: "random-information-gathering", quiet: true, workspaces: [] },
+  ]},
+  { name: "bazzite", addr: "relay · offline since 7 Nov", color: "#6b7280", offline: true, projects: [] },
+];
+
+const FAM = {
+  opus: { bg: "#e8835a", ch: "O" }, sonnet: { bg: "#d9a066", ch: "S" }, haiku: { bg: "#c7b37a", ch: "H" },
+  deepseek: { bg: "#5b8cff", ch: "D" },
+};
+const RANK = { waiting: 0, error: 1, finished: 2, running: 3, idle: 4 };
+const worst = (chats) => chats.reduce((w, c) => (RANK[c.state] < RANK[w] ? c.state : w), "idle");
+const needsYou = (c) => c.state === "waiting" || c.state === "finished";
+const esc = (s) => s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+const AGE_MIN = (a) => (a === "now" ? 0 : parseInt(a, 10) * { m: 1, h: 60, d: 1440 }[a.slice(-1)]);
+
+// Stable keys for every level: project, workspace, chat.
+for (const h of HOSTS) for (const p of h.projects) {
+  p.key = `${h.name}/${p.name}`;
+  for (const w of p.workspaces) {
+    w.key = `${p.key}/${w.title}`;
+    w.chats.forEach((c, i) => (c.key = `${w.key}#${i}`));
+  }
+}
+
+let activeOnly = true;
+let mode = "projects";
+const folded = new Set();
+/** Pinned keys of any level. Starts empty: nothing pinned yet. */
+const pins = new Set();
+const EXAMPLE = [
+  "DESKTOP-U12KP1A/Everything/Resume IDP refactor, update from upstream master#0",
+  "DESKTOP-U12KP1A/Everything/Resume IDP refactor, update from upstream master#2",
+  "DESKTOP-U12KP1A/RecentChatsPaseoPlugin/Plan recent Paseo chats plugin with panel, pill, shortcuts",
+  "paseo-pai/ajour-manager",
+];
+
+const isPinned = (k) => pins.has(k);
+const covered = (p, w, c) => isPinned(p.key) || isPinned(w.key) || isPinned(c.key);
+
+function hostTag(h) {
+  return `<span class="hosttag" style="background:${h.color}26;color:${h.color}">${esc(h.name.slice(0, 6))}</span>`;
+}
+function pinBtn(key, label) {
+  const on = isPinned(key);
+  return `<span class="pinbtn ${on ? "on" : ""}" data-pin="${esc(key)}" title="${on ? "Unpin" : "Pin"} ${label}">📌</span>`;
+}
+
+function chatRow(c, h, p, w, { where = false, indent = true } = {}) {
+  const f = FAM[c.fam];
+  const place = where ? `${hostTag(h)}<span class="crumb">${esc(p.name)}</span>` : "";
+  const pad = indent ? "" : ' style="padding-left:8px"';
+  const done = needsYou(c) ? '<span class="act" title="Mark read">✓</span>' : c.state === "idle" ? '<span class="act" title="Later">◷</span>' : "";
+  return `<div class="chat ${c.state === "idle" ? "idle" : ""} ${c.open ? "open" : ""}"${pad} title="${esc(c.note ?? c.title)}">
+    <i class="led ${c.state}"></i>${place}
+    <span class="glyph" style="background:${f.bg}">${f.ch}</span>
+    <span class="title">${esc(c.title)}</span>
+    <span class="model">${c.model}</span>
+    <span class="actions">${done}</span>
+    ${pinBtn(c.key, "chat")}
+    <span class="age">${c.age}</span>
+  </div>`;
+}
+
+/** chats: which chats to list; capped to the newest 3 unless unfolded (pinned ones always show). */
+function workspaceBlock(w, h, p, foldKey, chats, cap = true) {
+  const state = worst(w.chats);
+  const all = !cap || folded.has(foldKey + "#all");
+  const shown = all ? chats : chats.filter((c, i) => i < 3 || covered(p, w, c));
+  const hidden = chats.length - shown.length;
+  const diff = w.diff ? `<span class="diff"><span class="add">+${w.diff[0]}</span> <span class="del">−${w.diff[1]}</span></span>` : "";
+  return `<div class="ws ${w.current ? "current" : ""} ${folded.has(foldKey) ? "collapsed" : ""}">
+    <div class="ws-head" data-fold="${esc(foldKey)}"><i class="led wsled ${state}"></i>
+      <span class="ws-title">${esc(w.title)}</span>${diff}<span class="chip">${w.kind}</span>${pinBtn(w.key, "workspace")}</div>
+    <div class="body">${w.branch ? `<div class="branch">⎇ ${esc(w.branch)}</div>` : ""}
+    ${shown.map((c) => chatRow(c, h, p, w)).join("")}
+    ${hidden > 0 ? `<div class="more" data-fold="${esc(foldKey)}#all">+${hidden} older</div>` : ""}
+    </div></div>`;
+}
+
+function projectBlock(p, h, foldKey, body) {
+  return `<div class="project ${folded.has(foldKey) ? "collapsed" : ""}">
+    <div class="project-head" data-fold="${esc(foldKey)}"><span class="chev">▼</span><span>📁</span><span style="flex:1">${esc(p.name)}</span>${pinBtn(p.key, "project")}</div>
+    <div class="body">${body}</div></div>`;
+}
+
+function strip() {
+  const urgent = [];
+  for (const h of HOSTS) for (const p of h.projects) for (const w of p.workspaces) for (const c of w.chats) if (needsYou(c)) urgent.push({ c, h, p, w });
+  urgent.sort((a, b) => RANK[a.c.state] - RANK[b.c.state] || AGE_MIN(b.c.age) - AGE_MIN(a.c.age));
+  if (!urgent.length) return "";
+  return `<div class="strip"><div class="label">⇣ Needs you · ${urgent.length}</div>${urgent.map((u) => chatRow(u.c, u.h, u.p, u.w, { where: true, indent: false })).join("")}</div>`;
+}
+
+/**
+ * The Pinned section: every pinned item with its parents above it and its children below it.
+ * A pinned project brings all its workspaces and chats; a pinned workspace its project and all its
+ * chats; a pinned chat its project and workspace. Pins of different levels add up.
+ */
+function pinnedSection() {
+  if (!pins.size) {
+    return `<div class="pin-empty">📌 Nothing pinned yet. Pin a project, a workspace or a chat (hover it) and it also shows up here, with its parents and everything below it.</div>`;
+  }
+  let body = "";
+  let count = 0;
+  for (const h of HOSTS) {
+    let hostBody = "";
+    for (const p of h.projects) {
+      const projectPinned = isPinned(p.key);
+      let projectBody = "";
+      for (const w of p.workspaces) {
+        const chats = projectPinned || isPinned(w.key) ? w.chats : w.chats.filter((c) => isPinned(c.key));
+        if (!chats.length) continue;
+        projectBody += workspaceBlock(w, h, p, "pin:" + w.key, chats, false);
+      }
+      if (projectPinned && !p.workspaces.length) projectBody = `<div class="quiet" style="margin-left:20px">no workspaces</div>`;
+      if (!projectBody) continue;
+      count++;
+      hostBody += projectBlock(p, h, "pin:" + p.key, projectBody);
+    }
+    if (hostBody) body += `<div class="pin-host">${hostTag(h)}</div>${hostBody}`;
+  }
+  const gk = "g:pinned";
+  return `<div class="${folded.has(gk) ? "collapsed" : ""}"><div class="group-label" data-fold="${gk}"><span class="chev">▼</span>📌 Pinned · ${count} project${count === 1 ? "" : "s"}</div>
+    <div class="body pinned-group">${body}</div></div>`;
+}
+
+function renderProjects() {
+  let html = strip() + pinnedSection();
+  for (const h of HOSTS) {
+    const all = h.projects.flatMap((p) => p.workspaces.flatMap((w) => w.chats));
+    const need = all.filter(needsYou).length;
+    const hk = "h:" + h.name;
+    html += `<div class="host ${h.offline ? "offline" : ""} ${folded.has(hk) ? "collapsed" : ""}">
+      <div class="host-card" data-fold="${hk}"><span class="chev">▼</span>${hostTag(h).replace("10px", "11px")}
+        <span class="addr">${esc(h.addr)}</span>
+        <span class="count ${need ? "hot" : ""}" title="${need ? need + " need you" : "nothing needs you"}">${h.offline ? "–" : need}</span></div>
+      <div class="body">`;
+    const quiet = [];
+    for (const p of h.projects) {
+      // Pinned items stay in the tree as well; a pin also keeps old items visible under Active only.
+      const live = p.workspaces.filter(
+        (w) => !activeOnly || !(w.stale || p.stale) || isPinned(p.key) || isPinned(w.key) || w.chats.some((c) => isPinned(c.key)),
+      );
+      if (live.length === 0) { quiet.push(p); continue; }
+      html += projectBlock(p, h, "t:" + p.key, live.map((w) => workspaceBlock(w, h, p, "t:" + w.key, w.chats)).join(""));
+    }
+    if (quiet.length && !h.offline) {
+      const qk = "q:" + h.name;
+      if (folded.has(qk)) {
+        html += quiet.map((p) => `<div class="quiet-row">📁 ${esc(p.name)}${pinBtn(p.key, "project")}</div>`).join("");
+        html += `<div class="quiet" data-fold="${qk}">hide quiet projects</div>`;
+      } else {
+        html += `<div class="quiet" data-fold="${qk}" title="${esc(quiet.map((p) => p.name).join(", "))}">${quiet.length} quiet project${quiet.length > 1 ? "s" : ""}: ${esc(quiet.slice(0, 3).map((p) => p.name).join(", "))}${quiet.length > 3 ? " …" : ""}</div>`;
+      }
+    }
+    html += `</div></div>`;
+  }
+  return html;
+}
+
+function renderTriage() {
+  let html = strip();
+  const rows = [];
+  for (const h of HOSTS) for (const p of h.projects) for (const w of p.workspaces) for (const c of w.chats) rows.push({ c, h, p, w });
+  const groups = [
+    ["Pinned", "📌", rows.filter((r) => covered(r.p, r.w, r.c))],
+    ["Running", "↧", rows.filter((r) => r.c.state === "running")],
+    ["Inactive", "↥", rows.filter((r) => r.c.state === "idle" && (!activeOnly || AGE_MIN(r.c.age) <= 14 * 1440)).sort((a, b) => AGE_MIN(a.c.age) - AGE_MIN(b.c.age))],
+  ];
+  for (const [name, icon, list] of groups) {
+    if (!list.length) continue;
+    const k = "tr:" + name;
+    const cap = name === "Inactive" && !folded.has(k + "#all") ? 6 : Infinity;
+    html += `<div class="${folded.has(k) ? "collapsed" : ""}"><div class="group-label" data-fold="${k}"><span>${icon}</span>${name}<span class="chev" style="margin-left:auto">▼</span></div><div class="body">`;
+    html += list.slice(0, cap).map((r) => chatRow(r.c, r.h, r.p, r.w, { where: true, indent: false })).join("");
+    if (list.length > cap) html += `<div class="more" style="margin-left:8px" data-fold="${k}#all">+${list.length - cap} older</div>`;
+    html += `</div></div>`;
+  }
+  return html;
+}
+
+function render() {
+  document.getElementById("tree").innerHTML = mode === "projects" ? renderProjects() : renderTriage();
+  let need = 0, active = 0;
+  for (const h of HOSTS) for (const p of h.projects) for (const w of p.workspaces) for (const c of w.chats) {
+    if (needsYou(c)) need++;
+    if (c.state !== "idle") active++;
+  }
+  document.getElementById("summary").textContent = `${need} need you · ${active} active · ${pins.size} pin${pins.size === 1 ? "" : "s"}`;
+}
+
+document.getElementById("tree").addEventListener("click", (e) => {
+  const pin = e.target.closest("[data-pin]");
+  if (pin) {
+    const k = pin.dataset.pin;
+    pins.has(k) ? pins.delete(k) : pins.add(k);
+    render();
+    return;
+  }
+  const t = e.target.closest("[data-fold]");
+  if (!t) return;
+  const k = t.dataset.fold;
+  folded.has(k) ? folded.delete(k) : folded.add(k);
+  render();
+});
+document.getElementById("activeOnly").onclick = (e) => { activeOnly = !activeOnly; e.currentTarget.classList.toggle("on", activeOnly); render(); };
+document.getElementById("phone").onclick = (e) => {
+  const phone = document.getElementById("sidebar").classList.toggle("phone");
+  e.currentTarget.classList.toggle("on", phone);
+  mode = phone ? "triage" : "projects";
+  document.querySelectorAll(".seg button").forEach((x) => x.classList.toggle("on", x.dataset.mode === mode));
+  render();
+};
+document.getElementById("examplePins").onclick = () => {
+  if (pins.size) pins.clear();
+  else EXAMPLE.forEach((k) => pins.add(k));
+  document.getElementById("examplePins").textContent = pins.size ? "Clear pins" : "Example pins";
+  render();
+};
+document.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => {
+  mode = b.dataset.mode; document.querySelectorAll(".seg button").forEach((x) => x.classList.toggle("on", x === b)); render();
+}));
+render();
+</script>
+</body>
+</html>

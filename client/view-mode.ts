@@ -1,7 +1,7 @@
-// Trial of the projects view: which view the sidebar shows, "active only", and the project and
-// workspace pins. Kept on this device (browser or desktop profile), not synced, so trying it changes
-// nothing elsewhere. Phones keep it in memory. Shared on globalThis so every host's copy of the plugin
-// in this app shows the same.
+// How the sidebar list looks on this device: Triage or Projects, "active only", and which tree nodes are
+// folded. Kept on this device (browser or desktop profile), not synced: a phone and a desktop choose
+// separately. Phones keep it in memory. Shared on globalThis so every host's copy of the plugin in this
+// app shows the same. Pins of projects and workspaces are synced settings (prefs.treePins).
 import { useSyncExternalStore } from "react";
 import { readDeviceValue, writeDeviceValue } from "./web";
 
@@ -9,17 +9,16 @@ const KEY = "__paseoRecentChats.viewMode.v1";
 const STORAGE_KEY = "paseo-recent-chats:view-mode:v1";
 
 export interface ViewMode {
-  view: "triage" | "projects";
+  /** Null until chosen on this device: Projects on wide screens, Triage on phones. */
+  view: "triage" | "projects" | null;
   activeOnly: boolean;
-  /** Tree keys of pinned projects (`project:`) and workspaces (`workspace:`). Chat pins are the synced ones. */
-  pins: readonly string[];
   /** Tree nodes switched from their default: folded hosts, projects and workspaces, opened "+N older" and quiet lists. */
   toggled: readonly string[];
-  /** Group the projects tree by host. Off: one list of projects, each with its host's tag. */
-  groupHosts: boolean;
+  /** Project and workspace pins made before pins were synced; moved to the settings once (see sidebar-item). */
+  legacyPins: readonly string[];
 }
 
-const DEFAULTS: ViewMode = { view: "triage", activeOnly: true, pins: [], toggled: [], groupHosts: true };
+const DEFAULTS: ViewMode = { view: null, activeOnly: true, toggled: [], legacyPins: [] };
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
 
 interface Shared {
@@ -31,13 +30,14 @@ function load(): ViewMode {
   try {
     const raw = readDeviceValue(STORAGE_KEY);
     if (!raw) return DEFAULTS;
-    const parsed = JSON.parse(raw) as Partial<ViewMode>;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return DEFAULTS;
+    const stored = parsed as Record<string, unknown>;
     return {
-      view: parsed.view === "projects" ? "projects" : "triage",
-      activeOnly: parsed.activeOnly !== false,
-      pins: strings(parsed.pins),
-      toggled: strings(parsed.toggled),
-      groupHosts: parsed.groupHosts !== false,
+      view: stored.view === "projects" || stored.view === "triage" ? stored.view : null,
+      activeOnly: stored.activeOnly !== false,
+      toggled: strings(stored.toggled),
+      legacyPins: strings(stored.pins),
     };
   } catch {
     return DEFAULTS;
@@ -52,7 +52,8 @@ function shared(scope: object = globalThis): Shared {
 export function updateViewMode(patch: Partial<ViewMode>): void {
   const state = shared();
   state.value = { ...state.value, ...patch };
-  writeDeviceValue(STORAGE_KEY, JSON.stringify(state.value));
+  const { view, activeOnly, toggled, legacyPins } = state.value;
+  writeDeviceValue(STORAGE_KEY, JSON.stringify({ view, activeOnly, toggled, pins: legacyPins }));
   for (const listener of [...state.listeners]) {
     try {
       listener();
@@ -62,16 +63,15 @@ export function updateViewMode(patch: Partial<ViewMode>): void {
   }
 }
 
-const flip = (list: readonly string[], key: string) => (list.includes(key) ? list.filter((item) => item !== key) : [...list, key]);
+/** Adds `key` when missing, removes it when present. */
+export const flip = (list: readonly string[], key: string): string[] =>
+  list.includes(key) ? list.filter((item) => item !== key) : [...list, key];
 
-export const togglePin = (key: string): void => updateViewMode({ pins: flip(shared().value.pins, key) });
 export const toggleNode = (key: string): void => updateViewMode({ toggled: flip(shared().value.toggled, key) });
 
-/** Unfolds the given tree nodes (and opens the listed toggles) so a search result can be shown. */
-export function revealNodes(unfold: readonly string[], open: readonly string[] = []): void {
-  const toggled = shared().value.toggled.filter((key) => !unfold.includes(key));
-  updateViewMode({ toggled: [...toggled, ...open.filter((key) => !toggled.includes(key))] });
-}
+/** The view shown: the one chosen on this device, else Projects on wide screens and Triage on phones. */
+export const resolvedView = (mode: ViewMode, compact: boolean): "triage" | "projects" =>
+  mode.view ?? (compact ? "triage" : "projects");
 
 export const currentViewMode = (): ViewMode => shared().value;
 

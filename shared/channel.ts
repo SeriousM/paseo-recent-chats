@@ -3,4 +3,4 @@
  * newest commit of the repository's default branch, which would replace a trial branch). Set back to
  * "main" when a trial branch is merged.
  */
-export const RELEASE_CHANNEL: string = "projects-mode-trial";
+export const RELEASE_CHANNEL: string = "main";

@@ -75,6 +75,13 @@ export const prefsSettings = defineSettings({
     updatedAt: z.number().default(0),
     /** Show a heading per host and keep each host's chats together. Caps then apply per host. */
     groupByHost: z.boolean().default(false),
+    /**
+     * Projects and workspaces pinned in the Projects view: `project:<host>:<project>` and
+     * `workspace:<host>:<workspace id>`. Chats are pinned through the read marks, as in every list.
+     */
+    treePins: z.array(z.string()).default([]),
+    /** Projects view: group the tree by host. Off: one list of projects, each with its host's tag. */
+    projectsGroupByHost: z.boolean().default(true),
     /** Hosts switched off in the host filter (serverIds). A host not listed here is shown, so new hosts start on. */
     hiddenHosts: z.array(z.string()).default([]),
   }),

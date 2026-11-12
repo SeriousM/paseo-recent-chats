@@ -16,6 +16,16 @@ The settings screen, where every row item can be shown, reordered, split over li
 
 ## What it does
 
+- Two views in the sidebar, switched in its first row. **Projects** (the default on wide screens): a
+  Needs you strip, a Pinned section, then host → project → workspace → chat, with the branch, checkout
+  or worktree and line changes per workspace and the newest 3 chats per workspace. **Triage** (the default
+  on phones): the sections below. The choice, **Active only** (hide workspaces outside the inactive window)
+  and folds are kept per device.
+- Pin a project, a workspace or a chat. The Pinned section shows each pinned item with its parents and
+  everything below it; pinned items also stay in place. Pins are synced to every device.
+- The search button filters the view in place: a matching project keeps everything in it, a matching
+  workspace all its chats, a matching chat itself. The Hosts dropdown switches hosts on or off and
+  grouping by host (in Projects, off shows a host tag on each project).
 - One row per chat, from every connected host. Default row: host tag, status light, project,
   workspace and tab name on the first line; git branch and agent on the second.
 - Ordered by what needs you: unread chats oldest first, then running chats oldest first, then the most
@@ -30,8 +40,7 @@ The settings screen, where every row item can be shown, reordered, split over li
 - **Later pill** marks the chat you are in as unread and opens the next one.
 - Check button on unread rows marks read without opening; clock button on inactive rows marks unread;
   pin button on every row.
-- Fuzzy search over title, project, workspace, branch, agent and host. Host chips filter by host, and
-  one chip groups rows per host.
+- Fuzzy search over title, project, workspace, branch, agent and host.
 - Full list screen, a cog that opens the settings, and a Command Center item.
 - Settings: choose, reorder, split over any number of lines and set the length of every row item, with a
   live preview; list limits; the order of the sections and the sort direction inside each; the hover card with the full names and its transparency.
