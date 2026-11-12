@@ -1,7 +1,7 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/ui";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
-import { Animated, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
+import { Animated, Easing, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
 import { chatTitle, hostColors, withAlpha } from "./format";
 import { columnChars, tokenMono, tokenText, tokenValue, visibleLines } from "./row-layout";
 import { openPluginSettings } from "./runtime";
@@ -35,52 +35,66 @@ export function isDark(hex: string): boolean {
   return luminance < 140;
 }
 
-/** Waiting for you red (and pulsing fast), running orange, finished and unseen green, inactive grey. */
+/**
+ * Paseo's own sidebar status-dot colours (`statusDot*` in the app's styles/theme.ts, mapped by its
+ * getStatusDotColor). The plugin theme does not carry them, so they are copied here per light and dark.
+ */
+const STATUS_DOT = {
+  light: { asking: "#b37824", failed: "#f12e2f", running: "#268ae0", ready: "#299f51" },
+  dark: { asking: "#db932e", failed: "#f7796d", running: "#5caaf6", ready: "#35c264" },
+} as const;
+
+/** As in Paseo: asking (a question or permission) amber, failed red, running blue, ready (finished, unseen) green; inactive grey. */
 export function ledColor(theme: PluginTheme, led: Led): string {
+  const dots = STATUS_DOT[isDark(theme.colors.surface0) ? "dark" : "light"];
   switch (led) {
     case "permission":
+      return dots.asking;
     case "error":
-      return theme.colors.statusDanger;
+      return dots.failed;
     case "running":
-      return theme.colors.statusWarning;
+      return dots.running;
     case "finished":
-      return theme.colors.statusSuccess;
+      return dots.ready;
     default:
       return theme.colors.foregroundMuted;
   }
 }
 
-/** Running pulses slowly; waiting for you (a permission or question) pulses fast and grows, to stand out. */
-const PULSE_MS: Partial<Record<Led, number>> = { running: 700, permission: 260 };
+/** Time per turn of the spinning circle: running turns steadily, asking for you turns fast to stand out. */
+const SPIN_MS: Partial<Record<Led, number>> = { running: 1100, permission: 450 };
 
 export function LedDot({ led, theme, size = 10 }: { led: Led; theme: PluginTheme; size?: number }) {
-  const pulse = useRef(new Animated.Value(1)).current;
-  const duration = PULSE_MS[led];
+  const spin = useRef(new Animated.Value(0)).current;
+  const duration = SPIN_MS[led];
   useEffect(() => {
-    if (duration === undefined) {
-      pulse.setValue(1);
-      return;
-    }
+    if (duration === undefined) return;
+    spin.setValue(0);
     const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.35, duration, useNativeDriver: NATIVE_DRIVER }),
-        Animated.timing(pulse, { toValue: 1, duration, useNativeDriver: NATIVE_DRIVER }),
-      ]),
+      Animated.timing(spin, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER }),
     );
     loop.start();
     return () => loop.stop();
-  }, [duration, pulse]);
-  const urgent = led === "permission";
+  }, [duration, spin]);
+  const color = ledColor(theme, led);
+  if (duration === undefined) {
+    return (
+      <View
+        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity: led === "idle" ? 0.55 : 1 }}
+      />
+    );
+  }
+  // A ring with one quarter open, turning: the same box as the dot, so rows do not shift.
   return (
     <Animated.View
       style={{
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: ledColor(theme, led),
-        opacity: led === "idle" ? 0.55 : pulse,
-        // Larger while bright: the dot throbs instead of only fading.
-        ...(urgent ? { transform: [{ scale: pulse.interpolate({ inputRange: [0.35, 1], outputRange: [0.8, 1.3] }) }] } : null),
+        borderWidth: Math.max(2, Math.round(size / 4)),
+        borderColor: color,
+        borderTopColor: "transparent",
+        transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
       }}
     />
   );

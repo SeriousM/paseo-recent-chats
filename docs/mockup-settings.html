@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recent Chats: settings for both views (mockup)</title>
+<style>
+  :root {
+    --bg: #0f1115; --surface0: #16181d; --surface1: #1c1f25; --surface2: #252931; --border: #2c313a;
+    --fg: #e6e8eb; --muted: #8b929c; --faint: #5b626c; --accent: #4f8cff;
+    --red: #f0524f; --orange: #f5a524; --green: #2fbf71; --grey: #6b7280;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .page { display: grid; grid-template-columns: auto 1fr; gap: 28px; padding: 24px; max-width: 1320px; margin: 0 auto; }
+  @media (max-width: 1000px) { .page { grid-template-columns: 1fr; padding: 12px; } }
+
+  /* Settings screen frame */
+  .frame { width: 560px; background: var(--surface0); border: 1px solid var(--border); border-radius: 14px; height: calc(100vh - 48px); position: sticky; top: 24px; display: flex; flex-direction: column; overflow: hidden; transition: width .2s; }
+  .frame.phone { width: 390px; }
+  @media (max-width: 1000px) { .frame, .frame.phone { width: 100%; height: auto; position: static; } }
+  .frame-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .frame-bar h1 { font-size: 15px; margin: 0; flex: 1; }
+  .scroll { overflow: auto; flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .phone .scroll { padding: 12px; }
+  .note { color: var(--muted); font-size: 12px; }
+
+  .section-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin: 0 0 6px 2px; display: flex; align-items: center; gap: 8px; }
+  .badge { font-size: 10px; letter-spacing: .3px; text-transform: none; font-weight: 600; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.new { color: var(--green); border-color: color-mix(in srgb, var(--green) 50%, var(--border)); }
+  .badge.moved { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 50%, var(--border)); }
+  .badge.device { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+  .card { background: var(--surface1); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 12px; border-top: 1px solid var(--border); }
+  .row:first-child { border-top: 0; }
+  .row .text { flex: 1; min-width: 0; }
+  .row .label { font-size: 14px; }
+  .row .hint { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .row.stack { flex-direction: column; align-items: stretch; gap: 8px; }
+  .row.dim { opacity: .5; }
+  .ver { font-family: var(--mono); font-size: 12px; color: var(--muted); background: var(--surface2); border-radius: 5px; padding: 1px 6px; margin-left: 4px; }
+  .ver-host { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .ver-host > span:first-child { flex: 1; }
+  .ver-state { font-size: 12px; color: var(--muted); min-width: 120px; text-align: right; }
+  .ver-state.ok { color: var(--green); }
+
+  .switch { width: 38px; height: 22px; border-radius: 11px; background: var(--surface2); border: 1px solid var(--border); position: relative; cursor: pointer; flex: none; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted); transition: left .15s; }
+  .switch.on { background: var(--accent); border-color: var(--accent); }
+  .switch.on::after { left: 18px; background: #fff; }
+  select { background: var(--surface2); color: var(--fg); border: 1px solid var(--border); border-radius: 7px; padding: 5px 8px; font: inherit; font-size: 13px; }
+  .seg { display: inline-flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+  .seg button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 6px; cursor: pointer; }
+  .seg button.on { background: var(--surface0); color: var(--fg); }
+  .slider { display: flex; align-items: center; gap: 10px; }
+  .slider input { flex: 1; accent-color: var(--accent); }
+  .slider span { font-family: var(--mono); font-size: 12px; color: var(--muted); width: 36px; text-align: right; }
+  .btn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 7px 16px; font: inherit; font-weight: 600; }
+  .btn.ghost { background: none; color: var(--fg); border: 1px solid var(--border); font-weight: 400; }
+  .btn[disabled] { opacity: .4; }
+
+  /* Preview rows */
+  .preview { background: var(--surface0); border: 1px solid var(--border); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .heading { font-size: 10.5px; letter-spacing: .7px; text-transform: uppercase; font-weight: 600; color: var(--muted); padding: 4px 6px 2px; }
+  .chat { display: flex; flex-direction: column; gap: 1px; padding: 4px 6px; border-radius: 7px; }
+  .chat .l1, .chat .l2 { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .chat .l2 { padding-left: 16px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+  .chat .title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+  .cut { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .hosttag { font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 5px; white-space: nowrap; color: #111; }
+  .led { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .led.waiting { background: var(--red); } .led.running { background: var(--orange); } .led.finished { background: var(--green); } .led.idle { background: var(--grey); opacity: .55; }
+  .tree-node { font-size: 13px; padding: 3px 6px; display: flex; gap: 6px; align-items: center; }
+  .tree-node.project { font-weight: 650; }
+  .tree-node.ws { padding-left: 18px; color: var(--fg); }
+  .tree-node.branch { padding-left: 34px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .tree-chat { padding-left: 28px; }
+  .strip { border: 1px solid color-mix(in srgb, var(--red) 45%, var(--border)); background: color-mix(in srgb, var(--red) 8%, var(--surface1)); border-radius: 10px; padding: 4px 2px; margin-bottom: 6px; }
+  .tree-note { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+  .more { font-size: 11.5px; color: var(--accent); padding: 2px 6px 2px 28px; }
+
+  /* Layout editor (simplified) */
+  .line-label { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .5px; padding: 8px 12px 2px; }
+  .token { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--border); font-size: 13px; }
+  .token .grab { color: var(--faint); font-family: var(--mono); cursor: grab; }
+  .token .name { flex: 1; }
+  .token .chars { font-family: var(--mono); font-size: 12px; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; min-width: 34px; text-align: center; }
+  .token .tree-off { font-size: 10.5px; color: var(--faint); border: 1px dashed var(--border); border-radius: 5px; padding: 0 5px; }
+  .token.off .name { color: var(--faint); }
+  .check { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface2); display: grid; place-items: center; font-size: 11px; color: #fff; }
+  .check.on { background: var(--accent); border-color: var(--accent); }
+
+  /* Section editor (simplified) */
+  .sec { border-top: 1px solid var(--border); }
+  .sec:first-child { border-top: 0; }
+  .sec-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
+  .sec-head .name { flex: 1; font-weight: 600; }
+  .sortbtn, .arrow { border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; font-size: 12px; color: var(--muted); background: none; }
+  .sec .row { border-top: 0; padding-top: 4px; padding-left: 36px; }
+  .sec .gone { padding: 0 12px 10px 36px; font-size: 12px; color: var(--faint); }
+
+  /* Notes */
+  .notes h2 { margin: 4px 0 6px; font-size: 22px; }
+  .notes h3 { margin: 22px 0 8px; font-size: 15px; }
+  .notes p, .notes li { color: #c9ced6; max-width: 74ch; }
+  .notes .lede { color: var(--muted); }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+  table { border-collapse: collapse; width: 100%; max-width: 860px; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 9px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  code { font-family: var(--mono); font-size: 12px; background: var(--surface1); padding: 1px 5px; border-radius: 4px; }
+  .k-new { color: var(--green); } .k-moved { color: var(--orange); } .k-same { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="frame" id="frame">
+    <div class="frame-bar"><h1>Settings · Recent Chats</h1></div>
+    <div class="scroll">
+
+      <!-- Version and updates -->
+      <div>
+        <div class="section-title">Version <span class="badge moved">was Updates, at the end</span></div>
+        <div class="card">
+          <div class="row">
+            <div class="text">
+              <div class="label">Recent Chats <span class="ver">269f535</span></div>
+              <div class="hint">Installed 12 Nov 2026, 07:41. Every connected host runs this version.</div>
+            </div>
+            <button class="btn ghost" id="checkNow">Check now</button>
+          </div>
+          <div class="row stack">
+            <div class="ver-host"><span>DESKTOP-U12KP1A</span><span class="ver">269f535</span><span class="ver-state" data-result>12 Nov, 07:41</span></div>
+            <div class="ver-host"><span>paseo-pai</span><span class="ver">269f535</span><span class="ver-state" data-result>12 Nov, 07:43</span></div>
+          </div>
+          <div class="row">
+            <div class="text"><div class="label">Keep Recent Chats up to date</div><div class="hint">Every host that installed it from GitHub checks a few minutes after it starts and every 6 hours, and installs a newer version. Check now asks every host at once, whether or not this is on.</div></div>
+            <div class="switch on" data-toggle></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- This device -->
+      <div>
+        <div class="section-title">This device <span class="badge device">not synced</span> <span class="badge new">new</span></div>
+        <div class="card">
+          <div class="row">
+            <div class="text">
+              <div class="label">View</div>
+              <div class="hint">Which list the sidebar shows on this device. Automatic: Projects on wide screens, Triage on phones. Also switched in the sidebar's first row.</div>
+            </div>
+            <select id="viewSel">
+              <option value="auto">Automatic</option>
+              <option value="projects">Projects</option>
+              <option value="triage">Triage</option>
+            </select>
+          </div>
+          <div class="row" id="activeRow">
+            <div class="text">
+              <div class="label">Active only</div>
+              <div class="hint">Projects view: hide workspaces with nothing newer than the inactive window. Pinned ones stay. Same as the Active button in the sidebar.</div>
+            </div>
+            <div class="switch on" data-toggle></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row layout -->
+      <div>
+        <div class="section-title">Row layout</div>
+        <div class="preview">
+          <div class="preview-head">
+            <span class="note">Preview</span>
+            <div class="seg" id="previewSeg"><button data-v="triage">Triage</button><button data-v="projects">Projects</button></div>
+          </div>
+          <div id="previewTriage">
+            <div class="heading">Needs you</div>
+            <div class="chat">
+              <div class="l1"><span class="hosttag" style="background:#7dd3fc">DESK</span><span class="led waiting"></span><span class="cut">paseo-reci</span><span class="cut">main      </span><span class="title">Adapt the settings screen</span></div>
+              <div class="l2">main · claude-opus</div>
+            </div>
+            <div class="heading">Running</div>
+            <div class="chat">
+              <div class="l1"><span class="hosttag" style="background:#fbbf24">PAI</span><span class="led running"></span><span class="cut">home-assis</span><span class="cut">feat-zigbe</span><span class="title">Pair the new sensors</span></div>
+              <div class="l2">feat/zigbee · codex</div>
+            </div>
+          </div>
+          <div id="previewProjects" hidden>
+            <div class="strip">
+              <div class="heading">Needs you · 1</div>
+              <div class="chat">
+                <div class="l1"><span class="hosttag" style="background:#7dd3fc">DESK</span><span class="led waiting"></span><span class="cut">paseo-reci</span><span class="cut">main      </span><span class="title">Adapt the settings screen</span></div>
+                <div class="l2">main · claude-opus</div>
+              </div>
+            </div>
+            <div class="tree-node project">▾ paseo-recent-chats</div>
+            <div class="tree-node ws">▾ main</div>
+            <div class="chat tree-chat">
+              <div class="l1"><span class="led waiting"></span><span class="title">Adapt the settings screen</span></div>
+              <div class="l2">claude-opus</div>
+            </div>
+            <div class="chat tree-chat">
+              <div class="l1"><span class="led idle"></span><span class="title">Hosts dropdown in the first row</span></div>
+              <div class="l2">claude-opus</div>
+            </div>
+            <div class="more">+4 older</div>
+            <div class="tree-note">In the tree, host, project, workspace and branch are left out of the rows: the tree shows them. The Needs you box uses the full row.</div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:8px">
+          <div class="line-label">Line 1</div>
+          <div class="token"><span class="check on">✓</span><span class="name">Host</span><span class="tree-off">not in tree</span><span class="chars">auto</span><span class="grab">⋮⋮</span></div>
+          <div class="token"><span class="check on">✓</span><span class="name">Status light</span><span class="chars">–</span><span class="grab">⋮⋮</span></div>
+          <div class="token"><span class="check on">✓</span><span class="name">Project</span><span class="tree-off">not in tree</span><span class="chars">10</span><span class="grab">⋮⋮</span></div>
+          <div class="token"><span class="check on">✓</span><span class="name">Workspace</span><span class="tree-off">not in tree</span><span class="chars">10</span><span class="grab">⋮⋮</span></div>
+          <div class="token"><span class="check on">✓</span><span class="name">Tab name</span><span class="chars">all</span><span class="grab">⋮⋮</span></div>
+          <div class="line-label">Line 2</div>
+          <div class="token"><span class="check on">✓</span><span class="name">Branch</span><span class="tree-off">not in tree</span><span class="chars">20</span><span class="grab">⋮⋮</span></div>
+          <div class="token"><span class="check on">✓</span><span class="name">Agent</span><span class="chars">12</span><span class="grab">⋮⋮</span></div>
+          <div class="token off"><span class="check"></span><span class="name">Age</span><span class="chars">6</span><span class="grab">⋮⋮</span></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+          <button class="btn" disabled>Save layout</button><button class="btn ghost" disabled>Discard</button><span class="note">Saved.</span>
+        </div>
+      </div>
+
+      <!-- Both views -->
+      <div>
+        <div class="section-title">Both views <span class="badge new">new</span></div>
+        <div class="card">
+          <div class="row">
+            <div class="text"><div class="label">Needs you: chats shown</div><div class="hint">Triage: the rest appear as a +N chip (per host when grouped). Projects: the Needs you box at the top shows this many, then "+N more".</div></div>
+            <select><option>3</option><option>4</option><option>5</option><option selected>6</option><option>8</option><option>10</option></select>
+          </div>
+          <div class="row">
+            <div class="text"><div class="label">Needs you: expiry</div><div class="hint">Chats waiting longer than this count as inactive, in both views.</div></div>
+            <select><option>1 day</option><option>3 days</option><option selected>7 days</option><option>14 days</option><option>30 days</option></select>
+          </div>
+          <div class="row">
+            <div class="text"><div class="label">Inactive window</div><div class="hint">Triage: older chats stay out of the Inactive short list. Projects: with Active only on, workspaces with nothing newer are hidden.</div></div>
+            <select><option>3 days</option><option>7 days</option><option selected>14 days</option><option>30 days</option><option>90 days</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Projects view -->
+      <div>
+        <div class="section-title">Projects view <span class="badge new">new</span></div>
+        <div class="card">
+          <div class="row">
+            <div class="text"><div class="label">Group by host</div><div class="hint">A heading per host above its projects. Off: one list of projects, each with its host's tag. Also in the Hosts dropdown.</div></div>
+            <div class="switch on" data-toggle></div>
+          </div>
+          <div class="row">
+            <div class="text"><div class="label">Chats per workspace</div><div class="hint">The rest fold into "+N older". Chats that need you, run or are pinned always show.</div></div>
+            <select><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>8</option><option>10</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Triage view -->
+      <div>
+        <div class="section-title">Triage view</div>
+        <div class="card">
+          <div class="row">
+            <div class="text"><div class="label">Group rows by host</div><div class="hint">One heading per host. Chats are limited per host, and the host tag is left out of the rows.</div></div>
+            <div class="switch" data-toggle></div>
+          </div>
+          <div class="row">
+            <div class="text"><div class="label">Section headings</div><div class="hint">Pinned, Needs you, Running, Inactive.</div></div>
+            <div class="switch on" data-toggle></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:8px">
+          <div class="sec">
+            <div class="sec-head"><span class="grab" style="color:var(--faint)">⋮⋮</span><span class="name">Pinned</span><button class="sortbtn">oldest first</button><button class="arrow">▲</button><button class="arrow">▼</button></div>
+          </div>
+          <div class="sec">
+            <div class="sec-head"><span class="grab" style="color:var(--faint)">⋮⋮</span><span class="name">Needs you</span><button class="sortbtn">oldest first</button><button class="arrow">▲</button><button class="arrow">▼</button></div>
+            <div class="gone">Chats shown and expiry: under Both views.</div>
+          </div>
+          <div class="sec">
+            <div class="sec-head"><span class="grab" style="color:var(--faint)">⋮⋮</span><span class="name">Running</span><button class="sortbtn">oldest first</button><button class="arrow">▲</button><button class="arrow">▼</button></div>
+            <div class="row"><div class="text"><div class="label">Chats shown</div><div class="hint">0 hides them (the +N chip still counts them).</div></div><select><option selected>3</option></select></div>
+          </div>
+          <div class="sec">
+            <div class="sec-head"><span class="grab" style="color:var(--faint)">⋮⋮</span><span class="name">Inactive</span><button class="sortbtn">newest first</button><button class="arrow">▲</button><button class="arrow">▼</button></div>
+            <div class="row"><div class="text"><div class="label">Chats shown</div><div class="hint">0 hides them.</div></div><select><option selected>4</option></select></div>
+            <div class="gone">Window: under Both views.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hosts -->
+      <div>
+        <div class="section-title">Hosts</div>
+        <div class="card">
+          <div class="row"><div class="text"><div class="label">List chats of DESKTOP-U12KP1A</div><div class="hint">Connected. Both views.</div></div><div class="switch on" data-toggle></div></div>
+          <div class="row"><div class="text"><div class="label">List chats of paseo-pai</div><div class="hint">Connected. Both views.</div></div><div class="switch on" data-toggle></div></div>
+        </div>
+        <div class="note" style="margin-top:6px">Grouping by host moved into each view's section: Triage and Projects keep separate choices.</div>
+        <div class="note" style="margin-top:6px">These settings, pins and read marks are saved on every connected host that runs Recent Chats (DESKTOP-U12KP1A, paseo-pai), so every device shows the same view. Pins and read marks of a chat are kept on that chat's host.</div>
+      </div>
+
+      <!-- Sidebar list -->
+      <div>
+        <div class="section-title">Sidebar list <span class="badge moved">was Display</span></div>
+        <div class="card">
+          <div class="row">
+            <div class="text"><div class="label">Sidebar list expanded</div><div class="hint">Also changes when you open or close the list in the sidebar.</div></div>
+            <div class="switch on" data-toggle></div>
+          </div>
+          <div class="row stack">
+            <div><div class="label">Sidebar list height on phones</div><div class="hint">Share of the window height the list takes, even when fewer chats would fit. The grip under the list sets it too.</div></div>
+            <div class="slider"><input type="range" min="15" max="85" step="5" value="40" data-pct><span>40%</span></div>
+          </div>
+          <div class="row stack">
+            <div><div class="label">Sidebar list height on wide screens</div></div>
+            <div class="slider"><input type="range" min="15" max="85" step="5" value="50" data-pct><span>50%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Full names card -->
+      <div>
+        <div class="section-title">Full names card</div>
+        <div class="card">
+          <div class="row"><div class="text"><div class="label">Show full names on hover</div><div class="hint">A card with the untruncated names while the pointer rests on a row (long press on touch). Both views.</div></div><div class="switch on" data-toggle></div></div>
+          <div class="row stack"><div class="label">Card transparency</div><div class="slider"><input type="range" min="0" max="90" step="5" value="0" data-pct><span>0%</span></div></div>
+        </div>
+      </div>
+
+      <!-- Composer pills -->
+      <div>
+        <div class="section-title">Composer pills</div>
+        <div class="card">
+          <div class="row"><div class="text"><div class="label">Inbox pill</div><div class="hint">Counts and the chat list inside every chat.</div></div><div class="switch on" data-toggle></div></div>
+          <div class="row"><div class="text"><div class="label">Later pill</div><div class="hint">Marks the current chat unread.</div></div><div class="switch on" data-toggle></div></div>
+          <div class="row"><div class="text"><div class="label">After Later</div><div class="hint">Open the next chat, or stay on this one.</div></div><select><option>Open the next chat</option><option>Stay on this chat</option></select></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h2>Settings for both views</h2>
+    <p class="lede">The settings screen still describes only the Triage list. This mockup regroups it around the two views and orders the sections from most to least used. Badges mark new and moved sections.</p>
+    <div class="controls">
+      <span class="note">Screen:</span>
+      <div class="seg" id="widthSeg"><button data-w="wide" class="on">Wide</button><button data-w="phone">Phone</button></div>
+    </div>
+
+    <h3>Order: most used first</h3>
+    <ol>
+      <li><b>Version</b>: this host's installed version, each host's version, Check now (with a result per host) and the auto-update switch. Was "Updates" near the end.</li>
+      <li><b>This device</b> (not synced): which view, and Active only. The same state as the sidebar's first row.</li>
+      <li><b>Row layout</b>: the preview switches between Triage and Projects. Items the tree shows itself are marked "not in tree".</li>
+      <li><b>Both views</b>: the three settings both views use, shown once. Each hint says what it does in Triage and in Projects.</li>
+      <li><b>Projects view</b>: group by host, and chats per workspace (now a setting, fixed at 3 today).</li>
+      <li><b>Triage view</b>: group by host, section headings, and the Sections card without the settings that moved to Both views.</li>
+      <li><b>Hosts</b>: which hosts are listed (also in the Hosts dropdown), and where the settings are saved (was the screen's first line).</li>
+      <li><b>Sidebar list</b>: expanded, and the two heights (the grip sets them too). These were under Display.</li>
+      <li>Full names card, Composer pills: no change.</li>
+    </ol>
+
+    <h3>What changes</h3>
+    <table>
+      <tr><th>Setting</th><th>Today</th><th>Mockup</th><th>Stored</th></tr>
+      <tr><td>View</td><td>sidebar first row only</td><td class="k-new">This device</td><td>device (<code>viewMode.view</code>)</td></tr>
+      <tr><td>Active only</td><td>sidebar first row only</td><td class="k-new">This device</td><td>device (<code>viewMode.activeOnly</code>)</td></tr>
+      <tr><td>Version per host</td><td>only after Check now</td><td class="k-new">Version</td><td>asked from each host (<code>versions</code>)</td></tr>
+      <tr><td>Auto-update, Check now</td><td>Updates, near the end</td><td class="k-moved">Version</td><td><code>autoUpdate</code></td></tr>
+      <tr><td>List expanded, heights</td><td>Display</td><td class="k-moved">Sidebar list</td><td>synced, no change</td></tr>
+      <tr><td>Needs you: chats shown</td><td>Sections › Needs you</td><td class="k-moved">Both views</td><td><code>maxUnread</code></td></tr>
+      <tr><td>Needs you: expiry</td><td>Sections › Needs you</td><td class="k-moved">Both views</td><td><code>unreadExpiryDays</code></td></tr>
+      <tr><td>Inactive window</td><td>Sections › Inactive</td><td class="k-moved">Both views</td><td><code>inactiveWindowDays</code></td></tr>
+      <tr><td>Triage: group rows by host</td><td>Hosts</td><td class="k-moved">Triage view</td><td><code>groupByHost</code></td></tr>
+      <tr><td>Section headings</td><td>Display › Group headings</td><td class="k-moved">Triage view</td><td><code>groupHeadings</code></td></tr>
+      <tr><td>Projects: group by host</td><td>Hosts dropdown only</td><td class="k-new">Projects view</td><td><code>projectsGroupByHost</code></td></tr>
+      <tr><td>Chats per workspace</td><td>fixed at 3</td><td class="k-new">Projects view</td><td>new synced key <code>chatsPerWorkspace</code>, default 3</td></tr>
+      <tr><td>Row layout preview</td><td>Triage rows only</td><td class="k-moved">Triage / Projects switch</td><td>no setting</td></tr>
+    </table>
+
+    <h3>Open points</h3>
+    <ul>
+      <li>Older hosts without <code>chatsPerWorkspace</code> refuse settings that include it. They already show as "older" and get asked to update, as with any new setting.</li>
+      <li>The preview's Triage/Projects switch starts on the view this device shows.</li>
+      <li>"Group headings" becomes "Section headings": it names what it switches.</li>
+      <li>When hosts run different versions, the Version line says which are behind and that they follow within about a minute.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  const frame = document.getElementById("frame");
+  document.querySelectorAll("[data-toggle]").forEach((el) => el.addEventListener("click", () => el.classList.toggle("on")));
+  document.querySelectorAll("[data-pct]").forEach((el) => el.addEventListener("input", () => (el.nextElementSibling.textContent = el.value + "%")));
+
+  const widthSeg = document.getElementById("widthSeg");
+  const viewSel = document.getElementById("viewSel");
+  const previewSeg = document.getElementById("previewSeg");
+  let width = "wide";
+  let preview = null;
+
+  const resolvedView = () => (viewSel.value === "auto" ? (width === "phone" ? "triage" : "projects") : viewSel.value);
+  function render() {
+    frame.classList.toggle("phone", width === "phone");
+    widthSeg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.w === width));
+    const shown = preview ?? resolvedView();
+    previewSeg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === shown));
+    document.getElementById("previewTriage").hidden = shown !== "triage";
+    document.getElementById("previewProjects").hidden = shown !== "projects";
+    document.getElementById("activeRow").classList.toggle("dim", resolvedView() !== "projects");
+  }
+  widthSeg.addEventListener("click", (e) => { if (e.target.dataset.w) { width = e.target.dataset.w; render(); } });
+  previewSeg.addEventListener("click", (e) => { if (e.target.dataset.v) { preview = e.target.dataset.v; render(); } });
+  viewSel.addEventListener("change", () => { preview = null; render(); });
+  document.getElementById("checkNow").addEventListener("click", (e) => {
+    const button = e.currentTarget;
+    const states = document.querySelectorAll("[data-result]");
+    button.textContent = "Checking\u2026";
+    button.disabled = true;
+    states.forEach((el) => { el.textContent = "checking\u2026"; el.classList.remove("ok"); });
+    setTimeout(() => {
+      states.forEach((el) => { el.textContent = "up to date"; el.classList.add("ok"); });
+      button.textContent = "Check now";
+      button.disabled = false;
+    }, 900);
+  });
+  render();
+</script>
+</body>
+</html>

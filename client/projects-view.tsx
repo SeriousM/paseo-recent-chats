@@ -11,9 +11,9 @@ import { useOpenChat } from "./open-chat";
 import { buildTree, needsYou, pinnedTree, type TreeHost, type TreeProject, type TreeWorkspace } from "./project-tree";
 import { columnChars, visibleLines } from "./row-layout";
 import type { StoreSnapshot, WorkspaceInfo } from "./store";
-import type { TriageRow } from "./triage";
+import { LED_RANK, type Led, type TriageRow } from "./triage";
 import { hostColors } from "./format";
-import { HostHeading, isDark, LedDot, TriageRowView, type RowViewProps } from "./triage-list";
+import { HostHeading, isDark, LedDot, ledColor, TriageRowView, type RowViewProps } from "./triage-list";
 import { scoreRow } from "./fuzzy";
 import { filterTree } from "./tree-search";
 import { getStore } from "./runtime";
@@ -219,6 +219,8 @@ export function ProjectsView({
     () => rows.filter((row) => row.bucket === "unread" && (!searching || scoreRow(query, row) !== null)),
     [rows, searching, query],
   );
+  // The frame takes the light of its most urgent chat; grey when only a held (opened) chat is left.
+  const stripLed = urgent.reduce<Led>((worst, row) => (LED_RANK[row.led] < LED_RANK[worst] ? row.led : worst), "idle");
   const stripShown = stripAll ? urgent : urgent.slice(0, prefs.maxUnread);
   const stripLines = useMemo(() => visibleLines(prefs.layout), [prefs.layout]);
   const stripColumns = useMemo(() => columnChars(stripShown, prefs.layout), [stripShown, prefs.layout]);
@@ -319,7 +321,7 @@ export function ProjectsView({
                 paddingVertical: 4,
                 borderRadius: 10,
                 borderWidth: 1,
-                borderColor: theme.colors.statusDanger,
+                borderColor: stripLed === "idle" ? theme.colors.border : ledColor(theme, stripLed),
                 backgroundColor: theme.colors.surface1,
               }}
             >
