@@ -88,7 +88,9 @@ export function writeDeviceValue(key: string, value: string): void {
 }
 
 interface DomPointerEvent {
+  clientX: number;
   clientY: number;
+  pointerType: string;
   button: number;
   preventDefault(): void;
   stopPropagation(): void;
@@ -108,30 +110,49 @@ function isDomTarget(node: unknown): node is DomTarget {
 /**
  * Vertical mouse/pen/touch drag on a web element. The app's sidebar sorts its items with pointer-event
  * drag and drop, which takes the mouse before React Native's responder sees it, so the grip handles
- * pointer events itself and keeps them from reaching the sidebar. Returns a cleanup; a no-op off the web.
+ * pointer events itself and keeps them from reaching the sidebar. With `touchHoldMs`, a finger has to rest
+ * that long before the drag starts (moving 10 px earlier cancels it); mouse and pen start at once.
+ * Returns a cleanup; a no-op off the web.
  */
 export function attachVerticalDrag(
   node: unknown,
   handlers: { start(): void; move(dy: number): void; end(): void },
+  touchHoldMs = 0,
 ): () => void {
   if (Platform.OS !== "web" || !isDomTarget(node)) return () => {};
+  let startX = 0;
   let startY = 0;
+  let active = false;
+  let hold: ReturnType<typeof setTimeout> | null = null;
   const move = (event: DomPointerEvent) => {
     event.preventDefault();
-    handlers.move(event.clientY - startY);
+    if (active) handlers.move(event.clientY - startY);
+    else if (Math.abs(event.clientY - startY) > 10 || Math.abs(event.clientX - startX) > 10) up();
   };
   const up = () => {
+    if (hold !== null) {
+      clearTimeout(hold);
+      hold = null;
+    }
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
     window.removeEventListener("pointercancel", up);
-    handlers.end();
+    if (active) handlers.end();
+    active = false;
   };
   const down = (event: DomPointerEvent) => {
     if (event.button !== 0) return;
     event.stopPropagation();
     event.preventDefault();
+    startX = event.clientX;
     startY = event.clientY;
-    handlers.start();
+    const begin = () => {
+      hold = null;
+      active = true;
+      handlers.start();
+    };
+    if (event.pointerType === "touch" && touchHoldMs > 0) hold = setTimeout(begin, touchHoldMs);
+    else begin();
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
@@ -139,9 +160,7 @@ export function attachVerticalDrag(
   node.addEventListener("pointerdown", down);
   return () => {
     node.removeEventListener("pointerdown", down);
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-    window.removeEventListener("pointercancel", up);
+    up();
   };
 }
 

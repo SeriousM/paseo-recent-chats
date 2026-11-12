@@ -696,26 +696,49 @@ interface ItemDrag {
 /** Web-only styles that keep a drag from selecting text or scrolling a touch screen. */
 const GRAB_WEB = (Platform.OS === "web" ? { cursor: "grab", userSelect: "none", touchAction: "none" } : {}) as ViewStyle;
 
+/** On touch screens a drag starts after holding the handle this long, so a swipe over it still scrolls. */
+const TOUCH_HOLD_MS = 350;
+/** Moving further than this before the hold is over cancels it. */
+const TOUCH_SLOP = 10;
+
 /**
- * Grip around a handle icon. React Native's responder drives it on phones; on the web the app's sidebar
- * takes pointer events first, so the handle listens to them itself (see web.ts).
+ * Grip around a handle icon. React Native's responder drives it on phones: a long press lifts the item,
+ * then it follows the finger. On the web the app's sidebar takes pointer events first, so the handle
+ * listens to them itself and starts at once (see web.ts).
  */
 function DragHandle({ drag, label, children }: { drag: ItemDrag; label: string; children: ReactNode }) {
   const node = useRef<View>(null);
-  const pan = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => Platform.OS !== "web",
-        onMoveShouldSetPanResponder: () => Platform.OS !== "web",
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: drag.start,
-        onPanResponderMove: (_event, gesture) => drag.move(gesture.dy),
-        onPanResponderRelease: drag.end,
-        onPanResponderTerminate: drag.end,
-      }),
-    [drag],
-  );
-  useEffect(() => attachVerticalDrag(node.current, drag), [drag]);
+  const pan = useMemo(() => {
+    let hold: ReturnType<typeof setTimeout> | null = null;
+    let active = false;
+    const stop = () => {
+      if (hold !== null) {
+        clearTimeout(hold);
+        hold = null;
+      }
+      if (active) drag.end();
+      active = false;
+    };
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => Platform.OS !== "web",
+      // Until the hold is over the list may take the touch to scroll; once lifted, the drag keeps it.
+      onPanResponderTerminationRequest: () => !active,
+      onPanResponderGrant: () => {
+        hold = setTimeout(() => {
+          hold = null;
+          active = true;
+          drag.start();
+        }, TOUCH_HOLD_MS);
+      },
+      onPanResponderMove: (_event, gesture) => {
+        if (active) drag.move(gesture.dy);
+        else if (Math.abs(gesture.dy) > TOUCH_SLOP || Math.abs(gesture.dx) > TOUCH_SLOP) stop();
+      },
+      onPanResponderRelease: stop,
+      onPanResponderTerminate: stop,
+    });
+  }, [drag]);
+  useEffect(() => attachVerticalDrag(node.current, drag, TOUCH_HOLD_MS), [drag]);
   return (
     <View ref={node} accessibilityLabel={`Drag ${label} to reorder`} {...pan.panHandlers} style={[{ padding: 3 }, GRAB_WEB]}>
       {children}

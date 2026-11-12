@@ -23,8 +23,8 @@ The settings screen, where every row item can be shown, reordered, split over li
   newer than the Inactive window setting, 14 days by default) and folds are kept per device.
 - Pin a project, a workspace or a chat. The Pinned section shows each pinned item with its parents and
   everything below it; pinned items also stay in place. Pins are synced to every device.
-- Drag a project by its folder icon, or a workspace by its grip, to reorder the Projects view; the order is
-  synced to every device. Long press or double-click a workspace name to rename it (on its host).
+- Drag a project by its folder icon, or a workspace by its grip, to reorder the Projects view (long press
+  first on touch screens); the order is synced to every device. Long press or double-click a workspace name to rename it (on its host).
   Icons above the tree and in the Pinned heading fold everything, open everything, or open only what is active.
   What the tree shows per workspace and chat (branch, also main/master, checkout or worktree, line
   changes, host tag, age, agent) is a setting.
