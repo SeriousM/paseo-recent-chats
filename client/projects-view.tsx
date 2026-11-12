@@ -7,6 +7,7 @@ import { Icon } from "@getpaseo/plugin/client/ui";
 import { useMemo, useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { RowTokenId } from "../shared/layout";
+import type { Prefs } from "../shared/settings";
 import { useOpenChat } from "./open-chat";
 import { buildTree, needsYou, pinnedTree, type TreeHost, type TreeProject, type TreeWorkspace } from "./project-tree";
 import { columnChars, visibleLines } from "./row-layout";
@@ -30,6 +31,9 @@ const CHATS_PER_WORKSPACE = 3;
 
 /** The tree shows host, project, workspace and branch itself, so its rows leave them out. */
 const TREE_HIDDEN: readonly RowTokenId[] = ["host", "project", "workspace", "branch"];
+
+/** Branches the "main and master" switch hides. */
+const MAIN_BRANCHES: Record<string, true> = { main: true, master: true };
 
 /** Row props that are the same for every chat row. */
 export type RowShared = Omit<RowViewProps, "row" | "showHost" | "hostColor" | "lines" | "columns" | "current">;
@@ -224,9 +228,20 @@ export function ProjectsView({
   const stripShown = stripAll ? urgent : urgent.slice(0, prefs.maxUnread);
   const stripLines = useMemo(() => visibleLines(prefs.layout), [prefs.layout]);
   const stripColumns = useMemo(() => columnChars(stripShown, prefs.layout), [stripShown, prefs.layout]);
+  const show = prefs.projectsShow;
+  // The tree draws host, project, workspace and branch itself; age and agent follow the Projects settings.
   const treeLayout = useMemo(
-    () => prefs.layout.map((token) => (TREE_HIDDEN.includes(token.id) ? { ...token, enabled: false } : token)),
-    [prefs.layout],
+    () =>
+      prefs.layout.map((token) =>
+        TREE_HIDDEN.includes(token.id)
+          ? { ...token, enabled: false }
+          : token.id === "age"
+            ? { ...token, enabled: show.age }
+            : token.id === "agent"
+              ? { ...token, enabled: show.agent }
+              : token,
+      ),
+    [prefs.layout, show.age, show.agent],
   );
   const treeLines = useMemo(() => visibleLines(treeLayout), [treeLayout]);
   const treeColumns = useMemo(() => columnChars(rows, treeLayout), [rows, treeLayout]);
@@ -262,10 +277,11 @@ export function ProjectsView({
       theme={theme}
       compact={compact}
       toggled={toggled}
-      hostTag={flat ? hostOfProject(project, snapshot) : undefined}
+      hostTag={flat && show.hostTag ? hostOfProject(project, snapshot) : undefined}
     >
       {project.workspaces.map((workspace) => (
         <WorkspaceNode
+          show={show}
           key={prefix + workspace.key}
           workspace={workspace}
           info={workspace.workspaceId ? workspaceInfo.get(workspace.key) : undefined}
@@ -554,6 +570,7 @@ function ProjectNode({
 }
 
 function WorkspaceNode({
+  show,
   workspace,
   info,
   prefix,
@@ -564,6 +581,7 @@ function WorkspaceNode({
   showOlder,
   renderChat,
 }: {
+  show: Prefs["projectsShow"];
   workspace: TreeWorkspace;
   info: WorkspaceInfo | undefined;
   prefix: string;
@@ -575,8 +593,9 @@ function WorkspaceNode({
   renderChat(row: TriageRow): ReactNode;
 }) {
   const chats = showOlder ? [...workspace.chats, ...workspace.older] : workspace.chats;
-  const kind = info ? KIND_LABEL[info.kind] : undefined;
+  const kind = show.kind && info ? KIND_LABEL[info.kind] : undefined;
   const small = { fontSize: 10.5, color: theme.colors.foregroundMuted };
+  const branch = show.branch && (show.mainBranch || !MAIN_BRANCHES[workspace.branch]) ? workspace.branch : "";
   return (
     <View style={{ marginBottom: 2 }}>
       <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6 }}>
@@ -595,11 +614,17 @@ function WorkspaceNode({
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          <LedDot led={workspace.led} released={workspace.released} failed={workspace.failed} theme={theme} size={11} />
-          <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: theme.colors.foreground }}>
+          {show.status ? (
+            <LedDot led={workspace.led} released={workspace.released} failed={workspace.failed} theme={theme} size={11} />
+          ) : null}
+          {/* White while something happens in it (running, asking, unseen); grey like its chats otherwise. */}
+          <Text
+            numberOfLines={1}
+            style={{ flex: 1, fontSize: 13, color: workspace.led === "idle" ? theme.colors.foregroundMuted : theme.colors.foreground }}
+          >
             {info?.title ?? workspace.name}
           </Text>
-          {info?.diff && (info.diff.additions || info.diff.deletions) ? (
+          {show.diff && info?.diff && (info.diff.additions || info.diff.deletions) ? (
             <Text style={small}>
               <Text style={{ color: theme.colors.statusSuccess }}>{`+${info.diff.additions}`}</Text>{" "}
               <Text style={{ color: theme.colors.statusDanger }}>{`\u2212${info.diff.deletions}`}</Text>
@@ -623,11 +648,11 @@ function WorkspaceNode({
       </View>
       {folded ? null : (
         <View style={{ paddingLeft: 12 }}>
-          {workspace.branch ? (
+          {branch ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingBottom: 2 }}>
               <Icon name="GitBranch" size={11} color={theme.colors.foregroundMuted} />
               <Text numberOfLines={1} style={{ flex: 1, fontSize: 11, color: theme.colors.foregroundMuted }}>
-                {workspace.branch}
+                {branch}
               </Text>
             </View>
           ) : null}

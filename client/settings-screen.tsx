@@ -11,6 +11,18 @@ import { sameLayout } from "./row-layout";
 import { useRecents } from "./use-recents";
 import type { UpdateCheck } from "./store";
 
+/** The Projects tree's switches, in the order they are shown. */
+const PROJECT_SWITCHES: readonly [keyof Prefs["projectsShow"], string, string][] = [
+  ["branch", "Branch", "The git branch under each workspace."],
+  ["mainBranch", "Also main and master", "Off: the branch is shown only when it is not main or master."],
+  ["kind", "Checkout or worktree", "The small tag after the workspace name."],
+  ["diff", "Line changes", "+added \u2212removed of the workspace."],
+  ["status", "Workspace status", "The symbol of its most urgent chat, before the name."],
+  ["hostTag", "Host tag on projects", "Only when projects are not grouped by host."],
+  ["age", "Age of each chat", "How long ago, placed as in the row layout."],
+  ["agent", "Agent of each chat", "The model the chat runs on, placed as in the row layout."],
+];
+
 export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
   const { store, snapshot } = useRecents();
   const { prefs, hosts } = snapshot;
@@ -125,6 +137,20 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
       <SettingsSection title="Sections">
         <SettingsCard>
           <SectionEditor theme={theme} compact={screen.compact} prefs={prefs} onChange={change} />
+        </SettingsCard>
+      </SettingsSection>
+      <SettingsSection title="Projects view">
+        <SettingsCard>
+          {PROJECT_SWITCHES.map(([key, label, hint]) => (
+            <SettingsSwitch
+              key={key}
+              label={label}
+              hint={hint}
+              value={prefs.projectsShow[key]}
+              disabled={key === "mainBranch" && !prefs.projectsShow.branch}
+              onValueChange={(next) => change({ projectsShow: { ...prefs.projectsShow, [key]: next } })}
+            />
+          ))}
         </SettingsCard>
       </SettingsSection>
       <SettingsSection title="Display">

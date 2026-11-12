@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recent Chats: tree hierarchy and workspace details (mockup)</title>
+<style>
+  body { margin: 0; padding: 24px; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: #0f1115; color: #e6e8eb; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2.sec { font-size: 16px; margin: 28px 0 4px; }
+  .lede { color: #8b929c; max-width: 85ch; margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 20px; }
+  .card h3 { font-size: 14px; margin: 0 0 2px; }
+  .card p { font-size: 12px; color: #8b929c; margin: 0 0 8px; min-height: 48px; }
+
+  .panel { --bg: #16181d; --s1: #1c1f25; --s2: #252931; --fg: #e6e8eb; --mid: #b4bac3; --muted: #8b929c; --faint: #5f6670; --border: #2c313a;
+           --ready: #35c264; --running: #5caaf6; --add: #6cb17b; --del: #d8847b; --host: #a890d5;
+           background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 12px; padding: 6px 4px; }
+  .r { display: flex; align-items: center; gap: 7px; padding: 3px 8px; min-height: 26px; }
+  .project { font-weight: 650; font-size: 14px; }
+  .chev { color: var(--muted); font-size: 10px; width: 10px; }
+  .folder { color: var(--muted); }
+  .ws { padding-left: 22px; font-size: 13px; }
+  .branch { padding-left: 40px; font-size: 11px; color: var(--muted); min-height: 18px; }
+  .chat { padding-left: 40px; font-size: 13px; }
+  .age { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); width: 26px; }
+  .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tag { font-size: 10.5px; color: var(--muted); background: var(--s2); border-radius: 5px; padding: 1px 6px; }
+  .htag { font-size: 10.5px; font-weight: 600; color: var(--host); background: color-mix(in srgb, var(--host) 18%, transparent); border-radius: 5px; padding: 1px 6px; }
+  .diff { font-size: 10.5px; } .diff .a { color: var(--add); } .diff .d { color: var(--del); }
+  .tick { width: 12px; height: 12px; flex: none; }
+  .ring { position: relative; width: 12px; height: 12px; flex: none; }
+  .ring b { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--running); box-sizing: border-box; }
+  .ring b:first-child { opacity: .3; } .ring b:nth-child(2) { border-color: transparent; border-top-color: var(--running); animation: spin .9s linear infinite; }
+  .ring i { position: absolute; inset: 3px; border-radius: 50%; background: var(--running); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Today: workspace white, inactive chat grey */
+  .now .ws .t { color: var(--fg); } .now .chat.idle .t { color: var(--muted); }
+  /* A: everything follows activity: idle workspace grey too */
+  .a .ws.idle .t { color: var(--muted); } .a .chat.idle .t { color: var(--muted); }
+  /* B: chats always white, workspace slightly dimmer label */
+  .b .ws .t { color: var(--mid); font-size: 12.5px; } .b .chat .t { color: var(--fg); }
+  /* C: chats white; workspace as small uppercase label, like a section */
+  .c .ws .t { color: var(--muted); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; font-weight: 600; } .c .chat .t { color: var(--fg); }
+  .c .ws .tick, .c .ws .ring { display: none; }
+  /* D: one level less: workspace merged into the branch line */
+  .d .ws { display: none; } .d .branch { font-size: 12px; color: var(--mid); } .d .chat .t { color: var(--fg); }
+  .d .branch .wsname { color: var(--mid); font-weight: 600; }
+  /* E: chats white, age and meta faint, workspace normal but tags removed */
+  .e .chat .t { color: var(--fg); } .e .ws .t { color: var(--mid); } .e .age { color: var(--faint); }
+
+  /* Settings card */
+  .settings { background: #1c1f25; border: 1px solid #2c313a; border-radius: 10px; max-width: 520px; }
+  .srow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid #2c313a; }
+  .srow:first-child { border-top: 0; }
+  .srow .l { flex: 1; } .srow .h { font-size: 12px; color: #8b929c; }
+  .sw { width: 38px; height: 22px; border-radius: 11px; background: #252931; border: 1px solid #2c313a; position: relative; cursor: pointer; flex: none; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #8b929c; transition: left .15s; }
+  .sw.on { background: #4f8cff; border-color: #4f8cff; } .sw.on::after { left: 18px; background: #fff; }
+  .two { display: grid; grid-template-columns: minmax(300px, 520px) minmax(300px, 420px); gap: 20px; align-items: start; }
+  .hide-branch .branch:not(.keep) { display: none; } .hide-kind .tag { display: none; } .hide-diff .diff { display: none; }
+  .hide-host .htag { display: none; } .hide-age .age { display: none; } .hide-wsled .ws .tick, .hide-wsled .ws .ring { display: none; }
+</style>
+</head>
+<body>
+<h1>Projects tree: what is important, and what is shown</h1>
+<p class="lede">Today a workspace name is always white, but an inactive chat's title is grey, so the label above looks more important than the chats under it. Each card shows the same project with five ideas. Then, below, the workspace details as settings.</p>
+
+<h2 class="sec">1. Colour hierarchy</h2>
+<div class="grid" id="grid"></div>
+
+<h2 class="sec">2. Workspace details as settings (Projects view section)</h2>
+<p class="lede">Switch them here to see the tree change. Each would be a synced setting, like the row layout.</p>
+<div class="two">
+  <div class="settings" id="settings">
+    <div class="srow"><div class="l">Branch<div class="h">The git branch under each workspace.</div></div><div class="sw on" data-k="branch"></div></div>
+    <div class="srow"><div class="l">Checkout or worktree<div class="h">The small tag after the workspace name.</div></div><div class="sw on" data-k="kind"></div></div>
+    <div class="srow"><div class="l">Line changes<div class="h">+added −removed of the workspace.</div></div><div class="sw on" data-k="diff"></div></div>
+    <div class="srow"><div class="l">Workspace status<div class="h">The symbol of its most urgent chat, before the name.</div></div><div class="sw on" data-k="wsled"></div></div>
+    <div class="srow"><div class="l">Host tag on projects<div class="h">Only when projects are not grouped by host.</div></div><div class="sw on" data-k="host"></div></div>
+    <div class="srow"><div class="l">Age of each chat<div class="h">How long ago, before the title (from the row layout).</div></div><div class="sw on" data-k="age"></div></div>
+  </div>
+  <div id="live"></div>
+</div>
+
+<template id="tree">
+  <div class="panel">
+    <div class="r project"><span class="chev">▾</span><span class="folder">▢</span><span class="t">ajour-manager</span><span class="htag">paseo-pai</span></div>
+    <div class="r ws"><span class="ring"><b></b><b></b><i></i></span><span class="t">encryption</span><span class="diff"><span class="a">+388</span> <span class="d">−35</span></span><span class="tag">checkout</span></div>
+    <div class="r branch keep-d"><span>⑂</span><span class="t"><span class="wsname">encryption</span> · master</span></div>
+    <div class="r chat"><span class="age">2m</span><span class="ring"><b></b><b></b><i></i></span><span class="t">sqlite encryption</span></div>
+    <div class="r chat idle"><span class="age">6d</span><svg class="tick" viewBox="0 0 12 12"><path d="M2.3 6.4 4.8 8.9 9.7 3.6" fill="none" stroke="#8b929c" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t">Key rotation for the vault</span></div>
+    <div class="r ws idle"><svg class="tick" viewBox="0 0 12 12"><path d="M2.3 6.4 4.8 8.9 9.7 3.6" fill="none" stroke="#8b929c" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t">Analyze coachdesk.at as product name</span><span class="tag">checkout</span></div>
+    <div class="r branch"><span>⑂</span><span class="t"><span class="wsname">Analyze coachdesk.at</span> · master</span></div>
+    <div class="r chat idle"><span class="age">7d</span><svg class="tick" viewBox="0 0 12 12"><path d="M2.3 6.4 4.8 8.9 9.7 3.6" fill="none" stroke="#8b929c" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t">Thanks for the storytime, I learned something new</span></div>
+    <div class="r chat idle"><span class="age">7d</span><svg class="tick" viewBox="0 0 12 12"><path d="M2.3 6.4 4.8 8.9 9.7 3.6" fill="none" stroke="#8b929c" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t">Analyze the new product name https://coachdesk.at</span></div>
+  </div>
+</template>
+
+<script>
+  const variants = [
+    ["now", "Today", "Workspace names white, inactive chat titles grey: the label outranks the chats."],
+    ["a", "A. Everything follows activity", "A workspace with nothing running or waiting is grey like its chats. Active ones stay white. Simple rule: white = something happening."],
+    ["b", "B. Chats white, workspace dimmer", "Chat titles always white (the symbol already says inactive). Workspace names a step dimmer and a bit smaller: a label, not content."],
+    ["c", "C. Workspace as a small heading", "Workspace names become small uppercase headings like the section headings; chats white. Clear levels, but long workspace names get cut sooner."],
+    ["d", "D. Workspace merged into the branch line", "One level less: the workspace name and branch share one quiet line above its chats; chats white."],
+    ["e", "E. Like B, plus quieter ages", "As B, and the age column is fainter so the titles carry the row."],
+  ];
+  const grid = document.getElementById("grid");
+  const tree = () => document.getElementById("tree").content.firstElementChild.cloneNode(true);
+  for (const [cls, title, text] of variants) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `<h3>${title}</h3><p>${text}</p>`;
+    const panel = tree();
+    panel.classList.add(cls);
+    if (cls === "d") panel.querySelectorAll(".branch").forEach((b) => b.classList.add("keep"));
+    else panel.querySelectorAll(".wsname").forEach((n) => { n.parentElement.textContent = "master"; });
+    card.append(panel);
+    grid.append(card);
+  }
+  const live = tree();
+  live.classList.add("b");
+  live.querySelectorAll(".wsname").forEach((n) => { n.parentElement.textContent = "master"; });
+  document.getElementById("live").append(live);
+  document.getElementById("settings").addEventListener("click", (e) => {
+    const k = e.target.dataset.k;
+    if (!k) return;
+    e.target.classList.toggle("on");
+    live.classList.toggle("hide-" + k, !e.target.classList.contains("on"));
+  });
+</script>
+</body>
+</html>

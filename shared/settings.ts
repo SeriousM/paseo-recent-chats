@@ -82,6 +82,20 @@ export const prefsSettings = defineSettings({
     treePins: z.array(z.string()).default([]),
     /** Projects view: group the tree by host. Off: one list of projects, each with its host's tag. */
     projectsGroupByHost: z.boolean().default(true),
+    /** What the Projects tree shows around its chats. Each switch is on by default except the agent. */
+    projectsShow: z
+      .object({
+        branch: z.boolean().default(true),
+        /** Also show the branch when it is main or master. */
+        mainBranch: z.boolean().default(true),
+        kind: z.boolean().default(true),
+        diff: z.boolean().default(true),
+        status: z.boolean().default(true),
+        hostTag: z.boolean().default(true),
+        age: z.boolean().default(true),
+        agent: z.boolean().default(false),
+      })
+      .default(() => ({ branch: true, mainBranch: true, kind: true, diff: true, status: true, hostTag: true, age: true, agent: false })),
     /** Hosts switched off in the host filter (serverIds). A host not listed here is shown, so new hosts start on. */
     hiddenHosts: z.array(z.string()).default([]),
   }),
