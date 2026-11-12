@@ -91,7 +91,7 @@ export function LedDot({ led, theme, size = 10 }: { led: Led; theme: PluginTheme
         width: size,
         height: size,
         borderRadius: size / 2,
-        borderWidth: Math.max(2, Math.round(size / 4)),
+        borderWidth: Math.max(1.5, size / 6),
         borderColor: color,
         borderTopColor: "transparent",
         transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
