@@ -13,7 +13,7 @@ import { agentLabel } from "./format";
 import { DEFAULT_PREFS, parseStoredPrefs, toggleHiddenHost, withNormalizedLayout } from "./prefs";
 import { overlaySettings, prefsSettings, type Prefs } from "../shared/settings";
 import type { Section } from "../shared/sections";
-import { renameChat } from "../shared/rename";
+import { renameChat, renameWorkspace } from "../shared/rename";
 import { checkForUpdate, installedVersionRpc } from "../shared/updates";
 
 export type Rpc = PluginCommandCapabilities["rpc"];
@@ -83,6 +83,8 @@ export interface RecentsStore {
   toggleSort(section: Section): void;
   /** Sets a chat's title, through the plugin copy of the chat's own host. Rejects with a readable reason. */
   renameChat(key: string, title: string): Promise<void>;
+  /** Sets a workspace's title, through the plugin copy of the workspace's host. Rejects with a readable reason. */
+  renameWorkspace(hostId: string, workspaceId: string, title: string): Promise<void>;
   /** Asks every reachable host's copy to check for a plugin update now. One entry per host. */
   checkForUpdates(): Promise<UpdateCheck[]>;
   /** Stops observation and drops every listener. Called when the plugin unloads. */
@@ -764,6 +766,11 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
       // Only that host's plugin can rename its chat; an older version there has no rename yet.
       if (!peer) throw new Error("That chat's host does not run a current Recent Chats.");
       await peer.rpc(renameChat, { agentId: key.slice(key.indexOf(":") + 1), title });
+    },
+    async renameWorkspace(hostId, workspaceId, title) {
+      const peer = directory.get(hostId);
+      if (!peer) throw new Error("That workspace's host does not run a current Recent Chats.");
+      await peer.rpc(renameWorkspace, { workspaceId, title });
     },
     async checkForUpdates() {
       const label = (hostId: string) => hosts.find((host) => host.serverId === hostId)?.label ?? hostId;

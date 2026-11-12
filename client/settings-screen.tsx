@@ -17,7 +17,6 @@ const PROJECT_SWITCHES: readonly [keyof Prefs["projectsShow"], string, string][]
   ["mainBranch", "Also main and master", "Off: the branch is shown only when it is not main or master."],
   ["kind", "Checkout or worktree", "The small tag after the workspace name."],
   ["diff", "Line changes", "+added \u2212removed of the workspace."],
-  ["status", "Workspace status", "The symbol of its most urgent chat, before the name."],
   ["hostTag", "Host tag on projects", "Only when projects are not grouped by host."],
   ["age", "Age of each chat", "How long ago, placed as in the row layout."],
   ["agent", "Agent of each chat", "The model the chat runs on, placed as in the row layout."],

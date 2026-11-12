@@ -84,6 +84,8 @@ export const prefsSettings = defineSettings({
     projectsGroupByHost: z.boolean().default(true),
     /** Project keys (`<host>:<project>`) in the order dragged in the Projects view; the rest follow by name. */
     projectOrder: z.array(z.string()).default([]),
+    /** Workspace keys (`<host>:<workspace id>`) in the order dragged inside their project; the rest follow by activity. */
+    workspaceOrder: z.array(z.string()).default([]),
     /** What the Projects tree shows around its chats. Each switch is on by default except the agent. */
     projectsShow: z
       .object({
@@ -92,12 +94,11 @@ export const prefsSettings = defineSettings({
         mainBranch: z.boolean().default(true),
         kind: z.boolean().default(true),
         diff: z.boolean().default(true),
-        status: z.boolean().default(true),
         hostTag: z.boolean().default(true),
         age: z.boolean().default(true),
         agent: z.boolean().default(false),
       })
-      .default(() => ({ branch: true, mainBranch: true, kind: true, diff: true, status: true, hostTag: true, age: true, agent: false })),
+      .default(() => ({ branch: true, mainBranch: true, kind: true, diff: true, hostTag: true, age: true, agent: false })),
     /** Hosts switched off in the host filter (serverIds). A host not listed here is shown, so new hosts start on. */
     hiddenHosts: z.array(z.string()).default([]),
   }),

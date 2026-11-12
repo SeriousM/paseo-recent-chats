@@ -23,10 +23,11 @@ The settings screen, where every row item can be shown, reordered, split over li
   and folds are kept per device.
 - Pin a project, a workspace or a chat. The Pinned section shows each pinned item with its parents and
   everything below it; pinned items also stay in place. Pins are synced to every device.
-- Drag a project by its folder icon to reorder the Projects view; the order is synced to every device.
+- Drag a project by its folder icon, or a workspace by its grip, to reorder the Projects view; the order is
+  synced to every device. Long press or double-click a workspace name to rename it (on its host).
   Collapse, Expand and Active above the tree fold everything, open everything, or open only what is active.
   What the tree shows per workspace and chat (branch, also main/master, checkout or worktree, line
-  changes, status, host tag, age, agent) is a setting.
+  changes, host tag, age, agent) is a setting.
 - Text follows the interface font size set in Paseo (Settings, Appearance) on web and desktop.
 - The search button filters the view in place: a matching project keeps everything in it, a matching
   workspace all its chats, a matching chat itself. The Hosts dropdown switches hosts on or off and

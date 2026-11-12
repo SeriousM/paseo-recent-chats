@@ -1,6 +1,6 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/ui";
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Animated, Easing, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
 import { chatTitle, hostColors, withAlpha } from "./format";
 import { columnChars, tokenMono, tokenText, tokenValue, visibleLines } from "./row-layout";
@@ -202,56 +202,101 @@ export function FullNamesCard({
   showHost: boolean;
   /** 0 = solid, 90 = almost see-through. */
   transparency: number;
-  /** False lays the card out in the flow (settings preview) instead of floating under a row. */
+  /** False lays the card out in the flow (settings preview, card layer) instead of floating under a row. */
   floating?: boolean;
 }) {
   const title = chatTitle(row.title, row.provider, row.agentId);
   const alpha = 1 - Math.min(90, Math.max(0, transparency)) / 100;
+  const fs = useFontScale();
+  const muted = theme.colors.foregroundMuted;
+  const small = { fontSize: fs(11.5), color: muted };
   const style = useMemo(
     () => ({
       ...(floating
         ? { position: "absolute" as const, top: "100%" as const, left: 18, right: 6, zIndex: 30, elevation: 6, marginTop: 2 }
         : null),
-      padding: 8,
-      gap: 2,
-      borderRadius: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      gap: 5,
+      borderRadius: 10,
       borderWidth: 1,
       borderColor: withAlpha(theme.colors.border, alpha),
       backgroundColor: withAlpha(theme.colors.surface2, alpha),
     }),
     [theme, alpha, floating],
   );
-  const fs = useFontScale();
-  const line = { fontSize: fs(12), color: theme.colors.foreground };
-  const label = { color: theme.colors.foregroundMuted };
+  const place = [row.projectName, row.workspaceName].filter(Boolean).join(" \u203A ");
   return (
     <View pointerEvents="none" style={style}>
-      {showHost ? (
-        <Text style={line}>
-          <Text style={label}>Host </Text>
-          {row.hostLabel}
-        </Text>
+      <Text style={{ fontSize: fs(13), fontWeight: "600", color: theme.colors.foreground }}>{title}</Text>
+      {place || showHost ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Icon name="Folder" size={11} color={muted} />
+          <Text style={[small, { flex: 1 }]}>{place || "-"}</Text>
+          {showHost ? <Text style={[small, { fontWeight: "600" }]}>{row.hostLabel}</Text> : null}
+        </View>
       ) : null}
-      <Text style={line}>
-        <Text style={label}>Project </Text>
-        {row.projectName || "-"}
-      </Text>
-      <Text style={line}>
-        <Text style={label}>Workspace </Text>
-        {row.workspaceName || "-"}
-      </Text>
-      {row.branch ? (
-        <Text style={line}>
-          <Text style={label}>Branch </Text>
-          {row.branch}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Icon name="Bot" size={11} color={muted} />
+        <Text numberOfLines={1} style={[small, { flexShrink: 0 }]}>
+          {row.agentName}
         </Text>
-      ) : null}
-      <Text style={line}>
-        <Text style={label}>Agent </Text>
-        {row.agentName}
-      </Text>
-      <Text style={line}>{title}</Text>
+        {row.branch ? (
+          <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+            <Icon name="GitBranch" size={11} color={muted} />
+            <Text numberOfLines={1} style={[small, { flexShrink: 1, fontFamily: MONO }]}>
+              {row.branch}
+            </Text>
+          </View>
+        ) : null}
+      </View>
     </View>
+  );
+}
+
+interface CardLayerApi {
+  show(owner: View, card: ReactNode): void;
+  hide(owner: View): void;
+}
+
+const CardLayerContext = createContext<CardLayerApi | null>(null);
+
+/**
+ * Draws the full-names card of a hovered row above everything in the list. React Native Web gives every
+ * view its own stacking order, so a card inside its row is covered by whatever comes after the row's
+ * section or workspace, which looked like a see-through card. Wrap a whole list in this.
+ */
+export function CardLayer({ children }: { children: ReactNode }) {
+  const container = useRef<View>(null);
+  const [card, setCard] = useState<{ owner: View; node: ReactNode; top: number; left: number; width: number } | null>(null);
+  const api = useMemo<CardLayerApi>(
+    () => ({
+      show(owner, node) {
+        const root = container.current;
+        if (!root) return;
+        owner.measureLayout(
+          root,
+          (x, y, width, height) => setCard({ owner, node, top: y + height + 2, left: x + 18, width: Math.max(160, width - 24) }),
+          () => {},
+        );
+      },
+      hide(owner) {
+        setCard((current) => (current?.owner === owner ? null : current));
+      },
+    }),
+    [],
+  );
+  return (
+    <CardLayerContext.Provider value={api}>
+      <View ref={container}>
+        {children}
+        {card ? (
+          <View pointerEvents="none" style={{ position: "absolute", top: card.top, left: card.left, width: card.width, zIndex: 30 }}>
+            {card.node}
+          </View>
+        ) : null}
+      </View>
+    </CardLayerContext.Provider>
   );
 }
 
@@ -338,6 +383,19 @@ export function TriageRowView({
   const [showFull, setShowFull] = useState(false);
   const [editing, setEditing] = useState(false);
   const rowNode = useRef<View>(null);
+  const layer = useContext(CardLayerContext);
+  const cardShown = showFull && fullNames === true && !editing;
+  // In a card layer the card is drawn on top of the whole list; without one (settings preview) under the row.
+  useEffect(() => {
+    const owner = rowNode.current;
+    if (!layer || !owner) return;
+    if (!cardShown) {
+      layer.hide(owner);
+      return;
+    }
+    layer.show(owner, <FullNamesCard row={row} theme={theme} showHost={showHost} transparency={cardTransparency} floating={false} />);
+    return () => layer.hide(owner);
+  }, [layer, cardShown, row, theme, showHost, cardTransparency]);
   const startRename = onRename
     ? () => {
         setShowFull(false);
@@ -456,7 +514,7 @@ export function TriageRowView({
       onHoverIn={fullNames && !editing ? () => setShowFull(true) : undefined}
       onHoverOut={fullNames ? () => setShowFull(false) : undefined}
       onLongPress={editing ? undefined : (startRename ?? (fullNames ? () => setShowFull((value) => !value) : undefined))}
-      style={[styles.row, showFull ? { position: "relative", zIndex: 20 } : null]}
+      style={[styles.row, cardShown && !layer ? { position: "relative", zIndex: 20 } : null]}
     >
       {editing && onRename ? (
         <RenameField
@@ -513,7 +571,7 @@ export function TriageRowView({
       </Pressable>
         </>
       )}
-      {showFull && fullNames && !editing ? <FullNamesCard row={row} theme={theme} showHost={showHost} transparency={cardTransparency} /> : null}
+      {cardShown && !layer ? <FullNamesCard row={row} theme={theme} showHost={showHost} transparency={cardTransparency} /> : null}
     </Pressable>
   );
 }
@@ -867,7 +925,7 @@ export function TriageList({
   if (footer === "only") return footerNode;
 
   return (
-    <View>
+    <CardLayer>
       {hosts.length >= 2 && !hideHostFilter ? (
         <HostFilter
           theme={theme}
@@ -967,6 +1025,6 @@ export function TriageList({
         </Text>
       ))}
       {footer === "last" ? footerNode : null}
-    </View>
+    </CardLayer>
   );
 }

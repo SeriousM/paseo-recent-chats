@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTree, foldAll, moveProject, pinnedTree } from "../client/project-tree";
+import { buildTree, foldAll, moveInOrder, pinnedTree } from "../client/project-tree";
 import type { TriageRow } from "../client/triage";
 
 const NOW = Date.UTC(2026, 10, 11, 21);
@@ -142,8 +142,16 @@ describe("project order", () => {
 
   it("moving a project puts the shown ones in their new order and keeps the others behind", () => {
     const shown = ["h1:alpha", "h1:bravo", "h1:charlie"];
-    expect(moveProject(["h2:x", "h1:charlie"], shown, "h1:charlie", 0)).toEqual(["h1:charlie", "h1:alpha", "h1:bravo", "h2:x"]);
-    expect(moveProject([], shown, "h1:alpha", 99)).toEqual(["h1:bravo", "h1:charlie", "h1:alpha"]);
+    expect(moveInOrder(["h2:x", "h1:charlie"], shown, "h1:charlie", 0)).toEqual(["h1:charlie", "h1:alpha", "h1:bravo", "h2:x"]);
+    expect(moveInOrder([], shown, "h1:alpha", 99)).toEqual(["h1:bravo", "h1:charlie", "h1:alpha"]);
+  });
+
+  it("lists dragged workspaces first in their project, then the most recently active", () => {
+    const ws = (id: string, ago: number) => row(id, { workspaceId: id, workspaceName: id, sortAt: NOW - ago * HOUR });
+    const order = (workspaceOrder: readonly string[]) =>
+      buildTree([ws("a", 1), ws("b", 2), ws("c", 3)], HOSTS, { ...options, workspaceOrder })[0]?.projects[0]?.workspaces.map((w) => w.name);
+    expect(order([])).toEqual(["a", "b", "c"]);
+    expect(order(["h1:c"])).toEqual(["c", "a", "b"]);
   });
 });
 

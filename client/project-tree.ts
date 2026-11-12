@@ -11,10 +11,8 @@ export interface TreeWorkspace {
   workspaceId: string | null;
   name: string;
   branch: string;
-  /** Most urgent light of its chats, and whether that chat's agent is released or last failed. */
+  /** Most urgent light of its chats. */
   led: Led;
-  released: boolean;
-  failed: boolean;
   /** Pinned in Paseo (a workspace pin, not a chat pin). */
   pinned: boolean;
   /** Newest time any of its chats sorts on. */
@@ -54,6 +52,8 @@ export interface TreeOptions {
   pinnedProjects?: ReadonlySet<string>;
   /** Project keys (`${hostId}:${projectName}`) in the order the user dragged them; the rest follow by name. */
   projectOrder?: readonly string[];
+  /** Workspace keys (`${hostId}:${workspaceId}`) in the order the user dragged them inside their project. */
+  workspaceOrder?: readonly string[];
 }
 
 /** Collapse every project, expand everything, or open only what is active (see foldAll). */
@@ -121,8 +121,6 @@ export function buildTree(
       name: first.workspaceName,
       branch: first.branch,
       led: first.led,
-      released: first.released,
-      failed: first.failed,
       pinned: first.workspaceId !== null && options.pinnedWorkspaces.has(`${first.hostId}:${first.workspaceId}`),
       lastAt: Math.max(...list.map((row) => row.sortAt)),
       chats,
@@ -134,10 +132,18 @@ export function buildTree(
     const projects: TreeProject[] = [];
     const quiet: TreeProject[] = [];
     let need = 0;
+    const workspaceRank = new Map((options.workspaceOrder ?? []).map((key, index) => [key, index]));
     for (const [name, workspaces] of grouped.get(id) ?? []) {
+      // Dragged workspaces first in their order; then pinned ones, then the most recently active.
       const all = [...workspaces]
         .map(([key, list]) => toWorkspace(key, list))
-        .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.lastAt - a.lastAt || a.key.localeCompare(b.key));
+        .sort(
+          (a, b) =>
+            (workspaceRank.get(a.key) ?? Number.MAX_SAFE_INTEGER) - (workspaceRank.get(b.key) ?? Number.MAX_SAFE_INTEGER) ||
+            Number(b.pinned) - Number(a.pinned) ||
+            b.lastAt - a.lastAt ||
+            a.key.localeCompare(b.key),
+        );
       for (const workspace of all) need += [...workspace.chats, ...workspace.older].filter(needsYou).length;
       const key = `${id}:${name}`;
       const projectPinned = options.pinnedProjects?.has(key) ?? false;
@@ -158,11 +164,11 @@ export function projectComparator(order: readonly string[]): (a: TreeProject, b:
 }
 
 /**
- * The stored project order after dragging `key` to position `to` among the projects on screen (`shown`,
- * in their current order). The shown projects take that order at the front; projects not on screen
- * (another host, folded away as quiet) keep their stored order behind them.
+ * A stored order (of projects or workspaces) after dragging `key` to position `to` among the items on
+ * screen (`shown`, in their current order). The shown items take that order at the front; items not on
+ * screen (another host or project, folded away as quiet) keep their stored order behind them.
  */
-export function moveProject(order: readonly string[], shown: readonly string[], key: string, to: number): string[] {
+export function moveInOrder(order: readonly string[], shown: readonly string[], key: string, to: number): string[] {
   const moved = shown.filter((candidate) => candidate !== key);
   moved.splice(Math.max(0, Math.min(to, moved.length)), 0, key);
   return [...moved, ...order.filter((candidate) => !moved.includes(candidate))];

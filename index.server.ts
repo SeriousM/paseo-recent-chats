@@ -1,7 +1,7 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { runCli } from "./server/cli";
 import { installedVersion, updateIfBehind, type InstalledVersion } from "./server/auto-update";
-import { renameChat } from "./shared/rename";
+import { renameChat, renameWorkspace } from "./shared/rename";
 import { checkForUpdate, installedVersionRpc } from "./shared/updates";
 import { overlaySettings, prefsSettings, type Prefs } from "./shared/settings";
 
@@ -16,6 +16,11 @@ export default function contribute(server: PluginServerContext) {
   // `--name=` keeps a title that starts with a dash from being read as an option.
   server.handle(renameChat, async ({ agentId, title }) => {
     await runCli(["agent", "update", agentId, `--name=${title}`]);
+    return { title };
+  });
+  // `--` keeps a title that starts with a dash from being read as an option.
+  server.handle(renameWorkspace, async ({ workspaceId, title }) => {
+    await runCli(["workspace", "rename", workspaceId, "--", title]);
     return { title };
   });
 

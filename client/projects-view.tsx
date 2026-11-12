@@ -13,7 +13,7 @@ import {
   buildTree,
   foldAll,
   type FoldAll,
-  moveProject,
+  moveInOrder,
   needsYou,
   pinnedTree,
   projectComparator,
@@ -27,12 +27,13 @@ import { columnChars, visibleLines } from "./row-layout";
 import type { StoreSnapshot, WorkspaceInfo } from "./store";
 import { LED_RANK, type Led, type TriageRow } from "./triage";
 import { hostColors } from "./format";
-import { HostHeading, isDark, LedDot, ledColor, TriageRowView, type RowViewProps } from "./triage-list";
+import { CardLayer, HostHeading, isDark, ledColor, TriageRowView, type RowViewProps } from "./triage-list";
 import { scoreRow } from "./fuzzy";
 import { filterTree } from "./tree-search";
 import { getStore } from "./runtime";
 import { flip, resolvedView, toggleNode, updateViewMode, useViewMode } from "./view-mode";
-import { attachVerticalDrag } from "./web";
+import { attachVerticalDrag, onDoubleClick } from "./web";
+import { RenameField } from "./rename-field";
 import { useFontScale } from "./font-scale";
 
 /** Pins or unpins a project (`project:` key) or workspace (`workspace:` key) on every device. */
@@ -216,8 +217,9 @@ export function ProjectsView({
         pinnedWorkspaces,
         pinnedProjects,
         projectOrder: prefs.projectOrder,
+        workspaceOrder: prefs.workspaceOrder,
       }),
-    [rows, listed, prefs.inactiveWindowDays, mode.activeOnly, pinnedWorkspaces, pinnedProjects, prefs.projectOrder],
+    [rows, listed, prefs.inactiveWindowDays, mode.activeOnly, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder],
   );
   // Everything, unfiltered: the base of the Pinned section and of search.
   const full = useMemo(
@@ -230,8 +232,9 @@ export function ProjectsView({
         pinnedWorkspaces,
         pinnedProjects,
         projectOrder: prefs.projectOrder,
+        workspaceOrder: prefs.workspaceOrder,
       }),
-    [rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder],
+    [rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder],
   );
   const pinned = useMemo(() => filterTree(pinnedTree(full, pinnedProjects), query), [full, pinnedProjects, query]);
   // Searching looks through everything, also what "active only" and "+N older" hide.
@@ -287,7 +290,23 @@ export function ProjectsView({
   };
 
   const flat = !prefs.projectsGroupByHost;
-  const renderProject = (project: TreeProject, prefix: string, inPinned: boolean, drag?: ProjectDrag) => (
+  const renderWorkspace = (workspace: TreeWorkspace, prefix: string, inPinned: boolean, drag?: ItemDrag) => (
+    <WorkspaceNode
+      show={show}
+      key={prefix + workspace.key}
+      workspace={workspace}
+      info={workspace.workspaceId ? workspaceInfo.get(workspace.key) : undefined}
+      prefix={prefix}
+      pinned={pins.has(`workspace:${workspace.key}`)}
+      theme={theme}
+      compact={compact}
+      folded={toggled.has(`${prefix}workspace:${workspace.key}`)}
+      showOlder={inPinned || toggled.has(`${prefix}older:${workspace.key}`)}
+      drag={drag}
+      renderChat={(row) => chatRow(row, false)}
+    />
+  );
+  const renderProject = (project: TreeProject, prefix: string, inPinned: boolean, drag?: ItemDrag) => (
     <ProjectNode
       key={prefix + project.key}
       project={project}
@@ -299,21 +318,16 @@ export function ProjectsView({
       hostTag={flat && show.hostTag ? hostOfProject(project, snapshot) : undefined}
       drag={drag}
     >
-      {project.workspaces.map((workspace) => (
-        <WorkspaceNode
-          show={show}
-          key={prefix + workspace.key}
-          workspace={workspace}
-          info={workspace.workspaceId ? workspaceInfo.get(workspace.key) : undefined}
-          prefix={prefix}
-          pinned={pins.has(`workspace:${workspace.key}`)}
+      {inPinned ? (
+        project.workspaces.map((workspace) => renderWorkspace(workspace, prefix, inPinned))
+      ) : (
+        <SortableList
+          items={project.workspaces}
+          orderKey="workspaceOrder"
           theme={theme}
-          compact={compact}
-          folded={toggled.has(`${prefix}workspace:${workspace.key}`)}
-          showOlder={inPinned || toggled.has(`${prefix}older:${workspace.key}`)}
-          renderChat={(row) => chatRow(row, false)}
+          render={(workspace, workspaceDrag) => renderWorkspace(workspace, prefix, inPinned, workspaceDrag)}
         />
-      ))}
+      )}
     </ProjectNode>
   );
   /** prefix keeps the Pinned section's folds apart from the tree's. */
@@ -350,7 +364,7 @@ export function ProjectsView({
 
   const pinnedFolded = toggled.has("pinned");
   return (
-    <View>
+    <CardLayer>
           {urgent.length > 0 ? (
             <View
               style={{
@@ -426,7 +440,7 @@ export function ProjectsView({
           {searching && shownTree.length === 0 && pinned.length === 0 && urgent.length === 0 ? (
             <Text style={{ fontSize: fs(12), color: theme.colors.foregroundMuted, padding: 12 }}>Nothing matches.</Text>
           ) : null}
-    </View>
+    </CardLayer>
   );
 }
 
@@ -469,7 +483,7 @@ function FlatProjects({
   toggled: ReadonlySet<string>;
   /** The projects can be reordered by dragging their folder icon (not in the Pinned section). */
   sortable: boolean;
-  renderProject(project: TreeProject, drag?: ProjectDrag): ReactNode;
+  renderProject(project: TreeProject, drag?: ItemDrag): ReactNode;
 }) {
   const quietKey = `${prefix}quiet:all`;
   const quietOpen = toggled.has(quietKey);
@@ -479,7 +493,7 @@ function FlatProjects({
   return (
     <View>
       {sortable ? (
-        <SortableProjects projects={merged.projects} theme={theme} render={renderProject} />
+        <SortableList items={merged.projects} orderKey="projectOrder" theme={theme} render={renderProject} />
       ) : (
         merged.projects.map((project) => renderProject(project))
       )}
@@ -531,7 +545,7 @@ function HostNode({
   toggled: ReadonlySet<string>;
   /** The projects can be reordered by dragging their folder icon (not in the Pinned section). */
   sortable: boolean;
-  renderProject(project: TreeProject, drag?: ProjectDrag): ReactNode;
+  renderProject(project: TreeProject, drag?: ItemDrag): ReactNode;
 }) {
   const fs = useFontScale();
   const muted = { fontSize: fs(12), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: compact ? 10 : 4 };
@@ -553,7 +567,7 @@ function HostNode({
       {folded ? null : (
         <View>
           {sortable ? (
-            <SortableProjects projects={host.projects} theme={theme} render={renderProject} />
+            <SortableList items={host.projects} orderKey="projectOrder" theme={theme} render={renderProject} />
           ) : (
             host.projects.map((project) => renderProject(project))
           )}
@@ -606,7 +620,7 @@ function ProjectNode({
   /** Shown at the right when projects are not grouped by host. */
   hostTag: { label: string; colorName: string | undefined } | undefined;
   /** Present where projects can be reordered: the folder icon is the drag handle. */
-  drag: ProjectDrag | undefined;
+  drag: ItemDrag | undefined;
   children: ReactNode;
 }) {
   const key = `${prefix}project:${project.key}`;
@@ -663,8 +677,8 @@ function ProjectNode({
   );
 }
 
-/** Drag of one project, by its folder icon. */
-interface ProjectDrag {
+/** Drag of one project or workspace, by its handle. */
+interface ItemDrag {
   start(): void;
   move(dy: number): void;
   end(): void;
@@ -674,10 +688,10 @@ interface ProjectDrag {
 const GRAB_WEB = (Platform.OS === "web" ? { cursor: "grab", userSelect: "none", touchAction: "none" } : {}) as ViewStyle;
 
 /**
- * Grip around the folder icon. React Native's responder drives it on phones; on the web the app's
- * sidebar takes pointer events first, so the handle listens to them itself (see web.ts).
+ * Grip around a handle icon. React Native's responder drives it on phones; on the web the app's sidebar
+ * takes pointer events first, so the handle listens to them itself (see web.ts).
  */
-function DragHandle({ drag, label, children }: { drag: ProjectDrag; label: string; children: ReactNode }) {
+function DragHandle({ drag, label, children }: { drag: ItemDrag; label: string; children: ReactNode }) {
   const node = useRef<View>(null);
   const pan = useMemo(
     () =>
@@ -694,54 +708,51 @@ function DragHandle({ drag, label, children }: { drag: ProjectDrag; label: strin
   );
   useEffect(() => attachVerticalDrag(node.current, drag), [drag]);
   return (
-    <View
-      ref={node}
-      accessibilityLabel={`Drag ${label} to reorder projects`}
-      {...pan.panHandlers}
-      style={[{ padding: 3 }, GRAB_WEB]}
-    >
+    <View ref={node} accessibilityLabel={`Drag ${label} to reorder`} {...pan.panHandlers} style={[{ padding: 3 }, GRAB_WEB]}>
       {children}
     </View>
   );
 }
 
-/** Height of a project's heading: drops are decided against headings, not whole (unfolded) projects. */
-const PROJECT_HEADING = 26;
+/** Height of a heading: drops are decided against headings, not whole (unfolded) items. */
+const HEADING_HEIGHT = 26;
 
 /**
- * A list of projects that can be reordered by dragging a folder icon. A marker shows where the project
- * lands; the new order is saved for every device.
+ * A list of projects or workspaces that can be reordered by dragging their handle. A marker shows where
+ * the item lands; the new order is saved in `orderKey` for every device.
  */
-function SortableProjects({
-  projects,
+function SortableList<Item extends { key: string }>({
+  items,
+  orderKey,
   theme,
   render,
 }: {
-  projects: readonly TreeProject[];
+  items: readonly Item[];
+  orderKey: "projectOrder" | "workspaceOrder";
   theme: PluginTheme;
-  render(project: TreeProject, drag: ProjectDrag): ReactNode;
+  render(item: Item, drag: ItemDrag): ReactNode;
 }) {
   const container = useRef<View>(null);
   const nodes = useRef(new Map<string, View | null>());
   const boxes = useRef(new Map<string, Box>());
   const [drag, setDrag] = useState<{ key: string; dy: number; to: number } | null>(null);
-  const latest = useRef(projects);
-  latest.current = projects;
+  const latest = useRef(items);
+  latest.current = items;
 
-  const handlers = useRef(new Map<string, ProjectDrag>());
-  const handlersFor = (key: string): ProjectDrag => {
+  const handlers = useRef(new Map<string, ItemDrag>());
+  const handlersFor = (key: string): ItemDrag => {
     const existing = handlers.current.get(key);
     if (existing) return existing;
     let dy = 0;
-    const keys = () => latest.current.map((project) => project.key);
+    const keys = () => latest.current.map((item) => item.key);
     const target = (offset: number) => {
       const list = keys();
       const from = list.indexOf(key);
-      const headings = list.map((candidate) => ({ top: boxes.current.get(candidate)?.top ?? 0, height: PROJECT_HEADING }));
+      const headings = list.map((candidate) => ({ top: boxes.current.get(candidate)?.top ?? 0, height: HEADING_HEIGHT }));
       const top = boxes.current.get(key)?.top ?? 0;
-      return { from, to: listDropIndex(headings, from, top + PROJECT_HEADING / 2 + offset) };
+      return { from, to: listDropIndex(headings, from, top + HEADING_HEIGHT / 2 + offset) };
     };
-    const created: ProjectDrag = {
+    const created: ItemDrag = {
       start() {
         dy = 0;
         measureIn(container.current, nodes.current, (fresh) => {
@@ -758,17 +769,17 @@ function SortableProjects({
         setDrag(null);
         if (from < 0 || to === from) return;
         const store = getStore();
-        store.updatePrefs({ projectOrder: moveProject(store.getSnapshot().prefs.projectOrder, keys(), key, to) });
+        store.updatePrefs({ [orderKey]: moveInOrder(store.getSnapshot().prefs[orderKey], keys(), key, to) });
       },
     };
     handlers.current.set(key, created);
     return created;
   };
 
-  // The marker sits above the project that will follow the dropped one, or below the last.
+  // The marker sits above the item that will follow the dropped one, or below the last.
   let marker = 0;
   if (drag) {
-    const others = projects.filter((project) => project.key !== drag.key);
+    const others = items.filter((item) => item.key !== drag.key);
     const after = others[drag.to];
     const last = others[others.length - 1];
     const box = after ? boxes.current.get(after.key) : last ? boxes.current.get(last.key) : undefined;
@@ -777,13 +788,13 @@ function SortableProjects({
 
   return (
     <View ref={container} style={{ position: "relative" }}>
-      {projects.map((project) => {
-        const dragged = drag?.key === project.key;
+      {items.map((item) => {
+        const dragged = drag?.key === item.key;
         return (
           <View
-            key={project.key}
+            key={item.key}
             ref={(node) => {
-              nodes.current.set(project.key, node);
+              nodes.current.set(item.key, node);
             }}
             style={
               dragged
@@ -791,7 +802,7 @@ function SortableProjects({
                 : null
             }
           >
-            {render(project, handlersFor(project.key))}
+            {render(item, handlersFor(item.key))}
           </View>
         );
       })}
@@ -815,6 +826,7 @@ function WorkspaceNode({
   compact,
   folded,
   showOlder,
+  drag,
   renderChat,
 }: {
   show: Prefs["projectsShow"];
@@ -826,6 +838,8 @@ function WorkspaceNode({
   compact: boolean;
   folded: boolean;
   showOlder: boolean;
+  /** Present where workspaces can be reordered: the grip before the name is the drag handle. */
+  drag: ItemDrag | undefined;
   renderChat(row: TriageRow): ReactNode;
 }) {
   const chats = showOlder ? [...workspace.chats, ...workspace.older] : workspace.chats;
@@ -833,33 +847,73 @@ function WorkspaceNode({
   const fs = useFontScale();
   const small = { fontSize: fs(10.5), color: theme.colors.foregroundMuted };
   const branch = show.branch && (show.mainBranch || !MAIN_BRANCHES[workspace.branch]) ? workspace.branch : "";
+  const name = info?.title ?? workspace.name;
+  const foldKey = `${prefix}workspace:${workspace.key}`;
+  // Long press (or a double-click on the web) renames the workspace on its host, as with chats.
+  const [editing, setEditing] = useState(false);
+  const nameNode = useRef<View>(null);
+  const workspaceId = workspace.workspaceId;
+  const startRename = workspaceId ? () => setEditing(true) : null;
+  const latestStart = useRef(startRename);
+  latestStart.current = startRename;
+  useEffect(() => onDoubleClick(nameNode.current, () => latestStart.current?.()), [editing]);
+  const grip = <Icon name="GripVertical" size={12} color={theme.colors.foregroundMuted} />;
   return (
     <View style={{ marginBottom: 2 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6, minHeight: compact ? 40 : 26 }}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${folded ? "Show" : "Hide"} ${info?.title ?? workspace.name}`}
+          accessibilityLabel={`${folded ? "Show" : "Hide"} ${name}`}
           accessibilityState={{ expanded: !folded }}
-          onPress={() => toggleNode(`${prefix}workspace:${workspace.key}`)}
+          onPress={() => toggleNode(foldKey)}
+          hitSlop={4}
+          style={({ pressed }) => ({ paddingLeft: 10, paddingRight: 4, paddingVertical: 3, opacity: pressed ? 0.6 : 1 })}
+        >
+          <Icon name={folded ? "ChevronRight" : "ChevronDown"} size={12} color={theme.colors.foregroundMuted} />
+        </Pressable>
+        {drag ? (
+          <DragHandle drag={drag} label={name}>
+            {grip}
+          </DragHandle>
+        ) : (
+          <View style={{ padding: 3 }}>{grip}</View>
+        )}
+        {editing && workspaceId ? (
+          <View style={{ flex: 1, paddingHorizontal: 4 }}>
+            <RenameField
+              theme={theme}
+              compact={compact}
+              initial={name}
+              onSave={(title) => getStore().renameWorkspace(workspace.hostId, workspaceId, title)}
+              onClose={() => setEditing(false)}
+            />
+          </View>
+        ) : (
+        <Pressable
+          ref={nameNode}
+          accessibilityRole="button"
+          accessibilityLabel={`${folded ? "Show" : "Hide"} ${name}`}
+          accessibilityHint={startRename ? "Long press to rename" : undefined}
+          accessibilityState={{ expanded: !folded }}
+          onPress={() => toggleNode(foldKey)}
+          onLongPress={startRename ?? undefined}
           style={({ pressed }) => ({
             flex: 1,
             flexDirection: "row",
             alignItems: "center",
             gap: 7,
-            paddingHorizontal: 10,
+            paddingLeft: 4,
+            paddingRight: 10,
             minHeight: compact ? 40 : 26,
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          {show.status ? (
-            <LedDot led={workspace.led} released={workspace.released} failed={workspace.failed} theme={theme} size={11} />
-          ) : null}
           {/* White while something happens in it (running, asking, unseen); grey like its chats otherwise. */}
           <Text
             numberOfLines={1}
             style={{ flex: 1, fontSize: fs(13), color: workspace.led === "idle" ? theme.colors.foregroundMuted : theme.colors.foreground }}
           >
-            {info?.title ?? workspace.name}
+            {name}
           </Text>
           {show.diff && info?.diff && (info.diff.additions || info.diff.deletions) ? (
             <Text style={small}>
@@ -873,6 +927,7 @@ function WorkspaceNode({
             </Text>
           ) : null}
         </Pressable>
+        )}
         {workspace.workspaceId ? (
           <PinButton
             theme={theme}
