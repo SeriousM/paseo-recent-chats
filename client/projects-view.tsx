@@ -27,7 +27,7 @@ import { columnChars, visibleLines } from "./row-layout";
 import type { StoreSnapshot, WorkspaceInfo } from "./store";
 import { LED_RANK, type Led, type TriageRow } from "./triage";
 import { hostColors } from "./format";
-import { CardLayer, HostHeading, isDark, ledColor, TriageRowView, type RowViewProps } from "./triage-list";
+import { CardLayer, HostHeading, isDark, ledColor, TipButton, TriageRowView, type RowViewProps } from "./triage-list";
 import { scoreRow } from "./fuzzy";
 import { filterTree } from "./tree-search";
 import { getStore } from "./runtime";
@@ -351,6 +351,18 @@ export function ProjectsView({
   };
 
   const pinnedFolded = toggled.has("pinned");
+  /** Collapse, Expand and Active for one section: "" the tree, "pinned/" the Pinned section. */
+  const foldButtons = (hosts: readonly TreeHost[], prefix: string) =>
+    FOLD_ACTIONS.map(([action, icon, label]) => (
+      <TipButton
+        key={action}
+        theme={theme}
+        compact={compact}
+        icon={icon}
+        label={label}
+        onPress={() => updateViewMode({ toggled: foldAll(hosts, mode.toggled, action, prefix) })}
+      />
+    ));
   return (
     <CardLayer>
           {urgent.length > 0 ? (
@@ -378,16 +390,19 @@ export function ProjectsView({
           ) : null}
           {pinned.length > 0 ? (
             <View style={{ marginBottom: 6 }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ expanded: !pinnedFolded }}
-                onPress={() => toggleNode("pinned")}
-                style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: compact ? 8 : 4 }}
-              >
-                <Icon name={pinnedFolded ? "ChevronRight" : "ChevronDown"} size={12} color={theme.colors.foregroundMuted} />
-                <Icon name="Pin" size={12} color={theme.colors.accent} />
-                <Text style={heading}>Pinned</Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6 }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: !pinnedFolded }}
+                  onPress={() => toggleNode("pinned")}
+                  style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: compact ? 8 : 4 }}
+                >
+                  <Icon name={pinnedFolded ? "ChevronRight" : "ChevronDown"} size={12} color={theme.colors.foregroundMuted} />
+                  <Icon name="Pin" size={12} color={theme.colors.accent} />
+                  <Text style={heading}>Pinned</Text>
+                </Pressable>
+                {pinnedFolded ? null : foldButtons(pinned, "pinned/")}
+              </View>
               {pinnedFolded ? null : (
                 <View style={{ marginLeft: 8, borderLeftWidth: 2, borderLeftColor: theme.colors.accent }}>
                   {renderHosts(pinned, "pinned/", true)}
@@ -427,27 +442,7 @@ export function ProjectsView({
                 </Text>
               </Pressable>
               <View style={{ flex: 1 }} />
-              {FOLD_ACTIONS.map(([action, icon, label, hint]) => (
-                <Pressable
-                  key={action}
-                  accessibilityRole="button"
-                  accessibilityLabel={hint}
-                  onPress={() => updateViewMode({ toggled: foldAll(full, mode.toggled, action) })}
-                  hitSlop={4}
-                  style={({ pressed }) => ({
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 4,
-                    paddingHorizontal: 6,
-                    paddingVertical: compact ? 8 : 2,
-                    borderRadius: 6,
-                    opacity: pressed ? 0.6 : 1,
-                  })}
-                >
-                  <Icon name={icon} size={12} color={theme.colors.foregroundMuted} />
-                  <Text style={{ fontSize: fs(11), color: theme.colors.foregroundMuted }}>{label}</Text>
-                </Pressable>
-              ))}
+              {foldButtons(full, "")}
             </View>
           )}
           {renderHosts(shownTree, "", false)}
@@ -458,11 +453,11 @@ export function ProjectsView({
   );
 }
 
-/** The fold-all buttons above the tree: action, icon, label, accessibility label. */
-const FOLD_ACTIONS: readonly [FoldAll, string, string, string][] = [
-  ["collapse", "ChevronsDownUp", "Collapse", "Collapse all projects"],
-  ["expand", "ChevronsUpDown", "Expand", "Expand all projects and workspaces"],
-  ["active", "Activity", "Active", "Collapse everything, then open what is active"],
+/** The fold-all buttons: action, icon, tooltip. */
+const FOLD_ACTIONS: readonly [FoldAll, string, string][] = [
+  ["collapse", "ChevronsDownUp", "Collapse all projects"],
+  ["expand", "ChevronsUpDown", "Expand all projects and workspaces"],
+  ["active", "Activity", "Collapse everything, then open what is active"],
 ];
 
 /** Host label and colour of a project (its key starts with the host id). */
@@ -782,13 +777,46 @@ function SortableList<Item extends { key: string }>({
         const { from, to } = target(dy);
         setDrag(null);
         if (from < 0 || to === from) return;
+        const shown = keys();
+        const order = moveInOrder([], shown, key, to);
+        // Where the item lands, from the measured heights: it glides there from where it was let go.
+        const firstTop = Math.min(...shown.map((candidate) => boxes.current.get(candidate)?.top ?? 0));
+        let landTop = firstTop;
+        for (const candidate of order) {
+          if (candidate === key) break;
+          landTop += boxes.current.get(candidate)?.height ?? 0;
+        }
+        setLanding({ key, order, from: (boxes.current.get(key)?.top ?? 0) + dy - landTop });
         const store = getStore();
-        store.updatePrefs({ [orderKey]: moveInOrder(store.getSnapshot().prefs[orderKey], keys(), key, to) });
+        store.updatePrefs({ [orderKey]: moveInOrder(store.getSnapshot().prefs[orderKey], shown, key, to) });
       },
     };
     handlers.current.set(key, created);
     return created;
   };
+
+  // After a drop the list is drawn in its new order at once, until the saved order arrives, so nothing jumps back.
+  const [landing, setLanding] = useState<{ key: string; order: string[]; from: number } | null>(null);
+  const itemKeys = items.map((item) => item.key).join("\n");
+  useEffect(() => {
+    if (!landing) return;
+    if (itemKeys === landing.order.join("\n")) {
+      const settled = setTimeout(() => setLanding(null), 200);
+      return () => clearTimeout(settled);
+    }
+    const giveUp = setTimeout(() => setLanding(null), 2000);
+    return () => clearTimeout(giveUp);
+  }, [itemKeys, landing]);
+  const byKey = new Map(items.map((item) => [item.key, item]));
+  const shown = landing
+    ? [
+        ...landing.order.flatMap((key) => {
+          const item = byKey.get(key);
+          return item ? [item] : [];
+        }),
+        ...items.filter((item) => !landing.order.includes(item.key)),
+      ]
+    : items;
 
   // Shuffle: while dragging, the items between the dragged one's old and new place move aside by its height.
   const dragFrom = drag ? items.findIndex((item) => item.key === drag.key) : -1;
@@ -803,20 +831,24 @@ function SortableList<Item extends { key: string }>({
 
   return (
     <View ref={container} style={{ position: "relative" }}>
-      {items.map((item, index) => {
+      {shown.map((item, index) => {
         const dragged = drag?.key === item.key;
+        const lands = landing?.key === item.key;
         return (
           <ShiftingItem
             key={item.key}
             shift={shiftOf(index)}
             dragging={drag !== null}
+            landFrom={lands ? landing.from : null}
             nodeRef={(node) => {
               nodes.current.set(item.key, node);
             }}
             style={
               dragged
                 ? { transform: [{ translateY: drag.dy }], zIndex: 10, opacity: 0.9, backgroundColor: theme.colors.surface1, borderRadius: 8 }
-                : null
+                : lands
+                  ? { zIndex: 10 }
+                  : null
             }
           >
             {render(item, handlersFor(item.key))}
@@ -828,34 +860,45 @@ function SortableList<Item extends { key: string }>({
 }
 
 /**
- * One item of a sortable list. While a drag is on, it glides to `shift` (out of the dragged item's way);
- * when the drag ends it lands at once, because the list is then drawn in its new order.
+ * One item of a sortable list. While a drag is on, it glides to `shift` (out of the dragged item's way).
+ * When the drag ends the list is drawn in its new order: the others stand still, and the dropped item
+ * glides from where it was let go (`landFrom`, relative to its new place) into place.
  */
 function ShiftingItem({
   shift,
   dragging,
+  landFrom,
   nodeRef,
   style,
   children,
 }: {
   shift: number;
   dragging: boolean;
+  landFrom: number | null;
   nodeRef(node: View | null): void;
   style: ViewStyle | null;
   children: ReactNode;
 }) {
   const offset = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    const glide = (toValue: number) =>
+      Animated.timing(offset, { toValue, duration: 140, easing: Easing.out(Easing.quad), useNativeDriver: Platform.OS !== "web" });
+    if (landFrom !== null) {
+      offset.setValue(landFrom);
+      const land = glide(0);
+      land.start();
+      return () => land.stop();
+    }
     if (!dragging) {
       offset.setValue(0);
       return;
     }
-    const glide = Animated.timing(offset, { toValue: shift, duration: 140, easing: Easing.out(Easing.quad), useNativeDriver: Platform.OS !== "web" });
-    glide.start();
-    return () => glide.stop();
-  }, [shift, dragging, offset]);
+    const move = glide(shift);
+    move.start();
+    return () => move.stop();
+  }, [shift, dragging, landFrom, offset]);
   return (
-    <Animated.View ref={nodeRef} style={style ?? { transform: [{ translateY: offset }] }}>
+    <Animated.View ref={nodeRef} style={[style, dragging && style ? null : { transform: [{ translateY: offset }] }]}>
       {children}
     </Animated.View>
   );

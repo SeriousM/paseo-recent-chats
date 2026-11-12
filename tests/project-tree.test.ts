@@ -172,4 +172,10 @@ describe("fold all", () => {
   it("opens only what is active: idle projects folded, idle workspaces of active projects folded", () => {
     expect(foldAll(tree, kept, "active")).toEqual([...kept, "workspace:h1:w2", "project:h1:quiet"]);
   });
+
+  it("folds the Pinned section on its own, leaving the tree's folds alone", () => {
+    const toggled = ["project:h1:live", "pinned/workspace:h1:w1", "older:h1:w1"];
+    expect(foldAll(tree, toggled, "collapse", "pinned/")).toEqual(["project:h1:live", "older:h1:w1", "pinned/project:h1:live", "pinned/project:h1:quiet"]);
+    expect(foldAll(tree, toggled, "expand", "pinned/")).toEqual(["project:h1:live", "older:h1:w1"]);
+  });
 });

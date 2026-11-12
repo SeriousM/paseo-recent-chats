@@ -255,28 +255,38 @@ export function FullNamesCard({
 }
 
 interface CardLayerApi {
-  show(owner: View, card: ReactNode): void;
+  /** "card": under the row, nearly its width. "tip": a small label under the owner, its right edge aligned. */
+  show(owner: View, card: ReactNode, place?: "card" | "tip"): void;
   hide(owner: View): void;
 }
 
 const CardLayerContext = createContext<CardLayerApi | null>(null);
 
 /**
- * Draws the full-names card of a hovered row above everything in the list. React Native Web gives every
- * view its own stacking order, so a card inside its row is covered by whatever comes after the row's
- * section or workspace, which looked like a see-through card. Wrap a whole list in this.
+ * Draws the full-names card of a hovered row, and button tooltips, above everything in the list. React
+ * Native Web gives every view its own stacking order, so a card inside its row is covered by whatever comes
+ * after the row's section or workspace, which looked like a see-through card. Wrap a whole list in this.
  */
 export function CardLayer({ children }: { children: ReactNode }) {
   const container = useRef<View>(null);
-  const [card, setCard] = useState<{ owner: View; node: ReactNode; top: number; left: number; width: number } | null>(null);
+  const containerWidth = useRef(0);
+  const [card, setCard] = useState<{ owner: View; node: ReactNode; style: ViewStyle } | null>(null);
   const api = useMemo<CardLayerApi>(
     () => ({
-      show(owner, node) {
+      show(owner, node, place = "card") {
         const root = container.current;
         if (!root) return;
         owner.measureLayout(
           root,
-          (x, y, width, height) => setCard({ owner, node, top: y + height + 2, left: x + 18, width: Math.max(160, width - 24) }),
+          (x, y, width, height) =>
+            setCard({
+              owner,
+              node,
+              style:
+                place === "tip"
+                  ? { top: y + height + 4, right: Math.max(0, containerWidth.current - x - width) }
+                  : { top: y + height + 2, left: x + 18, width: Math.max(160, width - 24) },
+            }),
           () => {},
         );
       },
@@ -288,15 +298,83 @@ export function CardLayer({ children }: { children: ReactNode }) {
   );
   return (
     <CardLayerContext.Provider value={api}>
-      <View ref={container}>
+      <View
+        ref={container}
+        onLayout={(event) => {
+          containerWidth.current = event.nativeEvent.layout.width;
+        }}
+      >
         {children}
         {card ? (
-          <View pointerEvents="none" style={{ position: "absolute", top: card.top, left: card.left, width: card.width, zIndex: 30 }}>
+          <View pointerEvents="none" style={[{ position: "absolute", zIndex: 30 }, card.style]}>
             {card.node}
           </View>
         ) : null}
       </View>
     </CardLayerContext.Provider>
+  );
+}
+
+/** Hover this long before a tooltip shows. */
+const TIP_DELAY_MS = 600;
+
+/**
+ * An icon button whose label appears as a tooltip after the pointer rests on it (web and desktop). The
+ * label is also its accessibility label. Needs a CardLayer around it for the tooltip.
+ */
+export function TipButton({
+  theme,
+  compact,
+  icon,
+  label,
+  onPress,
+}: {
+  theme: PluginTheme;
+  compact: boolean;
+  icon: string;
+  label: string;
+  onPress(): void;
+}) {
+  const node = useRef<View>(null);
+  const layer = useContext(CardLayerContext);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fs = useFontScale();
+  const hide = () => {
+    if (timer.current !== null) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (node.current) layer?.hide(node.current);
+  };
+  useEffect(() => hide, []);
+  const tip = (
+    <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface2 }}>
+      <Text numberOfLines={1} style={{ fontSize: fs(11), color: theme.colors.foreground }}>
+        {label}
+      </Text>
+    </View>
+  );
+  return (
+    <Pressable
+      ref={node}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={() => {
+        hide();
+        onPress();
+      }}
+      onHoverIn={() => {
+        hide();
+        timer.current = setTimeout(() => {
+          if (node.current) layer?.show(node.current, tip, "tip");
+        }, TIP_DELAY_MS);
+      }}
+      onHoverOut={hide}
+      hitSlop={4}
+      style={({ pressed }) => ({ padding: compact ? 8 : 4, borderRadius: 6, opacity: pressed ? 0.6 : 1 })}
+    >
+      <Icon name={icon} size={compact ? 14 : 12} color={theme.colors.foregroundMuted} />
+    </Pressable>
   );
 }
 

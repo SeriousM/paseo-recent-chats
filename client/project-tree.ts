@@ -60,20 +60,21 @@ export interface TreeOptions {
 export type FoldAll = "collapse" | "expand" | "active";
 
 /**
- * The tree's folds after a fold-all action, from the device's switched folds (`toggled`, see
- * view-mode.ts). Hosts open; "collapse" folds every project; "active" folds every project and workspace
- * with nothing running, asking you or finished unseen, and opens the rest. Folds of the Pinned section,
- * "+N older" and the quiet lists stay as they are.
+ * The folds after a fold-all action on one section of the view, from the device's switched folds
+ * (`toggled`, see view-mode.ts). `prefix` names the section: "" the tree, "pinned/" the Pinned section.
+ * Its hosts open; "collapse" folds every project; "active" folds every project and workspace with nothing
+ * running, asking you or finished unseen, and opens the rest. Other sections' folds, "+N older" and the
+ * quiet lists stay as they are.
  */
-export function foldAll(hosts: readonly TreeHost[], toggled: readonly string[], mode: FoldAll): string[] {
-  const kept = toggled.filter((key) => !/^(project|workspace|host):/.test(key));
+export function foldAll(hosts: readonly TreeHost[], toggled: readonly string[], mode: FoldAll, prefix = ""): string[] {
+  const kept = toggled.filter((key) => !(key.startsWith(prefix) && /^(project|workspace|host):/.test(key.slice(prefix.length))));
   if (mode === "expand") return kept;
   const folded: string[] = [];
   for (const host of hosts) {
     for (const project of [...host.projects, ...host.quiet]) {
       const busy = project.workspaces.filter((workspace) => workspace.led !== "idle");
-      if (mode === "collapse" || busy.length === 0) folded.push(`project:${project.key}`);
-      else for (const workspace of project.workspaces) if (!busy.includes(workspace)) folded.push(`workspace:${workspace.key}`);
+      if (mode === "collapse" || busy.length === 0) folded.push(`${prefix}project:${project.key}`);
+      else for (const workspace of project.workspaces) if (!busy.includes(workspace)) folded.push(`${prefix}workspace:${workspace.key}`);
     }
   }
   return [...kept, ...folded];

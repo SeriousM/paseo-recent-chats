@@ -25,7 +25,7 @@ The settings screen, where every row item can be shown, reordered, split over li
   everything below it; pinned items also stay in place. Pins are synced to every device.
 - Drag a project by its folder icon, or a workspace by its grip, to reorder the Projects view; the order is
   synced to every device. Long press or double-click a workspace name to rename it (on its host).
-  Collapse, Expand and Active above the tree fold everything, open everything, or open only what is active.
+  Icons above the tree and in the Pinned heading fold everything, open everything, or open only what is active.
   What the tree shows per workspace and chat (branch, also main/master, checkout or worktree, line
   changes, host tag, age, agent) is a setting.
 - Text follows the interface font size set in Paseo (Settings, Appearance) on web and desktop.
