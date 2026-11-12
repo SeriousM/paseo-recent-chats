@@ -66,14 +66,14 @@ const RING_PERIOD_MS = 900;
 /** The "?" of a chat asking you fades out and back in this slowly. */
 const ASK_PULSE_MS = 900;
 
-// Done and failed as 12x12 SVG paths. Loaded: filled, the check or "!" cut out (even-odd), so it works
-// on any row background. Released: outlined.
+// Done and failed as 12x12 SVG paths. Done is a plain tick: bold while the agent is loaded, thin once released.
+// Failed: a filled triangle with the "!" cut out (even-odd) while loaded, outlined once released.
 const GLYPHS = {
   done: {
     loaded: (c: string) =>
-      `<path fill="${c}" fill-rule="evenodd" d="M6 .5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11ZM2.83 6.77 5.2 9.13 9.29 4.74 8.11 3.66 5.2 6.87 3.97 5.63Z"/>`,
+      `<path d="M2 6.4 4.8 9.2 10 3.4" fill="none" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`,
     released: (c: string) =>
-      `<circle cx="6" cy="6" r="5" fill="none" stroke="${c}" stroke-width="1.2"/><path d="M3.6 6.2 5.3 7.9 8.5 4.4" fill="none" stroke="${c}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+      `<path d="M2.3 6.4 4.8 8.9 9.7 3.6" fill="none" stroke="${c}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>`,
   },
   failed: {
     loaded: (c: string) =>
@@ -312,17 +312,9 @@ export function TriageRowView({
         paddingLeft: compact ? 10 : 8,
         paddingRight: 6,
         borderRadius: 8,
-        // The open chat's bar is straight, so the corners next to it are square too.
-        ...(current ? { borderTopLeftRadius: 0, borderBottomLeftRadius: 0 } : null),
-        backgroundColor: current ? theme.colors.surface2 : "transparent",
-      },
-      currentBar: {
-        position: "absolute" as const,
-        left: 0,
-        top: 0,
-        bottom: 0,
-        width: 3,
-        backgroundColor: theme.colors.accent,
+        // The open chat gets an accent border; every row reserves the width so nothing shifts.
+        borderWidth: 1,
+        borderColor: current ? theme.colors.accent : "transparent",
       },
       body: { flex: 1, minWidth: 0, gap: 2 },
       line: { flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, columnGap: gap, rowGap: 2 },
@@ -464,7 +456,6 @@ export function TriageRowView({
       onLongPress={editing ? undefined : (startRename ?? (fullNames ? () => setShowFull((value) => !value) : undefined))}
       style={[styles.row, showFull ? { position: "relative", zIndex: 20 } : null]}
     >
-      {current ? <View pointerEvents="none" style={styles.currentBar} /> : null}
       {editing && onRename ? (
         <RenameField
           theme={theme}
