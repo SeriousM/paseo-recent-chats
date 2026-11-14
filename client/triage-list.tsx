@@ -415,7 +415,26 @@ export interface RowViewProps {
   onRename?: (key: string, title: string) => Promise<void>;
 }
 
-export function TriageRowView({
+/** A chat's row, followed by its sub-agents that ask you something, each indented under it. */
+export function TriageRowView(props: RowViewProps) {
+  const children = props.row.children;
+  if (!children?.length) return <ChatRow {...props} />;
+  return (
+    <View>
+      <ChatRow {...props} />
+      {children.map((child) => (
+        <View key={child.key} style={{ flexDirection: "row", alignItems: "center", paddingLeft: 12 }}>
+          <Icon name="CornerDownRight" size={12} color={props.theme.colors.foregroundMuted} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <ChatRow {...props} row={child} current={false} nested />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ChatRow({
   row,
   theme,
   compact,
@@ -430,8 +449,13 @@ export function TriageRowView({
   onMarkRead,
   onMarkUnread,
   onSetPinned,
-  onRename,
-}: RowViewProps) {
+  onRename: renameChat,
+  nested = false,
+}: RowViewProps & {
+  /** A sub-agent listed under its parent: no pin, read or Later buttons, no renaming. */
+  nested?: boolean;
+}) {
+  const onRename = nested ? undefined : renameChat;
   const hostTint = hostColors(hostColor, isDark(theme.colors.surface0));
   const title = chatTitle(row.title, row.provider, row.agentId);
   const fs = useFontScale();
@@ -655,7 +679,7 @@ export function TriageRowView({
         )}
       </View>
       )}
-      {editing ? null : (
+      {editing || nested ? null : (
         <>
       {row.bucket === "unread" ? (
         <Pressable

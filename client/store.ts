@@ -7,7 +7,7 @@ import { createHostObserver, type HostData, type HostObserver } from "./host-obs
 import { markRead, markUnread, mergeOverlays, pinChat, pruneOverlay, unpinChat } from "./overlay";
 import type { PaseoAgent, PaseoApi } from "./paseo-types";
 import { createPeerDirectory, type Peer, type PeerDirectory } from "./peers";
-import { chatKey, isDelegated, keyHost, type ChatInput, type Overlay, type OverlayEntry } from "./triage";
+import { chatKey, isDelegated, keyHost, PARENT_AGENT_LABEL, type ChatInput, type Overlay, type OverlayEntry } from "./triage";
 import { clearDevicePrefs, readDevicePrefs, readHostColorNames } from "./web";
 import { agentLabel } from "./format";
 import { DEFAULT_PREFS, parseStoredPrefs, toggleHiddenHost, withNormalizedLayout } from "./prefs";
@@ -169,8 +169,13 @@ function toChat(
       : null,
     pendingPermissions: agent.pendingPermissions?.length ?? 0,
     failed: Boolean(agent.lastError),
+    parentAgentId: agent.labels?.[PARENT_AGENT_LABEL]?.trim() || undefined,
   };
 }
+
+/** A question or permission request is open, or the daemon flags the agent as waiting for permission. */
+const asksYou = (agent: PaseoAgent): boolean =>
+  (agent.pendingPermissions?.length ?? 0) > 0 || (agent.requiresAttention === true && agent.attentionReason === "permission");
 
 export function createStore({ rpc, resolveSelf, directory = createPeerDirectory() }: StoreOptions): RecentsStore {
   const listeners = new Set<() => void>();
@@ -249,7 +254,8 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
         ]),
       );
       for (const agent of data.agents) {
-        if (!isDelegated(agent.labels)) chats.push(toChat(host, agent, names));
+        // Sub-agents are left out, except one that asks you something: it blocks its parent, so it shows under it.
+        if (!isDelegated(agent.labels) || asksYou(agent)) chats.push(toChat(host, agent, names));
       }
       for (const workspace of data.workspaces) {
         if (workspace.internal || workspace.background) continue;

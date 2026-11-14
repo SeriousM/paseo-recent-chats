@@ -6,6 +6,7 @@ import { buildTriage, type TriageLimits, type TriageResult, type TriageRow } fro
 import { followOpenChat, holdOpened, useLinger } from "./linger";
 import { useOpenChat } from "./open-chat";
 import type { Prefs } from "../shared/settings";
+import { recordOpenChat } from "./chat-history";
 
 export const GO_SCREEN_ID = "go";
 
@@ -34,7 +35,10 @@ export function useRecents(): Recents {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const linger = useLinger();
   const openKey = useOpenChat();
-  useEffect(() => followOpenChat(openKey), [openKey]);
+  useEffect(() => {
+    followOpenChat(openKey);
+    if (openKey) recordOpenChat(openKey);
+  }, [openKey]);
   const result = useMemo(
     () =>
       buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), {
@@ -69,4 +73,17 @@ export function openChat(store: RecentsStore, row: TriageRow, target: OpenTarget
     if (status) holdOpened(row.key, row.sortAt, status);
   }
   store.markRead([row.key]);
+}
+
+/** Opens the chat with `key` from the visit history: like a row when it is listed, else by its key. */
+export function openChatByKey(store: RecentsStore, rows: readonly TriageRow[], key: string, target: OpenTarget): void {
+  const row = rows.find((candidate) => candidate.key === key);
+  if (row) {
+    openChat(store, row, target);
+    return;
+  }
+  const hostId = key.slice(0, key.indexOf(":"));
+  const agentId = key.slice(key.indexOf(":") + 1);
+  if (target.navigation) target.navigation.openAgent({ agentId, serverId: hostId });
+  else target.openScreen?.({ screenId: GO_SCREEN_ID, params: { agentId, serverId: hostId } });
 }

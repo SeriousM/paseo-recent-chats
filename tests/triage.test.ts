@@ -521,3 +521,20 @@ describe("released agents and failed turns", () => {
     expect(flags).toEqual({ loaded: [false, false], released: [true, false], broke: [true, true], err: [false, true] });
   });
 });
+
+describe("sub-agents that ask you something", () => {
+  it("are listed under their running parent, which then waits for you", () => {
+    const parent = chat("p", { status: "running", startedAt: ago(10 * MIN) });
+    const sub = chat("s", { status: "running", parentAgentId: "p", pendingPermissions: 1, attention: attention(2) });
+    const result = buildTriage([parent, sub], {}, limits, NOW);
+    expect(ids(result.rows)).toEqual(["p"]);
+    expect(result.rows[0]).toMatchObject({ bucket: "unread", led: "permission", sortAt: ago(2 * MIN) });
+    expect(result.rows[0]?.children?.map((row) => [row.agentId, row.led])).toEqual([["s", "permission"]]);
+    expect(result.counts.unread).toBe(1);
+  });
+
+  it("stand on their own when the parent is not listed", () => {
+    const sub = chat("s", { status: "running", parentAgentId: "gone", pendingPermissions: 1 });
+    expect(ids(buildTriage([sub], {}, limits, NOW).rows)).toEqual(["s"]);
+  });
+});

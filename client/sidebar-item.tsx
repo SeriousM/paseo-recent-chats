@@ -6,7 +6,8 @@ import { scoreRow } from "./fuzzy";
 import { openPluginSettings } from "./runtime";
 import { SearchBox } from "./search-box";
 import { HostFilter, ledColor, TriageList, type TriageListProps } from "./triage-list";
-import { openChat, useRecents } from "./use-recents";
+import { openChat, openChatByKey, useRecents } from "./use-recents";
+import { moveInHistory, useChatHistory } from "./chat-history";
 import { ProjectsView, ViewModeBar } from "./projects-view";
 import { resolvedView, updateViewMode, useViewMode } from "./view-mode";
 import { attachVerticalDrag, attachWheelScroll, excludeFromWindowDrag } from "./web";
@@ -131,8 +132,30 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
 
   const cog = layout.compact ? 36 : 24;
   const fs = useFontScale();
+  const history = useChatHistory();
+  const back = history.index > 0;
+  const forward = history.index < history.entries.length - 1;
+  const go = (by: -1 | 1) => {
+    const key = moveInHistory(by);
+    if (key) openChatByKey(store, result.all, key, { openScreen });
+  };
+  const historyButton = (by: -1 | 1, enabled: boolean) => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={by < 0 ? "Back to the previous chat" : "Forward to the next chat"}
+      accessibilityState={{ disabled: !enabled }}
+      disabled={!enabled}
+      onPress={() => go(by)}
+      hitSlop={4}
+      style={{ width: cog, height: cog, alignItems: "center", justifyContent: "center", borderRadius: 6, opacity: enabled ? 1 : 0.35 }}
+    >
+      <Icon name={by < 0 ? "ArrowLeft" : "ArrowRight"} size={14} color={theme.colors.foregroundMuted} />
+    </Pressable>
+  );
   const summary = (
     <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+      {historyButton(-1, back)}
+      {historyButton(1, forward)}
       {unread > 0 ? (
         <Text style={{ color: ledColor(theme, result.worstUnread ?? "finished"), fontWeight: "600", fontSize: fs(12) }}>
           {unread}

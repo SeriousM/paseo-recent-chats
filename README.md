@@ -21,6 +21,7 @@ The settings screen, where every row item can be shown, reordered, split over li
   or worktree and line changes per workspace and the newest 3 chats per workspace. **Triage** (the default
   on phones): the sections below. The choice, the **Last N days** filter above the tree (hide workspaces with nothing
   newer than the Inactive window setting, 14 days by default) and folds are kept per device.
+- Back and forward arrows in the sidebar row go through the chats you had open, like a browser's history.
 - Pin a project, a workspace or a chat. The Pinned section shows each pinned item with its parents and
   everything below it; pinned items also stay in place. Pins are synced to every device.
 - Drag a project by its folder icon, or a workspace by its grip, to reorder the Projects view (long press
@@ -94,7 +95,7 @@ API. If a future Paseo release isolates them, each host simply keeps its own mar
   own marks and settings until updated.
 - Host colours are read from the app's saved host list, so they show on web and desktop only.
 - No keyboard shortcuts: plugins cannot register them. Use the Command Center.
-- Sub-agents are not listed.
+- Sub-agents are not listed, except one that asks you something: it shows under its parent chat.
 
 ## Development
 

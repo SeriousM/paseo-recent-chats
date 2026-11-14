@@ -33,6 +33,8 @@ export interface ChatInput {
   pendingPermissions?: number;
   /** The last turn ended in an error (the daemon keeps `lastError` until the next turn, also after releasing the agent). */
   failed?: boolean;
+  /** Set on sub-agents (only those that ask you something are passed in): the agent that started it. */
+  parentAgentId?: string;
 }
 
 export type OverlayEntry = {
@@ -73,6 +75,8 @@ export interface TriageRow {
   failed: boolean;
   /** Value the bucket sorts on, epoch ms. */
   sortAt: number;
+  /** Sub-agents of this chat that ask you something, listed under it. */
+  children?: TriageRow[];
 }
 
 export interface TriageResult {
@@ -207,6 +211,25 @@ export function buildTriage(
   return merged;
 }
 
+/** The parts of a row that come straight from the chat. */
+function rowBase(chat: ChatInput) {
+  return {
+    key: chatKey(chat.hostId, chat.agentId),
+    hostId: chat.hostId,
+    hostLabel: chat.hostLabel,
+    agentId: chat.agentId,
+    workspaceId: chat.workspaceId,
+    projectName: chat.projectName,
+    workspaceName: chat.workspaceName,
+    branch: chat.branch,
+    agentName: chat.agentName,
+    title: chat.title,
+    provider: chat.provider,
+    released: chat.status === "closed",
+    failed: chat.status === "error" || chat.failed === true,
+  };
+}
+
 function triageOne(
   chats: readonly ChatInput[],
   overlay: Overlay,
@@ -219,26 +242,33 @@ function triageOne(
   const inactive: TriageRow[] = [];
   const pinned: { row: TriageRow; at: number }[] = [];
 
+  // Sub-agents that ask you something are listed under their parent, which then waits for you as well.
+  // One whose parent is not listed (archived, another host) stands on its own.
+  const present = new Set(chats.map((chat) => chat.agentId));
+  const childrenOf = new Map<string, TriageRow[]>();
   for (const chat of chats) {
-    const key = chatKey(chat.hostId, chat.agentId);
-    const base = {
-      key,
-      hostId: chat.hostId,
-      hostLabel: chat.hostLabel,
-      agentId: chat.agentId,
-      workspaceId: chat.workspaceId,
-      projectName: chat.projectName,
-      workspaceName: chat.workspaceName,
-      branch: chat.branch,
-      agentName: chat.agentName,
-      title: chat.title,
-      provider: chat.provider,
-      released: chat.status === "closed",
-      failed: chat.status === "error" || chat.failed === true,
+    if (!chat.parentAgentId || !present.has(chat.parentAgentId)) continue;
+    const parentKey = chatKey(chat.hostId, chat.parentAgentId);
+    const child: TriageRow = {
+      ...rowBase(chat),
+      bucket: "unread",
+      pinned: false,
+      led: "permission",
+      sortAt: chat.attention?.at ?? chat.startedAt ?? chat.updatedAt,
     };
+    childrenOf.set(parentKey, [...(childrenOf.get(parentKey) ?? []), child]);
+  }
+
+  for (const chat of chats) {
+    if (chat.parentAgentId && present.has(chat.parentAgentId)) continue;
+    const key = chatKey(chat.hostId, chat.agentId);
+    const base = { ...rowBase(chat), ...(childrenOf.has(key) ? { children: childrenOf.get(key) } : null) };
     const pinnedAt = overlay[key]?.pinnedAt;
     const isPinned = pinnedAt !== undefined;
-    const state = unreadState(chat, overlay[key], limits, now);
+    const asking = childrenOf.get(key);
+    const state = asking
+      ? { sortAt: Math.min(...asking.map((child) => child.sortAt)), led: "permission" as const, blocked: true }
+      : unreadState(chat, overlay[key], limits, now);
     let row: TriageRow;
     // The daemon keeps its "finished" or "error" flag while the chat works on a new turn. That flag is about
     // the turn before: a running chat shows as running, and turns unread again when this turn ends. Only a
