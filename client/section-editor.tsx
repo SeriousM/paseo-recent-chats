@@ -23,9 +23,9 @@ const SORT_HINTS: Record<Section, string> = {
   inactive: "By its last message.",
 };
 
-type NumericPref = "maxUnread" | "maxRunning" | "maxInactive" | "inactiveWindowDays" | "unreadExpiryDays";
+type NumericPref = "maxUnread" | "maxRunning" | "maxInactive" | "inactiveWindowDays" | "unreadExpiryDays" | "chatsPerWorkspace";
 
-interface NumericSetting {
+export interface NumericSetting {
   key: NumericPref;
   label: string;
   hint: string;
@@ -33,27 +33,45 @@ interface NumericSetting {
   unit?: string;
 }
 
-/** The size settings of each section, shown under it. */
+/** The size settings of each section, shown under it. Settings both views use are in BOTH_VIEWS. */
 const SIZE_SETTINGS: Record<Section, readonly NumericSetting[]> = {
   pinned: [],
-  unread: [
-    { key: "maxUnread", label: "Chats shown", hint: "The rest appear as a +N chip. Per host when grouped.", presets: [3, 4, 5, 6, 8, 10, 15, 20] },
-    { key: "unreadExpiryDays", label: "Expiry", hint: "Chats waiting longer count as inactive.", presets: [1, 3, 7, 14, 30], unit: " days" },
-  ],
+  unread: [],
   running: [
     { key: "maxRunning", label: "Chats shown", hint: "0 hides them (the +N chip still counts them).", presets: [0, 1, 2, 3, 4, 5, 8, 10] },
   ],
-  inactive: [
-    { key: "maxInactive", label: "Chats shown", hint: "0 hides them.", presets: [0, 2, 3, 4, 5, 8, 10, 15] },
-    { key: "inactiveWindowDays", label: "Window", hint: "Chats older than this stay out of the short list. In Projects, the \u201CLast N days\u201D filter hides workspaces with nothing newer.", presets: [3, 7, 14, 30, 90], unit: " days" },
-  ],
+  inactive: [{ key: "maxInactive", label: "Chats shown", hint: "0 hides them.", presets: [0, 2, 3, 4, 5, 8, 10, 15] }],
 };
+
+/** Settings that change both views, shown once. */
+export const BOTH_VIEWS: readonly NumericSetting[] = [
+  {
+    key: "maxUnread",
+    label: "Needs you: chats shown",
+    hint: "Triage: the rest appear as a +N chip (per host when grouped). Projects: the Needs you box shows this many, then \u201C+N more\u201D.",
+    presets: [3, 4, 5, 6, 8, 10, 15, 20],
+  },
+  {
+    key: "unreadExpiryDays",
+    label: "Needs you: expiry",
+    hint: "Chats waiting longer than this count as inactive.",
+    presets: [1, 3, 7, 14, 30],
+    unit: " days",
+  },
+  {
+    key: "inactiveWindowDays",
+    label: "Inactive window",
+    hint: "Triage: older chats stay out of the Inactive list. Projects: the \u201CLast N days\u201D filter hides workspaces with nothing newer.",
+    presets: [3, 7, 14, 30, 90],
+    unit: " days",
+  },
+];
 
 // Web-only styles that keep a drag from selecting text or scrolling a touch screen.
 const NO_SELECT_NO_SCROLL = { touchAction: "none", userSelect: "none", cursor: "grab" } as unknown as ViewStyle;
 
 /** Preset choices keep the screen usable on a phone and make invalid input impossible. */
-function options(presets: readonly number[], current: number, unit = "") {
+export function presetOptions(presets: readonly number[], current: number, unit = "") {
   const values = presets.includes(current) ? presets : [...presets, current].sort((a, b) => a - b);
   return values.map((value) => ({ label: `${value}${unit}`, value: String(value) }));
 }
@@ -256,7 +274,7 @@ function SectionBlock({
           label={setting.label}
           hint={setting.hint}
           value={String(prefs[setting.key])}
-          options={options(setting.presets, prefs[setting.key], setting.unit)}
+          options={presetOptions(setting.presets, prefs[setting.key], setting.unit)}
           onValueChange={(next) => onChange({ [setting.key]: Number(next) })}
         />
       ))}

@@ -6,8 +6,9 @@ import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/ui";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Easing, PanResponder, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
-import type { RowTokenId } from "../shared/layout";
+import type { RowToken, RowTokenId } from "../shared/layout";
 import type { Prefs } from "../shared/settings";
+import { PREVIEW_HOST_COLORS, PREVIEW_TREE_ROWS, PREVIEW_WORKSPACES } from "./preview-data";
 import { useOpenChat } from "./open-chat";
 import {
   buildTree,
@@ -42,11 +43,21 @@ function togglePin(key: string): void {
   store.updatePrefs({ treePins: flip(store.getSnapshot().prefs.treePins, key) });
 }
 
-/** Chats listed per workspace before "+N older"; chats that need you, run or are pinned always show. */
-const CHATS_PER_WORKSPACE = 3;
-
 /** The tree shows host, project, workspace and branch itself, so its rows leave them out. */
 const TREE_HIDDEN: readonly RowTokenId[] = ["host", "project", "workspace", "branch"];
+
+/** The row layout of chats in the tree: without what the tree shows itself; age and agent as the Projects settings say. */
+function treeLayoutOf(layout: readonly RowToken[], show: Prefs["projectsShow"]): RowToken[] {
+  return layout.map((token) =>
+    TREE_HIDDEN.includes(token.id)
+      ? { ...token, enabled: false }
+      : token.id === "age"
+        ? { ...token, enabled: show.age }
+        : token.id === "agent"
+          ? { ...token, enabled: show.agent }
+          : token,
+  );
+}
 
 /** Branches the "main and master" switch hides. */
 const MAIN_BRANCHES: Record<string, true> = { main: true, master: true };
@@ -201,13 +212,13 @@ export function ProjectsView({
         now: Date.now(),
         inactiveWindowDays: prefs.inactiveWindowDays,
         activeOnly: mode.activeOnly,
-        chatsPerWorkspace: CHATS_PER_WORKSPACE,
+        chatsPerWorkspace: prefs.chatsPerWorkspace,
         pinnedWorkspaces,
         pinnedProjects,
         projectOrder: prefs.projectOrder,
         workspaceOrder: prefs.workspaceOrder,
       }),
-    [rows, listed, prefs.inactiveWindowDays, mode.activeOnly, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder],
+    [rows, listed, prefs.inactiveWindowDays, mode.activeOnly, prefs.chatsPerWorkspace, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder],
   );
   // Everything, unfiltered: the base of the Pinned section and of search.
   const full = useMemo(
@@ -239,20 +250,7 @@ export function ProjectsView({
   const stripLines = useMemo(() => visibleLines(prefs.layout), [prefs.layout]);
   const stripColumns = useMemo(() => columnChars(stripShown, prefs.layout), [stripShown, prefs.layout]);
   const show = prefs.projectsShow;
-  // The tree draws host, project, workspace and branch itself; age and agent follow the Projects settings.
-  const treeLayout = useMemo(
-    () =>
-      prefs.layout.map((token) =>
-        TREE_HIDDEN.includes(token.id)
-          ? { ...token, enabled: false }
-          : token.id === "age"
-            ? { ...token, enabled: show.age }
-            : token.id === "agent"
-              ? { ...token, enabled: show.agent }
-              : token,
-      ),
-    [prefs.layout, show.age, show.agent],
-  );
+  const treeLayout = useMemo(() => treeLayoutOf(prefs.layout, show), [prefs.layout, show]);
   const treeLines = useMemo(() => visibleLines(treeLayout), [treeLayout]);
   const treeColumns = useMemo(() => columnChars(rows, treeLayout), [rows, treeLayout]);
 
@@ -450,6 +448,133 @@ export function ProjectsView({
             <Text style={{ fontSize: fs(12), color: theme.colors.foregroundMuted, padding: 12 }}>Nothing matches.</Text>
           ) : null}
     </CardLayer>
+  );
+}
+
+const PREVIEW_HOSTS = [
+  { id: "preview-laptop", label: "laptop" },
+  { id: "preview-buildbox", label: "buildbox-eu" },
+];
+const NO_FOLDS: ReadonlySet<string> = new Set();
+const ignore = () => {};
+
+/**
+ * The Projects tree on sample chats, for the settings: drawn with the real tree parts, the row layout
+ * being edited (`layout`) and the Projects settings. Nothing in it reacts to the pointer.
+ */
+export function ProjectsPreview({
+  theme,
+  compact,
+  prefs,
+  layout,
+}: {
+  theme: PluginTheme;
+  compact: boolean;
+  prefs: Prefs;
+  layout: readonly RowToken[];
+}) {
+  const show = prefs.projectsShow;
+  const tree = useMemo(
+    () =>
+      buildTree(PREVIEW_TREE_ROWS, PREVIEW_HOSTS, {
+        now: Date.now(),
+        inactiveWindowDays: 3650,
+        activeOnly: false,
+        chatsPerWorkspace: prefs.chatsPerWorkspace,
+        pinnedWorkspaces: NO_FOLDS,
+      }),
+    [prefs.chatsPerWorkspace],
+  );
+  const treeLayout = useMemo(() => treeLayoutOf(layout, show), [layout, show]);
+  const lines = useMemo(() => visibleLines(treeLayout), [treeLayout]);
+  const columns = useMemo(() => columnChars(PREVIEW_TREE_ROWS, treeLayout), [treeLayout]);
+  const flat = !prefs.projectsGroupByHost;
+  const chat = (row: TriageRow) => (
+    <TriageRowView
+      key={row.key}
+      row={row}
+      theme={theme}
+      compact={compact}
+      showHost={false}
+      hostColor={undefined}
+      lines={lines}
+      columns={columns}
+      current={false}
+      fullNames={false}
+      onOpen={ignore}
+      onMarkRead={ignore}
+      onMarkUnread={ignore}
+      onSetPinned={ignore}
+    />
+  );
+  const renderProject = (project: TreeProject) => {
+    const hostId = project.key.slice(0, project.key.indexOf(":"));
+    return (
+      <ProjectNode
+        key={project.key}
+        project={project}
+        prefix="preview/"
+        pinned={false}
+        theme={theme}
+        compact={compact}
+        toggled={NO_FOLDS}
+        hostTag={
+          flat && show.hostTag
+            ? { label: PREVIEW_HOSTS.find((host) => host.id === hostId)?.label ?? hostId, colorName: PREVIEW_HOST_COLORS[hostId] }
+            : undefined
+        }
+        drag={undefined}
+      >
+        {project.workspaces.map((workspace) => (
+          <WorkspaceNode
+            key={workspace.key}
+            show={show}
+            workspace={workspace}
+            info={PREVIEW_WORKSPACES.get(workspace.key)}
+            prefix="preview/"
+            pinned={false}
+            theme={theme}
+            compact={compact}
+            folded={false}
+            showOlder={false}
+            drag={undefined}
+            renderChat={chat}
+          />
+        ))}
+      </ProjectNode>
+    );
+  };
+  return (
+    <View
+      pointerEvents="none"
+      style={{ borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface1, paddingVertical: 6 }}
+    >
+      {flat ? (
+        <FlatProjects
+          merged={mergeHosts(tree, [])}
+          prefix="preview/"
+          theme={theme}
+          compact={compact}
+          toggled={NO_FOLDS}
+          sortable={false}
+          renderProject={renderProject}
+        />
+      ) : (
+        tree.map((host) => (
+          <HostNode
+            key={host.hostId}
+            host={host}
+            prefix="preview/"
+            theme={theme}
+            compact={compact}
+            colorName={PREVIEW_HOST_COLORS[host.hostId]}
+            toggled={NO_FOLDS}
+            sortable={false}
+            renderProject={renderProject}
+          />
+        ))
+      )}
+    </View>
   );
 }
 

@@ -86,6 +86,8 @@ export const prefsSettings = defineSettings({
     projectOrder: z.array(z.string()).default([]),
     /** Workspace keys (`<host>:<workspace id>`) in the order dragged inside their project; the rest follow by activity. */
     workspaceOrder: z.array(z.string()).default([]),
+    /** Projects view: chats listed per workspace before "+N older"; chats that need you, run or are pinned always show. */
+    chatsPerWorkspace: z.number().int().min(1).max(20).default(3),
     /** What the Projects tree shows around its chats. Each switch is on by default except the agent. */
     projectsShow: z
       .object({
