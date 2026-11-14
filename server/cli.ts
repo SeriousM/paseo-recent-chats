@@ -38,20 +38,26 @@ function findCli(): Cli {
   return { file: existsSync(beside) ? beside : "paseo", prefix: [], env: process.env };
 }
 
-function fullArgs(cli: Cli, args: readonly string[]): string[] {
-  const home = process.env.PASEO_HOME ? ["--home", process.env.PASEO_HOME] : [];
-  return [...cli.prefix, ...args, ...home];
+/** The CLI's arguments with this host's `--home`, which must stay before a `--` (everything after it is a value). */
+export function fullArgs(prefix: readonly string[], args: readonly string[], paseoHome: string | undefined): string[] {
+  const home = paseoHome ? ["--home", paseoHome] : [];
+  const end = args.indexOf("--");
+  return end < 0 ? [...prefix, ...args, ...home] : [...prefix, ...args.slice(0, end), ...home, ...args.slice(end)];
 }
 
 /** Runs the CLI and returns its standard output. */
 export async function runCli(args: readonly string[]): Promise<string> {
   const cli = findCli();
-  const { stdout } = await execFileAsync(cli.file, fullArgs(cli, args), { env: cli.env, timeout: TIMEOUT_MS, windowsHide: true });
+  const { stdout } = await execFileAsync(cli.file, fullArgs(cli.prefix, args, process.env.PASEO_HOME), {
+    env: cli.env,
+    timeout: TIMEOUT_MS,
+    windowsHide: true,
+  });
   return stdout;
 }
 
 /** Starts the CLI so that it outlives this process (a plugin update reloads this plugin before it is done). */
 export function startCliDetached(args: readonly string[]): void {
   const cli = findCli();
-  spawn(cli.file, fullArgs(cli, args), { env: cli.env, detached: true, stdio: "ignore", windowsHide: true }).unref();
+  spawn(cli.file, fullArgs(cli.prefix, args, process.env.PASEO_HOME), { env: cli.env, detached: true, stdio: "ignore", windowsHide: true }).unref();
 }
