@@ -450,8 +450,9 @@ export function ProjectsView({
         renderProject={(project, projectDrag) => renderProject(project, prefix, inPinned, projectDrag)}
       />
     );
-    // The hosts can be dragged into an order by their grip, which Triage's host groups follow too.
-    if (inPinned || hosts.length < 2) return hosts.map((host) => node(host));
+    // The hosts can be dragged into an order by their grip, here and in the Pinned section (one order for both,
+    // which Triage's host groups follow too).
+    if (hosts.length < 2) return hosts.map((host) => node(host));
     return <SortableList items={hosts.map((host) => ({ key: host.hostId, host }))} orderKey="hostOrder" theme={theme} render={(item, drag) => node(item.host, drag)} />;
   };
 
