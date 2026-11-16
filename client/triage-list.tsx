@@ -17,6 +17,7 @@ import type { Section } from "../shared/sections";
 import { PROVIDER_ICONS } from "./provider-icons";
 import { copyText, MenuButton, MenuView, type MenuGroups } from "./row-menu";
 import { getStore } from "./runtime";
+import { moveInOrder } from "./project-tree";
 
 /** Hover this long on a row before its full-names card shows. */
 const CARD_DELAY_MS = 450;
@@ -917,6 +918,8 @@ export function HostHeading({
   unread,
   collapsed,
   onToggleCollapsed,
+  before,
+  after,
 }: {
   theme: PluginTheme;
   label: string;
@@ -925,6 +928,9 @@ export function HostHeading({
   /** With a handler, the heading folds the host's rows away when pressed; a chevron shows the state. */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  /** Outside the pressable heading, so pressing them does not fold the host: a drag handle, move buttons. */
+  before?: ReactNode;
+  after?: ReactNode;
 }) {
   const tint = hostColors(colorName, isDark(theme.colors.surface0));
   const fs = useFontScale();
@@ -949,10 +955,18 @@ export function HostHeading({
     </>
   );
   const style = { flexDirection: "row" as const, alignItems: "center" as const, gap: 8, paddingHorizontal: 8, paddingTop: 10, paddingBottom: 2 };
-  return (
-    <HeadingRow style={style} label={label} collapsed={collapsed ?? false} onToggleCollapsed={onToggleCollapsed}>
+  const heading = (grow: boolean) => (
+    <HeadingRow style={grow ? { ...style, flex: 1 } : style} label={label} collapsed={collapsed ?? false} onToggleCollapsed={onToggleCollapsed}>
       {content}
     </HeadingRow>
+  );
+  if (!before && !after) return heading(false);
+  return (
+    <View style={{ flexDirection: "row", alignItems: "flex-end" }}>
+      {before}
+      {heading(true)}
+      {after}
+    </View>
   );
 }
 
@@ -1061,6 +1075,12 @@ export function TriageList({
     for (const row of result.all) if (row.bucket === "unread") counts[row.hostId] = (counts[row.hostId] ?? 0) + 1;
     return counts;
   }, [result]);
+  // The host groups as shown, for moving one up or down; the new order is saved for every device.
+  const groupIds = useMemo(() => (grouped ? [...new Set(shown.map((row) => row.hostId))] : []), [grouped, shown]);
+  const moveHost = (hostId: string, to: number) => {
+    const store = getStore();
+    store.updatePrefs({ hostOrder: moveInOrder(store.getSnapshot().prefs.hostOrder, groupIds, hostId, to) });
+  };
   const lines = useMemo(() => visibleLines(prefs.layout), [prefs.layout]);
   const columns = useMemo(() => columnChars(shown, prefs.layout), [shown, prefs.layout]);
   const fs = useFontScale();
@@ -1198,6 +1218,34 @@ export function TriageList({
                   unread={unreadByHost[row.hostId] ?? 0}
                   collapsed={hostFolded}
                   onToggleCollapsed={() => toggleCollapsed(hostKey)}
+                  after={
+                    groupIds.length >= 2 ? (
+                      <View style={{ flexDirection: "row", paddingBottom: 2, paddingRight: 4 }}>
+                        {([
+                          ["up", "ChevronUp", -1],
+                          ["down", "ChevronDown", 1],
+                        ] as const).map(([word, icon, step]) => {
+                          const from = groupIds.indexOf(row.hostId);
+                          const to = from + step;
+                          const enabled = to >= 0 && to < groupIds.length;
+                          return (
+                            <Pressable
+                              key={word}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Move ${row.hostLabel} ${word}`}
+                              accessibilityState={{ disabled: !enabled }}
+                              disabled={!enabled}
+                              hitSlop={4}
+                              onPress={() => moveHost(row.hostId, to)}
+                              style={{ width: compact ? 32 : 20, height: compact ? 32 : 20, alignItems: "center", justifyContent: "center", opacity: enabled ? 1 : 0.3 }}
+                            >
+                              <Icon name={icon} size={12} color={theme.colors.foregroundMuted} />
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : undefined
+                  }
                 />
               ) : null}
               {headings && !hostFolded && (hostChanged || previousSection !== section) ? (

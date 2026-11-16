@@ -436,7 +436,7 @@ export function ProjectsView({
         />
       );
     }
-    return hosts.map((host) => (
+    const node = (host: TreeHost, drag?: ItemDrag) => (
       <HostNode
         key={prefix + host.hostId}
         host={host}
@@ -446,9 +446,13 @@ export function ProjectsView({
         colorName={snapshot.hostColors[host.hostId]}
         toggled={toggled}
         sortable={!inPinned}
-        renderProject={(project, drag) => renderProject(project, prefix, inPinned, drag)}
+        drag={drag}
+        renderProject={(project, projectDrag) => renderProject(project, prefix, inPinned, projectDrag)}
       />
-    ));
+    );
+    // The hosts can be dragged into an order by their grip, which Triage's host groups follow too.
+    if (inPinned || hosts.length < 2) return hosts.map((host) => node(host));
+    return <SortableList items={hosts.map((host) => ({ key: host.hostId, host }))} orderKey="hostOrder" theme={theme} render={(item, drag) => node(item.host, drag)} />;
   };
 
   const pinnedFolded = toggled.has("pinned");
@@ -786,6 +790,7 @@ function HostNode({
   colorName,
   toggled,
   sortable,
+  drag,
   renderProject,
 }: {
   host: TreeHost;
@@ -796,6 +801,8 @@ function HostNode({
   toggled: ReadonlySet<string>;
   /** The projects can be reordered by dragging their folder icon (not in the Pinned section). */
   sortable: boolean;
+  /** Reorders the hosts by dragging the grip before the heading. */
+  drag?: ItemDrag;
   renderProject(project: TreeProject, drag?: ItemDrag): ReactNode;
 }) {
   const fs = useFontScale();
@@ -814,6 +821,15 @@ function HostNode({
         unread={host.need}
         collapsed={folded}
         onToggleCollapsed={() => toggleNode(foldKey)}
+        before={
+          drag ? (
+            <View style={{ paddingLeft: 4, paddingBottom: 2 }}>
+              <DragHandle drag={drag} label={host.label}>
+                <Icon name="GripVertical" size={12} color={theme.colors.foregroundMuted} />
+              </DragHandle>
+            </View>
+          ) : undefined
+        }
       />
       {folded ? null : (
         <View>
@@ -1038,7 +1054,7 @@ function SortableList<Item extends { key: string }>({
   render,
 }: {
   items: readonly Item[];
-  orderKey: "projectOrder" | "workspaceOrder";
+  orderKey: "projectOrder" | "workspaceOrder" | "hostOrder";
   theme: PluginTheme;
   render(item: Item, drag: ItemDrag): ReactNode;
 }) {

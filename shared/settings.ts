@@ -86,6 +86,8 @@ export const prefsSettings = defineSettings({
     projectOrder: z.array(z.string()).default([]),
     /** Workspace keys (`<host>:<workspace id>`) in the order dragged inside their project; the rest follow by activity. */
     workspaceOrder: z.array(z.string()).default([]),
+    /** Host ids in the order dragged (Projects) or moved (Triage) while grouped by host; the rest follow. */
+    hostOrder: z.array(z.string()).default([]),
     /** Projects view: chats listed per workspace before "+N older"; chats that need you, run or are pinned always show. */
     chatsPerWorkspace: z.number().int().min(1).max(20).default(3),
     /** Projects view: the cleanup filter lists chats with nothing newer than this many days. */

@@ -268,7 +268,12 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     // A host switched off in the filter stays hidden only while another online host is listed: with one host
     // left (another went offline, or the switch-off was synced from a device with more hosts) nothing could
     // switch it back on, because the host filter only shows with two or more hosts.
-    const online = hosts.filter((host) => host.status === "online");
+    // Online hosts in the user's order (hostOrder); hosts not in it keep Paseo's order after them.
+    const rank = (id: string) => {
+      const index = prefs.hostOrder.indexOf(id);
+      return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+    };
+    const online = hosts.filter((host) => host.status === "online").sort((a, b) => rank(a.serverId) - rank(b.serverId));
     const hiddenOnline = online.filter((host) => prefs.hiddenHosts.includes(host.serverId));
     const hidden = (id: string) => hiddenOnline.length < online.length && prefs.hiddenHosts.includes(id);
     for (const host of hosts) {

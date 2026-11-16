@@ -222,6 +222,16 @@ describe("chats in the snapshot", () => {
     store.dispose();
   });
 
+  it("lists the hosts in the order the user set", async () => {
+    const { store } = storeOn("a");
+    store.setHosts([host("a"), host("b"), host("c")]);
+    store.retain();
+    await settle();
+    store.updatePrefs({ hostOrder: ["c", "a"] });
+    expect(store.getSnapshot().hosts.map((chip) => chip.id)).toEqual(["c", "a", "b"]);
+    store.dispose();
+  });
+
   it("lists only online hosts", async () => {
     fake.hostData.set("a", data([agent("a1")]));
     const { store } = storeOn("a");
