@@ -120,6 +120,8 @@ export function ViewModeBar({
   onHosts,
   searchOpen,
   onSearch,
+  onAddProject,
+  addingProject = false,
   extra,
 }: {
   theme: PluginTheme;
@@ -132,6 +134,9 @@ export function ViewModeBar({
   onSearch(): void;
   /** Placed at the end of the row, after the search button (the sidebar view's back, forward, counts and cog). */
   extra?: ReactNode;
+  /** Projects view: opens the form that adds a project. */
+  onAddProject?: () => void;
+  addingProject?: boolean;
 }) {
   const mode = useViewMode();
   const fs = useFontScale();
@@ -193,6 +198,17 @@ export function ViewModeBar({
         </Pressable>
       ) : null}
       <View style={{ flex: 1 }} />
+      {onAddProject ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add a project"
+          accessibilityState={{ expanded: addingProject }}
+          onPress={onAddProject}
+          style={toggle(addingProject)}
+        >
+          <Icon name="FolderPlus" size={13} color={tone(addingProject)} />
+        </Pressable>
+      ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={searchOpen ? "Close search" : "Search"}
@@ -912,7 +928,9 @@ function ProjectNode({
         {hostTag ? <HostPill theme={theme} label={hostTag.label} colorName={hostTag.colorName} /> : null}
         {pinned ? (
           <PinButton theme={theme} compact={compact} pinned label={`project ${project.name}`} onPress={() => togglePin(`project:${project.key}`)} />
-        ) : null}
+        ) : (
+          <View style={{ width: compact ? 32 : 20 }} />
+        )}
         {menu.button}
       </Pressable>
       {folded ? null : <View style={{ paddingLeft: 12 }}>{children}</View>}
@@ -1205,7 +1223,10 @@ function WorkspaceNode({
     const newest = [...all].sort((a, b) => b.sortAt - a.sortAt)[0];
     const running = all.some((row) => row.bucket === "running");
     return [
-      [nav && workspaceId ? { label: "Open workspace", icon: "ExternalLink", onPress: () => nav.openWorkspace(workspace.hostId, workspaceId) } : null],
+      [
+        nav && workspaceId ? { label: "Open workspace", icon: "ExternalLink", onPress: () => nav.openWorkspace(workspace.hostId, workspaceId) } : null,
+        nav && info?.projectId ? { label: "New workspace", icon: "Plus", onPress: () => nav.newWorkspace(workspace.hostId, info.projectId) } : null,
+      ],
       [
         workspaceId ? { label: "Rename", icon: "Pencil", onPress: () => setEditing(true) } : null,
         workspaceId
@@ -1315,7 +1336,9 @@ function WorkspaceNode({
             label={`workspace ${info?.title ?? workspace.name}`}
             onPress={() => togglePin(`workspace:${workspace.key}`)}
           />
-        ) : null}
+        ) : (
+          <View style={{ width: compact ? 32 : 20 }} />
+        )}
         {editing ? null : menu.button}
       </Pressable>
       {folded ? null : (

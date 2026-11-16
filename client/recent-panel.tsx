@@ -4,7 +4,8 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon, ScrollView } from "@getpaseo/plugin/client/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View, type ScrollView as NativeScrollView } from "react-native";
+import { Pressable, Text, TextInput, View, type ScrollView as NativeScrollView } from "react-native";
+import { usePaseoNavigation } from "./navigation";
 import { moveInHistory, useChatHistory } from "./chat-history";
 import { useFontScale } from "./font-scale";
 import { scoreRow } from "./fuzzy";
@@ -12,7 +13,7 @@ import { ProjectsView, ViewModeBar } from "./projects-view";
 import { openPluginSettings } from "./runtime";
 import { SearchBox } from "./search-box";
 import type { TriageRow } from "./triage";
-import { HostFilter, ledColor, TriageList, type TriageListProps } from "./triage-list";
+import { CardLayer, HostFilter, ledColor, TriageList, type TriageListProps } from "./triage-list";
 import { openChat, openChatByKey, useRecents, type OpenTarget } from "./use-recents";
 import { resolvedView, updateViewMode, useViewMode } from "./view-mode";
 import { attachWheelScroll, excludeFromWindowDrag } from "./web";
@@ -114,6 +115,7 @@ export function RecentPanel({
   const [query, setQuery] = useState("");
   const [showSearch, setShowSearch] = useState(searchOpen);
   const [hostsOpen, setHostsOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const viewMode = useViewMode();
   const projects = resolvedView(viewMode, compact) === "projects";
   // Project and workspace pins made while pins were kept on this device: moved to the synced settings once.
@@ -167,6 +169,7 @@ export function RecentPanel({
   };
 
   return (
+    <CardLayer style={listHeight === undefined ? { flex: 1, minHeight: 0 } : undefined}>
     <View ref={area} style={listHeight === undefined ? { flex: 1, minHeight: 0 } : null}>
       <ViewModeBar
         theme={theme}
@@ -176,8 +179,11 @@ export function RecentPanel({
         onHosts={() => setHostsOpen(!hostsOpen)}
         searchOpen={showSearch}
         onSearch={toggleSearch}
+        onAddProject={projects ? () => setAdding(!adding) : undefined}
+        addingProject={adding}
         extra={headerExtra}
       />
+      {adding && projects ? <AddProject theme={theme} compact={compact} onDone={() => setAdding(false)} /> : null}
       {hostsOpen && snapshot.hosts.length >= 2 ? (
         <HostFilter
           theme={theme}
@@ -234,6 +240,91 @@ export function RecentPanel({
       </ScrollView>
       {/* Outside the scroll area, so the chips, Mark all read and All chats stay at the bottom of the list. */}
       {projects || searching ? null : <TriageList {...listProps} footer="only" />}
+    </View>
+    </CardLayer>
+  );
+}
+
+/**
+ * Adds a project: a folder on one of the connected hosts. Paseo opens it as a workspace, which registers the
+ * project; the 0.16 sidebar view then shows it. Plugins cannot open a folder picker, so the path is typed.
+ */
+function AddProject({ theme, compact, onDone }: { theme: PluginTheme; compact: boolean; onDone(): void }) {
+  const { store, snapshot } = useRecents();
+  const nav = usePaseoNavigation();
+  const fs = useFontScale();
+  const hosts = snapshot.hosts;
+  const [hostId, setHostId] = useState(hosts[0]?.id ?? "");
+  const [path, setPath] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const add = () => {
+    const folder = path.trim();
+    if (!folder || !hostId || busy) return;
+    setBusy(true);
+    setError(null);
+    store
+      .addProject(hostId, folder)
+      .then((workspaceId) => {
+        if (workspaceId) nav?.openWorkspace(hostId, workspaceId);
+        onDone();
+      })
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
+      .finally(() => setBusy(false));
+  };
+  const chip = (on: boolean) => ({
+    paddingHorizontal: 8,
+    paddingVertical: compact ? 6 : 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: on ? theme.colors.accent : theme.colors.border,
+    backgroundColor: on ? theme.colors.surface2 : "transparent",
+  });
+  return (
+    <View style={{ paddingHorizontal: 8, paddingBottom: 6, gap: 6 }}>
+      {hosts.length >= 2 ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+          {hosts.map((host) => (
+            <Pressable key={host.id} accessibilityRole="radio" accessibilityState={{ selected: host.id === hostId }} onPress={() => setHostId(host.id)} style={chip(host.id === hostId)}>
+              <Text style={{ fontSize: fs(11), color: host.id === hostId ? theme.colors.foreground : theme.colors.foregroundMuted }}>{host.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <TextInput
+          value={path}
+          onChangeText={setPath}
+          onSubmitEditing={add}
+          placeholder="Folder on the host, e.g. ~/src/my-project"
+          placeholderTextColor={theme.colors.foregroundMuted}
+          autoFocus
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            height: compact ? 40 : 30,
+            paddingHorizontal: 8,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.surface1,
+            color: theme.colors.foreground,
+            fontSize: fs(13),
+          }}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy || !path.trim() }}
+          disabled={busy || !path.trim()}
+          onPress={add}
+          style={{ height: compact ? 40 : 30, paddingHorizontal: 12, borderRadius: 8, justifyContent: "center", backgroundColor: theme.colors.accent, opacity: busy || !path.trim() ? 0.5 : 1 }}
+        >
+          <Text style={{ fontSize: fs(12), fontWeight: "600", color: theme.colors.accentForeground }}>{busy ? "Adding\u2026" : "Add project"}</Text>
+        </Pressable>
+      </View>
+      {error ? <Text style={{ fontSize: fs(11), color: theme.colors.statusDanger }}>{`Not added: ${error}`}</Text> : null}
     </View>
   );
 }

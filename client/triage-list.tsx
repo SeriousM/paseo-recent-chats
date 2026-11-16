@@ -282,14 +282,22 @@ export function useMenuOpener(): CardLayerApi["openMenu"] | null {
   return useContext(CardLayerContext)?.openMenu ?? null;
 }
 
+/** Rough height of an open menu, to decide whether it opens below or above its anchor. */
+function menuHeight(groups: MenuGroups): number {
+  const visible = groups.map((group) => group.filter(Boolean)).filter((group) => group.length > 0);
+  return visible.reduce((sum, group) => sum + group.length * 30, 0) + visible.length * 9 + 8;
+}
+
 /**
- * Draws the full-names card of a hovered row, and button tooltips, above everything in the list. React
- * Native Web gives every view its own stacking order, so a card inside its row is covered by whatever comes
- * after the row's section or workspace, which looked like a see-through card. Wrap a whole list in this.
+ * Draws the full-names card of a hovered row, button tooltips and row menus above everything in the list.
+ * React Native Web gives every view its own stacking order, so a card inside its row is covered by whatever
+ * comes after the row's section or workspace. Wrap the whole surface in this, outside its scroll area, so a
+ * menu is not cut off where the list ends; an inner layer then uses the outer one.
  */
-export function CardLayer({ children }: { children: ReactNode }) {
+export function CardLayer({ children, style }: { children: ReactNode; style?: ViewStyle }) {
+  const outer = useContext(CardLayerContext);
   const container = useRef<View>(null);
-  const containerWidth = useRef(0);
+  const size = useRef({ width: 0, height: 0 });
   const [card, setCard] = useState<{ owner: View; node: ReactNode; style: ViewStyle } | null>(null);
   const [menu, setMenu] = useState<{ props: Parameters<CardLayerApi["openMenu"]>[1]; style: ViewStyle } | null>(null);
   const closeMenu = useMemo(() => () => setMenu(null), []);
@@ -306,7 +314,7 @@ export function CardLayer({ children }: { children: ReactNode }) {
               node,
               style:
                 place === "tip"
-                  ? { top: y + height + 4, right: Math.max(0, containerWidth.current - x - width) }
+                  ? { top: y + height + 4, right: Math.max(0, size.current.width - x - width) }
                   : { top: y + height + 2, left: x + 18, width: Math.max(160, width - 24) },
             }),
           () => {},
@@ -321,20 +329,27 @@ export function CardLayer({ children }: { children: ReactNode }) {
         if (!root) return;
         anchor.measureLayout(
           root,
-          (x, y, width, height) =>
-            setMenu({ props, style: { top: y + height + 2, right: Math.max(4, containerWidth.current - x - width) } }),
+          (x, y, width, height) => {
+            const right = Math.max(4, size.current.width - x - width);
+            const tall = menuHeight(props.groups);
+            // Below the anchor when it fits, else above it, so the end of the list does not cut it off.
+            const below = y + height + 2 + tall <= size.current.height || y < tall;
+            setMenu({ props, style: below ? { top: y + height + 2, right } : { top: Math.max(0, y - tall - 2), right } });
+          },
           () => setMenu({ props, style: { top: 0, right: 4 } }),
         );
       },
     }),
     [],
   );
+  if (outer) return <>{children}</>;
   return (
     <CardLayerContext.Provider value={api}>
       <View
         ref={container}
+        style={style}
         onLayout={(event) => {
-          containerWidth.current = event.nativeEvent.layout.width;
+          size.current = { width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height };
         }}
       >
         {children}
@@ -742,6 +757,21 @@ function ChatRow({
       )}
       {editing || nested ? null : (
         <>
+      {/* Fixed slots, filled or empty, so the buttons line up from row to row: unpin, then read or Later. */}
+      {row.pinned ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Unpin ${title}`}
+          accessibilityState={{ selected: true }}
+          onPress={() => onSetPinned(row.key, false)}
+          hitSlop={6}
+          style={styles.check}
+        >
+          <Icon name="PinOff" size={12} color={theme.colors.accent} />
+        </Pressable>
+      ) : (
+        <View style={styles.check} />
+      )}
       {row.bucket === "unread" ? (
         <Pressable
           accessibilityRole="button"
@@ -752,8 +782,7 @@ function ChatRow({
         >
           <Icon name="Check" size={12} color={theme.colors.foregroundMuted} />
         </Pressable>
-      ) : null}
-      {row.bucket === "inactive" ? (
+      ) : row.bucket === "inactive" ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Later: mark ${title} unread`}
@@ -763,19 +792,9 @@ function ChatRow({
         >
           <Icon name="Clock" size={12} color={theme.colors.foregroundMuted} />
         </Pressable>
-      ) : null}
-      {row.pinned ? (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={row.pinned ? `Unpin ${title}` : `Pin ${title} to the top`}
-        accessibilityState={{ selected: row.pinned }}
-        onPress={() => onSetPinned(row.key, !row.pinned)}
-        hitSlop={6}
-        style={styles.check}
-      >
-        <Icon name={row.pinned ? "PinOff" : "Pin"} size={12} color={row.pinned ? theme.colors.accent : theme.colors.foregroundMuted} />
-      </Pressable>
-      ) : null}
+      ) : (
+        <View style={styles.check} />
+      )}
         </>
       )}
       {openMenu && !editing ? (
