@@ -159,33 +159,46 @@ export function ViewModeBar({
   const tone = (on: boolean) => (on ? theme.colors.foreground : theme.colors.foregroundMuted);
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4 }}>
-      <View
-        style={{
-          flexDirection: "row",
-          padding: 2,
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
-          backgroundColor: theme.colors.surface1,
-        }}
-      >
-        {(["projects", "triage"] as const).map((option) => (
-          <Pressable
-            key={option}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: view === option }}
-            onPress={() => updateViewMode({ view: option })}
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: compact ? 8 : 3,
-              borderRadius: 6,
-              backgroundColor: view === option ? theme.colors.surface2 : "transparent",
-            }}
-          >
-            <Text style={{ fontSize: fs(12), color: tone(view === option) }}>{option === "projects" ? "Projects" : "Triage"}</Text>
-          </Pressable>
-        ))}
-      </View>
+      {compact ? (
+        // Phones: one button that switches between the two views, to keep the row short.
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityLabel={view === "projects" ? "Projects view: switch to Triage" : "Triage view: switch to Projects"}
+          accessibilityState={{ checked: view === "projects" }}
+          onPress={() => updateViewMode({ view: view === "projects" ? "triage" : "projects" })}
+          style={toggle(true)}
+        >
+          <Icon name={view === "projects" ? "FolderTree" : "Inbox"} size={15} color={tone(true)} />
+        </Pressable>
+      ) : (
+        <View
+          style={{
+            flexDirection: "row",
+            padding: 2,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.surface1,
+          }}
+        >
+          {(["projects", "triage"] as const).map((option) => (
+            <Pressable
+              key={option}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: view === option }}
+              onPress={() => updateViewMode({ view: option })}
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+                borderRadius: 6,
+                backgroundColor: view === option ? theme.colors.surface2 : "transparent",
+              }}
+            >
+              <Text style={{ fontSize: fs(12), color: tone(view === option) }}>{option === "projects" ? "Projects" : "Triage"}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
       {showHosts ? (
         <Pressable
           accessibilityRole="button"
