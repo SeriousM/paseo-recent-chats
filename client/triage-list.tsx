@@ -546,7 +546,6 @@ function ChatRow({
     return () => layer.hide(owner);
   }, [layer, cardShown, row, theme, showHost, cardTransparency]);
   // The ⋮ menu (button, right-click, long press) holds every action on the chat, Rename included.
-  const [hovered, setHovered] = useState(false);
   const openMenuAt = useMenuOpener();
   const menuButton = useRef<View>(null);
   const openMenu = openMenuAt && !nested
@@ -711,13 +710,11 @@ function ChatRow({
             }
       }
       onHoverIn={() => {
-        setHovered(true);
         if (!fullNames || editing) return;
         cancelHover();
         hoverTimer.current = setTimeout(() => setShowFull(true), CARD_DELAY_MS);
       }}
       onHoverOut={() => {
-        setHovered(false);
         cancelHover();
         setShowFull(false);
       }}

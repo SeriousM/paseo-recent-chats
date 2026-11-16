@@ -46,7 +46,6 @@ import { useFontScale } from "./font-scale";
  */
 function useRowMenu(theme: PluginTheme, compact: boolean, title: string, build: () => MenuGroups) {
   const open = useMenuOpener();
-  const [hovered, setHovered] = useState(false);
   const row = useRef<View>(null);
   const button = useRef<View | null>(null);
   const latest = useRef(build);
@@ -60,7 +59,6 @@ function useRowMenu(theme: PluginTheme, compact: boolean, title: string, build: 
   useEffect(() => onContextMenu(row.current, () => showRef.current(null)), []);
   return {
     row,
-    hover: { onHoverIn: () => setHovered(true), onHoverOut: () => setHovered(false) },
     longPress: open ? () => show(null) : undefined,
     button: open ? (
       <MenuButton
@@ -847,7 +845,7 @@ function ProjectNode({
   const folder = <Icon name="Folder" size={13} color={theme.colors.foregroundMuted} />;
   return (
     <View style={{ marginTop: 4 }}>
-      <Pressable ref={menu.row} {...menu.hover} style={{ flexDirection: "row", alignItems: "center", paddingRight: 6, paddingVertical: compact ? 5 : 0 }}>
+      <Pressable ref={menu.row} style={{ flexDirection: "row", alignItems: "center", paddingRight: 6, paddingVertical: compact ? 5 : 0 }}>
         <Pressable
           {...fold}
           hitSlop={4}
@@ -1211,7 +1209,6 @@ function WorkspaceNode({
     <View style={{ marginBottom: 2 }}>
       <Pressable
         ref={menu.row}
-        {...menu.hover}
         style={{ flexDirection: "row", alignItems: "center", paddingRight: 6, minHeight: compact ? 40 : 26 }}
       >
         <Pressable
