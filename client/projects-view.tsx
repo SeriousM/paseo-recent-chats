@@ -31,7 +31,7 @@ import { hostColors } from "./format";
 import { CardLayer, HostHeading, isDark, ledColor, TipButton, TriageRowView, type RowViewProps } from "./triage-list";
 import { scoreRow } from "./fuzzy";
 import { filterTree } from "./tree-search";
-import { getStore } from "./runtime";
+import { getStore, openPluginSettings } from "./runtime";
 import { flip, resolvedView, toggleNode, updateViewMode, useViewMode } from "./view-mode";
 import { attachVerticalDrag, onDoubleClick } from "./web";
 import { RenameField } from "./rename-field";
@@ -156,6 +156,9 @@ export function ViewModeBar({
         </Pressable>
       ) : null}
       <View style={{ flex: 1 }} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Recent Chats settings" onPress={openPluginSettings} style={toggle(false)}>
+        <Icon name="Settings" size={13} color={tone(false)} />
+      </Pressable>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={searchOpen ? "Close search" : "Search"}

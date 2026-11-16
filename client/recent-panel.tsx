@@ -87,14 +87,6 @@ export function HeaderControls({
       {running > 0 ? <Text style={{ color: ledColor(theme, "running"), fontWeight: "600", fontSize: fs(12) }}>{running}</Text> : null}
       {children}
       <HistoryButtons theme={theme} compact={compact} target={target} />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Recent Chats settings"
-        onPress={openPluginSettings}
-        style={{ width: size, height: size, alignItems: "center", justifyContent: "center", borderRadius: 6 }}
-      >
-        <Icon name="Settings" size={14} color={theme.colors.foregroundMuted} />
-      </Pressable>
     </View>
   );
 }
