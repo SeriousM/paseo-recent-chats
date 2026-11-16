@@ -13,6 +13,8 @@ export interface ViewMode {
   /** Null until chosen on this device: Projects on wide screens, Triage on phones. */
   view: "triage" | "projects" | null;
   activeOnly: boolean;
+  /** Projects: only chats nothing has happened in for a long time (prefs.staleDays), to clean them up. */
+  staleOnly?: boolean;
   /** Tree nodes switched from their default: folded hosts, projects and workspaces, opened "+N older" and quiet lists. */
   toggled: readonly string[];
   /** Project and workspace pins made before pins were synced; moved to the settings once (see sidebar-item). */
@@ -38,6 +40,7 @@ function load(): ViewMode {
       view: stored.view === "projects" || stored.view === "triage" ? stored.view : null,
       activeOnly: stored.activeOnly !== false,
       toggled: strings(stored.toggled),
+      staleOnly: stored.staleOnly === true,
       legacyPins: strings(stored.pins),
     };
   } catch {
@@ -53,8 +56,8 @@ function shared(scope: object = globalThis): Shared {
 export function updateViewMode(patch: Partial<ViewMode>): void {
   const state = shared();
   state.value = { ...state.value, ...patch };
-  const { view, activeOnly, toggled, legacyPins } = state.value;
-  writeDeviceValue(STORAGE_KEY, JSON.stringify({ view, activeOnly, toggled, pins: legacyPins }));
+  const { view, activeOnly, staleOnly, toggled, legacyPins } = state.value;
+  writeDeviceValue(STORAGE_KEY, JSON.stringify({ view, activeOnly, staleOnly, toggled, pins: legacyPins }));
   for (const listener of [...state.listeners]) {
     try {
       listener();

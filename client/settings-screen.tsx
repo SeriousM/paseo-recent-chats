@@ -209,6 +209,13 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
             hint: "The rest fold into \u201C+N older\u201D. Chats that need you, run or are pinned always show.",
             presets: [1, 2, 3, 4, 5, 8, 10],
           })}
+          {numberSelect({
+            key: "staleDays",
+            label: "Stale after",
+            hint: "The \u201CStale\u201D cleanup filter above the tree lists chats with nothing newer than this, to archive them.",
+            presets: [14, 30, 60, 90, 180, 365],
+            unit: " days",
+          })}
           {PROJECT_SWITCHES.map(([key, label, hint]) => (
             <SettingsSwitch
               key={key}

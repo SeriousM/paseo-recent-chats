@@ -88,6 +88,8 @@ export const prefsSettings = defineSettings({
     workspaceOrder: z.array(z.string()).default([]),
     /** Projects view: chats listed per workspace before "+N older"; chats that need you, run or are pinned always show. */
     chatsPerWorkspace: z.number().int().min(1).max(20).default(3),
+    /** Projects view: the cleanup filter lists chats with nothing newer than this many days. */
+    staleDays: z.number().int().min(7).max(365).default(30),
     /** What the Projects tree shows around its chats. Each switch is on by default except the agent. */
     projectsShow: z
       .object({

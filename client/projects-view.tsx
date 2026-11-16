@@ -250,19 +250,26 @@ export function ProjectsView({
     () => snapshot.hosts.filter((host) => !host.hidden).map((host) => ({ id: host.id, label: host.label })),
     [snapshot.hosts],
   );
+  // Cleanup: only chats with nothing newer than the stale age, not pinned, not waiting or running.
+  const staleOnly = mode.staleOnly === true;
+  const staleRows = useMemo(() => {
+    if (!staleOnly) return rows;
+    const cutoff = Date.now() - prefs.staleDays * 86_400_000;
+    return rows.filter((row) => row.bucket === "inactive" && !row.pinned && row.sortAt < cutoff);
+  }, [rows, staleOnly, prefs.staleDays]);
   const tree = useMemo(
     () =>
-      buildTree(rows, listed, {
+      buildTree(staleRows, listed, {
         now: Date.now(),
         inactiveWindowDays: prefs.inactiveWindowDays,
-        activeOnly: mode.activeOnly,
-        chatsPerWorkspace: prefs.chatsPerWorkspace,
+        activeOnly: staleOnly ? false : mode.activeOnly,
+        chatsPerWorkspace: staleOnly ? Number.MAX_SAFE_INTEGER : prefs.chatsPerWorkspace,
         pinnedWorkspaces,
         pinnedProjects,
         projectOrder: prefs.projectOrder,
         workspaceOrder: prefs.workspaceOrder,
       }),
-    [rows, listed, prefs.inactiveWindowDays, mode.activeOnly, prefs.chatsPerWorkspace, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder],
+    [staleRows, listed, prefs.inactiveWindowDays, staleOnly, mode.activeOnly, prefs.chatsPerWorkspace, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder],
   );
   // Everything, unfiltered: the base of the Pinned section and of search.
   const full = useMemo(
@@ -281,12 +288,12 @@ export function ProjectsView({
   );
   const pinned = useMemo(() => filterTree(pinnedTree(full, pinnedProjects), query), [full, pinnedProjects, query]);
   // Searching looks through everything, also what "active only" and "+N older" hide.
-  const shownTree = useMemo(() => (searching ? filterTree(full, query) : tree), [searching, full, tree, query]);
+  const shownTree = useMemo(() => (searching ? filterTree(staleOnly ? tree : full, query) : tree), [searching, staleOnly, full, tree, query]);
 
   // Chats that wait for you or finished unseen, plus an opened one held in place (grey).
   const urgent = useMemo(
-    () => rows.filter((row) => row.bucket === "unread" && (!searching || scoreRow(query, row) !== null)),
-    [rows, searching, query],
+    () => (staleOnly ? [] : rows.filter((row) => row.bucket === "unread" && (!searching || scoreRow(query, row) !== null))),
+    [rows, staleOnly, searching, query],
   );
   // The frame takes the light of its most urgent chat; grey when only a held (opened) chat is left.
   const stripLed = urgent.reduce<Led>((worst, row) => (LED_RANK[row.led] < LED_RANK[worst] ? row.led : worst), "idle");
@@ -298,6 +305,31 @@ export function ProjectsView({
   const treeLines = useMemo(() => visibleLines(treeLayout), [treeLayout]);
   const treeColumns = useMemo(() => columnChars(rows, treeLayout), [rows, treeLayout]);
 
+  /** A switch in the row above the tree: the "Last N days" and "Stale" filters. */
+  const filterChip = (on: boolean, icon: string, label: string, hint: string, onPress: () => void) => (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityLabel={hint}
+      accessibilityState={{ checked: on }}
+      onPress={onPress}
+      hitSlop={4}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 6,
+        paddingVertical: compact ? 8 : 2,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: on ? theme.colors.border : "transparent",
+        backgroundColor: on ? theme.colors.surface2 : "transparent",
+        opacity: pressed ? 0.6 : 1,
+      })}
+    >
+      <Icon name={icon} size={12} color={on ? theme.colors.foreground : theme.colors.foregroundMuted} />
+      <Text style={{ fontSize: fs(11), color: on ? theme.colors.foreground : theme.colors.foregroundMuted }}>{label}</Text>
+    </Pressable>
+  );
   const chatRow = (row: TriageRow, inStrip: boolean) => (
     <TriageRowView
       key={row.key}
@@ -431,7 +463,7 @@ export function ProjectsView({
               ) : null}
             </View>
           ) : null}
-          {pinned.length > 0 ? (
+          {staleOnly ? null : pinned.length > 0 ? (
             <View style={{ marginBottom: 6 }}>
               <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6 }}>
                 <Pressable
@@ -452,7 +484,7 @@ export function ProjectsView({
                 </View>
               )}
             </View>
-          ) : searching ? null : (
+          ) : searching || staleOnly ? null : (
             <Text style={{ fontSize: fs(11.5), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingBottom: 6 }}>
               Pin a project, workspace or chat to keep it here, with what is around it.
             </Text>
@@ -460,34 +492,33 @@ export function ProjectsView({
           {searching ? null : (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 6, paddingTop: 2 }}>
               {/* Hides workspaces with nothing newer than the inactive window (Settings, Sections, Inactive, Window). */}
-              <Pressable
-                accessibilityRole="switch"
-                accessibilityLabel={`Only workspaces active in the last ${prefs.inactiveWindowDays} days`}
-                accessibilityState={{ checked: mode.activeOnly }}
-                onPress={() => updateViewMode({ activeOnly: !mode.activeOnly })}
-                hitSlop={4}
-                style={({ pressed }) => ({
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  paddingHorizontal: 6,
-                  paddingVertical: compact ? 8 : 2,
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderColor: mode.activeOnly ? theme.colors.border : "transparent",
-                  backgroundColor: mode.activeOnly ? theme.colors.surface2 : "transparent",
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <Icon name="ListFilter" size={12} color={mode.activeOnly ? theme.colors.foreground : theme.colors.foregroundMuted} />
-                <Text style={{ fontSize: fs(11), color: mode.activeOnly ? theme.colors.foreground : theme.colors.foregroundMuted }}>
-                  {`Last ${prefs.inactiveWindowDays}d`}
-                </Text>
-              </Pressable>
+              {staleOnly
+                ? null
+                : filterChip(
+                    mode.activeOnly,
+                    "ListFilter",
+                    `Last ${prefs.inactiveWindowDays}d`,
+                    `Only workspaces active in the last ${prefs.inactiveWindowDays} days`,
+                    () => updateViewMode({ activeOnly: !mode.activeOnly }),
+                  )}
+              {filterChip(
+                staleOnly,
+                "Archive",
+                `Stale ${prefs.staleDays}d+`,
+                `Cleanup: only chats with nothing newer than ${prefs.staleDays} days`,
+                () => updateViewMode({ staleOnly: !staleOnly }),
+              )}
               <View style={{ flex: 1 }} />
               {foldButtons(full, "")}
             </View>
           )}
+          {staleOnly && !searching ? (
+            <Text style={{ fontSize: fs(11.5), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: 4 }}>
+              {staleRows.length === 0
+                ? `No chat has been idle for more than ${prefs.staleDays} days.`
+                : `${staleRows.length} chat${staleRows.length > 1 ? "s" : ""} idle for more than ${prefs.staleDays} days. Archive them from their \u22EE menu, or a whole workspace from its own.`}
+            </Text>
+          ) : null}
           {renderHosts(shownTree, "", false)}
           {searching && shownTree.length === 0 && pinned.length === 0 && urgent.length === 0 ? (
             <Text style={{ fontSize: fs(12), color: theme.colors.foregroundMuted, padding: 12 }}>Nothing matches.</Text>

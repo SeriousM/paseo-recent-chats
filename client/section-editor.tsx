@@ -23,7 +23,7 @@ const SORT_HINTS: Record<Section, string> = {
   inactive: "By its last message.",
 };
 
-type NumericPref = "maxUnread" | "maxRunning" | "maxInactive" | "inactiveWindowDays" | "unreadExpiryDays" | "chatsPerWorkspace";
+type NumericPref = "maxUnread" | "maxRunning" | "maxInactive" | "inactiveWindowDays" | "unreadExpiryDays" | "chatsPerWorkspace" | "staleDays";
 
 export interface NumericSetting {
   key: NumericPref;
