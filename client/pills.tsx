@@ -15,6 +15,7 @@ import { limitsOf, openChat, useRecents } from "./use-recents";
 import { reportOpenChat } from "./open-chat";
 import { watchShown } from "./web";
 import { RECENT_SCREEN_ID } from "./sidebar-item";
+import { HistoryButtons } from "./recent-panel";
 
 const INBOX_PILL_ID = "inbox";
 const LATER_PILL_ID = "later";
