@@ -1035,7 +1035,8 @@ export function TriageList({
       chips.push({ bucket: "inactive", led: "idle", text: `+${result.hidden.inactive} older` });
   }
 
-  const footerNode = onShowAll && !searching ? (
+  // Without a full list to open (the 0.16 sidebar view lists every chat itself) only Mark all read remains.
+  const footerNode = !searching && (onShowAll || result.counts.unread > 0) ? (
     <View style={styles.footer}>
       {chips.map((chip) => (
         <Pressable key={chip.bucket} accessibilityRole="button" onPress={onShowAll} style={styles.chip}>
@@ -1051,9 +1052,11 @@ export function TriageList({
           <Text style={styles.link}>Mark all read</Text>
         </Pressable>
       ) : null}
-      <Pressable accessibilityRole="button" onPress={onShowAll} style={{ marginLeft: "auto" }}>
-        <Text style={styles.link}>All chats</Text>
-      </Pressable>
+      {onShowAll ? (
+        <Pressable accessibilityRole="button" onPress={onShowAll} style={{ marginLeft: "auto" }}>
+          <Text style={styles.link}>All chats</Text>
+        </Pressable>
+      ) : null}
       {showSettingsButton ? <SettingsCog theme={theme} compact={compact} /> : null}
     </View>
   ) : null;

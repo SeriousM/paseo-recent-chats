@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@getpaseo/plugin':
-        specifier: 0.14.0
-        version: 0.14.0(@getpaseo/client@0.14.0)(@getpaseo/protocol@0.14.0)(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(typescript@5.9.3)(zod@4.6.7)
+        specifier: 0.16.0
+        version: 0.16.0(@getpaseo/client@0.16.0)(@getpaseo/protocol@0.16.0)(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(typescript@5.9.3)(zod@4.6.7)
       '@tanstack/react-query':
         specifier: ^5.90.11
         version: 5.105.3(@types/react@19.2.18)(react@19.1.0)
@@ -197,14 +197,14 @@ packages:
     resolution: {integrity: sha512-WCsemW40Cpc6gouC1SrY6PBaZ+oLRlEVY9XBvZBI7il/HyUrb2nJ505wE1MHEFyDZNnrWDEuy4jL50WVHfTTSQ==}
     engines: {node: '>=6.9.0'}
 
-  '@getpaseo/client@0.14.0':
-    resolution: {integrity: sha512-TkDBrhQw4koQI3J2Vlo61M7l7EOCk4AQIZ1dr13SVYVEcofwj+I9R/fqXYkC/nuCl85GsJupxkeEPy5hEItznw==}
+  '@getpaseo/client@0.16.0':
+    resolution: {integrity: sha512-J0ufRdEN33c55UAZF3BEG/d1v4iEBvHknAu4hFT0MXLZwmq17jL56XkOaKB5zBDKONpNU6O5ZSqRv4S0JEEhMg==}
 
-  '@getpaseo/plugin@0.14.0':
-    resolution: {integrity: sha512-CAxPU2mUrscOGeIWc3ESOp1Hwoy8jwhks3hctQO1VJNoDskKUtOHkPKQej/yuscRKH7XXSj7nfc1aG87nseQqg==}
+  '@getpaseo/plugin@0.16.0':
+    resolution: {integrity: sha512-tUpE5llA4KEYvGckdHT4bwslJxvJ2RthR7W6lY9SEc6G6jJCNpkpebqd2pjDo4hztGpaQd/jSBUxKrXSLJqw5A==}
     peerDependencies:
-      '@getpaseo/client': 0.14.0
-      '@getpaseo/protocol': 0.14.0
+      '@getpaseo/client': 0.16.0
+      '@getpaseo/protocol': 0.16.0
       react: '>=19.1.0 <20'
       react-native: '>=0.81.5'
       zod: ^4.4.3
@@ -212,11 +212,11 @@ packages:
       react-native:
         optional: true
 
-  '@getpaseo/protocol@0.14.0':
-    resolution: {integrity: sha512-fF0na1u91sKKgk6R0EKtXQMTJKbqLx8jZ8IuiUcm3jLVOnGruAvPggAQVAzm4MX2mrikesj3immqztHjPNxjTQ==}
+  '@getpaseo/protocol@0.16.0':
+    resolution: {integrity: sha512-kCfnli5PwqMRSjQ1xCN06Mtf4o+KTjPAxWEfLtSuchJFRR5m3yDkkL2EFqw5PZEcXk4H+dfsySrzkA9PNKUDmw==}
 
-  '@getpaseo/relay@0.14.0':
-    resolution: {integrity: sha512-nLEQ3JkCe7NUWrbQadYVjgiIbVB6g3BMNyGxZrtX42RjsKvJJ+/jjowuSChU26G7AjZ6KY0T5lE+OlYpLlfqHA==}
+  '@getpaseo/relay@0.16.0':
+    resolution: {integrity: sha512-lzzZXOIJ0KY9j3OQvzwKmSsw4IyBHmJ0gSqfouIg6AeSjgbQjU33ExpFqGnu5NC8iUtV0BP0x+aSnT/g63oSYQ==}
 
   '@isaacs/ttlcache@1.4.1':
     resolution: {integrity: sha512-RQgQ4uQ+pLbqXfOmieB91ejmLwvSgv9nLx6sT6sD83s7umBypgg+OIBOBbEUiJXrfpnp9j0mRhYYdzp9uqq3lA==}
@@ -1869,21 +1869,21 @@ snapshots:
       '@babel/helper-string-parser': 7.29.11
       '@babel/helper-validator-identifier': 7.29.7
 
-  '@getpaseo/client@0.14.0':
+  '@getpaseo/client@0.16.0':
     dependencies:
-      '@getpaseo/protocol': 0.14.0
-      '@getpaseo/relay': 0.14.0
+      '@getpaseo/protocol': 0.16.0
+      '@getpaseo/relay': 0.16.0
       ws: 8.22.1
       zod: 4.6.7
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@getpaseo/plugin@0.14.0(@getpaseo/client@0.14.0)(@getpaseo/protocol@0.14.0)(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(typescript@5.9.3)(zod@4.6.7)':
+  '@getpaseo/plugin@0.16.0(@getpaseo/client@0.16.0)(@getpaseo/protocol@0.16.0)(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(typescript@5.9.3)(zod@4.6.7)':
     dependencies:
       '@agentclientprotocol/sdk': 1.9.0(zod@4.6.7)
-      '@getpaseo/client': 0.14.0
-      '@getpaseo/protocol': 0.14.0
+      '@getpaseo/client': 0.16.0
+      '@getpaseo/protocol': 0.16.0
       i18next: 26.7.1(typescript@5.9.3)
       react: 19.1.0
       use-sync-external-store: 1.7.0(react@19.1.0)
@@ -1893,12 +1893,12 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@getpaseo/protocol@0.14.0':
+  '@getpaseo/protocol@0.16.0':
     dependencies:
       semver: 7.8.6
       zod: 4.6.7
 
-  '@getpaseo/relay@0.14.0':
+  '@getpaseo/relay@0.16.0':
     dependencies:
       '@noble/ciphers': 2.4.0
       '@noble/curves': 2.4.0
