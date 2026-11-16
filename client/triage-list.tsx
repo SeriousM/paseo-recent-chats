@@ -757,7 +757,6 @@ function ChatRow({
       )}
       {editing || nested ? null : (
         <>
-      {/* Fixed slots, filled or empty, so the buttons line up from row to row: unpin, then read or Later. */}
       {row.pinned ? (
         <Pressable
           accessibilityRole="button"
@@ -769,9 +768,7 @@ function ChatRow({
         >
           <Icon name="PinOff" size={12} color={theme.colors.accent} />
         </Pressable>
-      ) : (
-        <View style={styles.check} />
-      )}
+      ) : null}
       {row.bucket === "unread" ? (
         <Pressable
           accessibilityRole="button"
@@ -792,9 +789,7 @@ function ChatRow({
         >
           <Icon name="Clock" size={12} color={theme.colors.foregroundMuted} />
         </Pressable>
-      ) : (
-        <View style={styles.check} />
-      )}
+      ) : null}
         </>
       )}
       {openMenu && !editing ? (

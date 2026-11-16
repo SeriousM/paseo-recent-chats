@@ -97,6 +97,8 @@ export interface RecentsStore {
   addProject(hostId: string, path: string): Promise<string | null>;
   /** Asks every reachable host's copy to check for a plugin update now. One entry per host. */
   checkForUpdates(): Promise<UpdateCheck[]>;
+  /** What this store sees, for a bug report: hosts, their data, settings and errors. No chat titles or paths. */
+  diagnostics(): Record<string, unknown>;
   /** Stops observation and drops every listener. Called when the plugin unloads. */
   dispose(): void;
 }
@@ -250,8 +252,14 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     const workspaces: WorkspaceInfo[] = [];
     let loading = false;
     const errors: string[] = [];
+    // A host switched off in the filter stays hidden only while another online host is listed: with one host
+    // left (another went offline, or the switch-off was synced from a device with more hosts) nothing could
+    // switch it back on, because the host filter only shows with two or more hosts.
+    const online = hosts.filter((host) => host.status === "online");
+    const hiddenOnline = online.filter((host) => prefs.hiddenHosts.includes(host.serverId));
+    const hidden = (id: string) => hiddenOnline.length < online.length && prefs.hiddenHosts.includes(id);
     for (const host of hosts) {
-      if (host.status !== "online" || prefs.hiddenHosts.includes(host.serverId)) continue;
+      if (host.status !== "online" || hidden(host.serverId)) continue;
       const data = hostData.get(host.serverId);
       if (!data) {
         loading = true;
@@ -299,15 +307,12 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
       workspaces,
       overlay,
       prefs,
-      hostCount: hosts.filter((host) => host.status === "online" && !prefs.hiddenHosts.includes(host.serverId))
-        .length,
-      hosts: hosts
-        .filter((host) => host.status === "online")
-        .map((host) => ({
-          id: host.serverId,
-          label: host.label,
-          hidden: prefs.hiddenHosts.includes(host.serverId),
-        })),
+      hostCount: online.filter((host) => !hidden(host.serverId)).length,
+      hosts: online.map((host) => ({
+        id: host.serverId,
+        label: host.label,
+        hidden: hidden(host.serverId),
+      })),
       storageHosts: [...docs.keys()].map(label),
       outdatedHosts: [...outdated].map(label),
       hostColors,
@@ -807,6 +812,46 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     async addProject(hostId, path) {
       const workspace = await hostApi(hostId).workspaces.open({ cwd: path });
       return workspace.current()?.id ?? null;
+    },
+    diagnostics() {
+      return {
+        selfId,
+        selfError,
+        hosts: hosts.map((host) => {
+          const data = hostData.get(host.serverId);
+          return {
+            serverId: host.serverId,
+            label: host.label,
+            status: host.status,
+            switchedOff: prefs.hiddenHosts.includes(host.serverId),
+            data: data
+              ? {
+                  loading: data.loading,
+                  error: data.error,
+                  agents: data.agents.length,
+                  subAgents: data.agents.filter((agent) => isDelegated(agent.labels)).length,
+                  archived: data.agents.filter((agent) => agent.archivedAt).length,
+                  workspaces: data.workspaces.length,
+                }
+              : null,
+            observerError: hostErrors.get(host.serverId) ?? null,
+            settingsError: docErrors.get(host.serverId) ?? null,
+            settingsStored: docs.has(host.serverId),
+            outdated: outdated.has(host.serverId),
+          };
+        }),
+        prefs: { ...prefs, treePins: prefs.treePins.length },
+        prefsLoaded,
+        prefsError,
+        snapshot: {
+          chats: snapshot.chats.length,
+          workspaces: snapshot.workspaces.length,
+          hostCount: snapshot.hostCount,
+          loading: snapshot.loading,
+          errors: snapshot.errors,
+          overlayEntries: Object.keys(overlay).length,
+        },
+      };
     },
     async checkForUpdates() {
       const label = (hostId: string) => hosts.find((host) => host.serverId === hostId)?.label ?? hostId;

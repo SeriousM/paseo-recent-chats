@@ -208,6 +208,20 @@ describe("chats in the snapshot", () => {
     store.dispose();
   });
 
+  it("lists the chats of the only online host even when it was switched off", async () => {
+    fake.hostData.set("a", data([agent("a1")]));
+    const { store } = storeOn("a");
+    store.setHosts([host("a"), host("b")]);
+    store.retain();
+    await settle();
+    store.toggleHost("a");
+    store.setHosts([host("a"), host("b", "offline")]);
+    const snapshot = store.getSnapshot();
+    expect(snapshot.chats.map((chat) => chat.agentId)).toEqual(["a1"]);
+    expect(snapshot.hosts).toEqual([{ id: "a", label: "A", hidden: false }]);
+    store.dispose();
+  });
+
   it("lists only online hosts", async () => {
     fake.hostData.set("a", data([agent("a1")]));
     const { store } = storeOn("a");

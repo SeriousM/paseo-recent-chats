@@ -925,12 +925,14 @@ function ProjectNode({
             {project.name}
           </Text>
         </Pressable>
-        {hostTag ? <HostPill theme={theme} label={hostTag.label} colorName={hostTag.colorName} /> : null}
+        {hostTag ? (
+          <View style={{ marginRight: 6 }}>
+            <HostPill theme={theme} label={hostTag.label} colorName={hostTag.colorName} />
+          </View>
+        ) : null}
         {pinned ? (
           <PinButton theme={theme} compact={compact} pinned label={`project ${project.name}`} onPress={() => togglePin(`project:${project.key}`)} />
-        ) : (
-          <View style={{ width: compact ? 32 : 20 }} />
-        )}
+        ) : null}
         {menu.button}
       </Pressable>
       {folded ? null : <View style={{ paddingLeft: 12 }}>{children}</View>}
@@ -1303,7 +1305,7 @@ function WorkspaceNode({
             alignItems: "center",
             gap: 7,
             paddingLeft: 4,
-            paddingRight: 10,
+            paddingRight: 6,
             minHeight: compact ? 40 : 26,
             opacity: pressed ? 0.6 : 1,
           })}
@@ -1336,9 +1338,7 @@ function WorkspaceNode({
             label={`workspace ${info?.title ?? workspace.name}`}
             onPress={() => togglePin(`workspace:${workspace.key}`)}
           />
-        ) : (
-          <View style={{ width: compact ? 32 : 20 }} />
-        )}
+        ) : null}
         {editing ? null : menu.button}
       </Pressable>
       {folded ? null : (

@@ -1,7 +1,7 @@
 import type { PluginSurfaceProps } from "@getpaseo/plugin/client";
 import { SettingsCard, SettingsSection, SettingsSelect, SettingsSwitch } from "@getpaseo/plugin/client/ui";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { RowToken } from "../shared/layout";
 import type { Prefs } from "../shared/settings";
 import { LayoutEditor, LayoutPreview, TooltipPreview } from "./layout-editor";
@@ -12,6 +12,10 @@ import { sameLayout } from "./row-layout";
 import { useRecents } from "./use-recents";
 import { updateViewMode, useViewMode } from "./view-mode";
 import type { UpdateCheck } from "./store";
+import { copyText } from "./row-menu";
+
+/** The browser's navigator where there is one (desktop and web); undefined on phones. */
+declare const navigator: { userAgent: string; clipboard?: { writeText(text: string): Promise<void> } } | undefined;
 
 /** The Projects tree's switches, in the order they are shown. */
 const PROJECT_SWITCHES: readonly [keyof Prefs["projectsShow"], string, string][] = [
@@ -57,6 +61,29 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
   }, [prefs.layout, draft]);
   const [checking, setChecking] = useState(false);
   const [updateResults, setUpdateResults] = useState<UpdateCheck[] | null>(null);
+  const [diagnostics, setDiagnostics] = useState<string | null>(null);
+  const [copied, setCopied] = useState<"copied" | "failed" | null>(null);
+  const makeDiagnostics = () => {
+    const report = JSON.stringify(
+      {
+        createdAt: new Date().toISOString(),
+        device: {
+          platform: Platform.OS,
+          userAgent: typeof navigator === "undefined" ? null : navigator.userAgent,
+          compact,
+          viewMode: { ...mode, toggled: mode.toggled.length, legacyPins: mode.legacyPins.length },
+        },
+        ...store.diagnostics(),
+      },
+      null,
+      2,
+    );
+    setDiagnostics(report);
+    setCopied(null);
+    const clipboard = typeof navigator === "undefined" ? undefined : navigator?.clipboard;
+    const copy = copyText ?? (clipboard ? (text: string) => clipboard.writeText(text) : null);
+    if (copy) void copy(report).then(() => setCopied("copied"), () => setCopied("failed"));
+  };
   const where = snapshot.storageHosts.length
     ? `Settings, pins and read marks are saved on every connected host that runs Recent Chats (${snapshot.storageHosts.join(", ")}), so every device shows the same. Pins and read marks of a chat are kept on that chat's host.`
     : "Connecting to the hosts that keep these settings.";
@@ -352,6 +379,42 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
             ]}
             onValueChange={(next) => change({ laterBehavior: next })}
           />
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title="Diagnostics">
+        <SettingsCard>
+          <View style={{ padding: 12, gap: 8 }}>
+            <Text style={muted}>
+              When the list stays empty or shows something wrong: create a report, then send it to whoever helps you. It lists
+              hosts, their status, chat counts, settings and errors. No chat titles, messages or folder paths.
+            </Text>
+            <Pressable accessibilityRole="button" onPress={makeDiagnostics} style={button(false, true)}>
+              <Text style={{ color: theme.colors.foreground }}>Create diagnostics report</Text>
+            </Pressable>
+            {copied === "copied" ? <Text style={muted}>Copied to the clipboard. It is also below.</Text> : null}
+            {copied === "failed" ? <Text style={muted}>Could not copy. Select the text below and copy it.</Text> : null}
+            {diagnostics ? (
+              <TextInput
+                value={diagnostics}
+                editable={false}
+                multiline
+                selectTextOnFocus
+                style={{
+                  minHeight: 160,
+                  maxHeight: 320,
+                  padding: 8,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.surface1,
+                  color: theme.colors.foreground,
+                  fontFamily: Platform.OS === "web" ? "monospace" : undefined,
+                  fontSize: 11,
+                }}
+              />
+            ) : null}
+          </View>
         </SettingsCard>
       </SettingsSection>
     </ScrollView>
