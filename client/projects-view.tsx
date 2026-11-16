@@ -407,16 +407,13 @@ export function ProjectsView({
       drag={drag}
       projectId={project.projectId ?? project.workspaces.map((workspace) => workspaceInfo.get(workspace.key)?.projectId).find(Boolean)}
     >
-      {inPinned ? (
-        project.workspaces.map((workspace) => renderWorkspace(workspace, prefix, inPinned))
-      ) : (
-        <SortableList
-          items={project.workspaces}
-          orderKey="workspaceOrder"
-          theme={theme}
-          render={(workspace, workspaceDrag) => renderWorkspace(workspace, prefix, inPinned, workspaceDrag)}
-        />
-      )}
+      {/* Dragging works in the Pinned section too: one order for a project's workspaces, wherever they show. */}
+      <SortableList
+        items={project.workspaces}
+        orderKey="workspaceOrder"
+        theme={theme}
+        render={(workspace, workspaceDrag) => renderWorkspace(workspace, prefix, inPinned, workspaceDrag)}
+      />
     </ProjectNode>
   );
   /** prefix keeps the Pinned section's folds apart from the tree's. */
@@ -431,7 +428,7 @@ export function ProjectsView({
           theme={theme}
           compact={compact}
           toggled={toggled}
-          sortable={!inPinned}
+          sortable
           renderProject={(project, drag) => renderProject(project, prefix, inPinned, drag)}
         />
       );
@@ -445,7 +442,7 @@ export function ProjectsView({
         compact={compact}
         colorName={snapshot.hostColors[host.hostId]}
         toggled={toggled}
-        sortable={!inPinned}
+        sortable
         drag={drag}
         renderProject={(project, projectDrag) => renderProject(project, prefix, inPinned, projectDrag)}
       />
