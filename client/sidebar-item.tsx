@@ -1,7 +1,7 @@
 import type { PluginSidebarItemProps } from "@getpaseo/plugin/client";
-import { SidebarRow } from "@getpaseo/plugin/client/ui";
+import { Icon, SidebarRow } from "@getpaseo/plugin/client/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { PanResponder, Platform, Text, useWindowDimensions, View, type ViewStyle } from "react-native";
+import { PanResponder, Platform, Pressable, Text, useWindowDimensions, View, type ViewStyle } from "react-native";
 import { useFontScale } from "./font-scale";
 import { HeaderControls, RecentPanel } from "./recent-panel";
 import { useSidebarViewShown } from "./sidebar-view-state";
@@ -21,6 +21,8 @@ const MIN_LIST_HEIGHT = 100;
 const HEIGHT_PERCENT = { min: 15, max: 85 };
 /** Phone drawer height outside the scroll area that holds its header rows: status bar, title, footer. */
 const DRAWER_CHROME = 220;
+/** One tap on the phone's shorter/taller buttons. */
+const STEP_PERCENT = 5;
 
 // Stops a touch screen from scrolling the drawer while the grip is dragged; resize cursor on desktop. React Native Web only.
 const GRIP_WEB = { touchAction: "none", cursor: "row-resize" } as unknown as ViewStyle;
@@ -103,6 +105,27 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
 
   if (viewShown) return null;
   const target = { openScreen };
+  const step = (by: number) => {
+    const next = Math.min(maxPercent, Math.max(HEIGHT_PERCENT.min, Math.min(savedPercent, maxPercent) + by));
+    if (next !== savedPercent) store.updatePrefs({ [heightKey]: next });
+  };
+  const stepButton = (by: number, icon: string, label: string) => {
+    const current = Math.min(savedPercent, maxPercent);
+    const enabled = by < 0 ? current > HEIGHT_PERCENT.min : current < maxPercent;
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ disabled: !enabled }}
+        disabled={!enabled}
+        onPress={() => step(by)}
+        hitSlop={6}
+        style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center", opacity: enabled ? 1 : 0.3 }}
+      >
+        <Icon name={icon} size={16} color={theme.colors.foregroundMuted} />
+      </Pressable>
+    );
+  };
   return (
     <View
       onLayout={(event) => {
@@ -133,28 +156,29 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
               onShowAll={(q) => openScreen({ screenId: RECENT_SCREEN_ID, params: q ? { q } : {} })}
             />
           </NavigationContext.Provider>
-          <View
-            ref={gripNode}
-            {...grip.panHandlers}
-            accessibilityRole="adjustable"
-            accessibilityLabel="Recent Chats list height"
-            accessibilityValue={{ min: HEIGHT_PERCENT.min, max: HEIGHT_PERCENT.max, now: percent }}
-            accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
-            onAccessibilityAction={(event) => {
-              const step = event.nativeEvent.actionName === "increment" ? 5 : -5;
-              const next = Math.min(maxPercent, Math.max(HEIGHT_PERCENT.min, savedPercent + step));
-              if (next !== savedPercent) store.updatePrefs({ [heightKey]: next });
-            }}
-            style={[{ height: layout.compact ? 24 : 12, alignItems: "center", justifyContent: "center" }, GRIP_WEB]}
-          >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            {/* Phones: Paseo's drawer scrolls its header rows and takes the finger from a drag, so taps resize too. */}
+            {layout.compact ? stepButton(-STEP_PERCENT, "ChevronUp", "Shorter list") : null}
             <View
-              style={{
-                width: 36,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: dragPercent === null ? theme.colors.border : theme.colors.accent,
-              }}
-            />
+              ref={gripNode}
+              {...grip.panHandlers}
+              accessibilityRole="adjustable"
+              accessibilityLabel="Recent Chats list height"
+              accessibilityValue={{ min: HEIGHT_PERCENT.min, max: maxPercent, now: percent }}
+              accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+              onAccessibilityAction={(event) => step(event.nativeEvent.actionName === "increment" ? STEP_PERCENT : -STEP_PERCENT)}
+              style={[{ height: layout.compact ? 36 : 12, paddingHorizontal: 8, alignItems: "center", justifyContent: "center" }, GRIP_WEB]}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: dragPercent === null ? theme.colors.border : theme.colors.accent,
+                }}
+              />
+            </View>
+            {layout.compact ? stepButton(STEP_PERCENT, "ChevronDown", "Taller list") : null}
           </View>
         </View>
       ) : null}
