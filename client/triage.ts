@@ -276,7 +276,9 @@ function triageOne(
     if (state && !(chat.status === "running" && !state.blocked)) {
       row = { ...base, bucket: "unread", pinned: isPinned, led: state.led, sortAt: state.sortAt };
       unread.push(row);
-    } else if (linger?.key === key && linger.status === chat.status) {
+    } else if (linger?.key === key && linger.status === chat.status && chat.status !== "running") {
+      // Held only while it rests: a chat that asked during its turn and was answered keeps running, so it
+      // belongs in Running, not grey in Needs you.
       row = { ...base, bucket: "unread", pinned: isPinned, led: "idle", sortAt: linger.sortAt };
       unread.push(row);
     } else if (chat.status === "running") {

@@ -538,3 +538,14 @@ describe("sub-agents that ask you something", () => {
     expect(ids(buildTriage([sub], {}, limits, NOW).rows)).toEqual(["s"]);
   });
 });
+
+describe("a running chat that asked you", () => {
+  it("is back in Running once answered, even while it is the opened one", () => {
+    // Opened while it asked (status running), then answered: it keeps running and must not stay held.
+    const answered = chat("a", { status: "running", startedAt: ago(5 * MIN) });
+    const opened: Overlay = { "h1:a": { dismissedAt: ago(1 * MIN) } };
+    const result = buildTriage([answered], opened, limits, NOW, { linger: { key: "h1:a", sortAt: ago(3 * MIN), status: "running" } });
+    expect(result.rows[0]).toMatchObject({ agentId: "a", bucket: "running", led: "running" });
+    expect(result.counts.running).toBe(1);
+  });
+});
