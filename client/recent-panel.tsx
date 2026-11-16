@@ -81,12 +81,12 @@ export function HeaderControls({
   const size = compact ? 36 : 24;
   return (
     <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-      <HistoryButtons theme={theme} compact={compact} target={target} />
       {unread > 0 ? (
         <Text style={{ color: ledColor(theme, result.worstUnread ?? "finished"), fontWeight: "600", fontSize: fs(12) }}>{unread}</Text>
       ) : null}
       {running > 0 ? <Text style={{ color: ledColor(theme, "running"), fontWeight: "600", fontSize: fs(12) }}>{running}</Text> : null}
       {children}
+      <HistoryButtons theme={theme} compact={compact} target={target} />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Recent Chats settings"
