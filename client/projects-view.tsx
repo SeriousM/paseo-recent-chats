@@ -156,9 +156,6 @@ export function ViewModeBar({
         </Pressable>
       ) : null}
       <View style={{ flex: 1 }} />
-      <Pressable accessibilityRole="button" accessibilityLabel="Recent Chats settings" onPress={openPluginSettings} style={toggle(false)}>
-        <Icon name="Settings" size={13} color={tone(false)} />
-      </Pressable>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={searchOpen ? "Close search" : "Search"}
@@ -167,6 +164,9 @@ export function ViewModeBar({
         style={toggle(searchOpen)}
       >
         <Icon name="Search" size={13} color={tone(searchOpen)} />
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Recent Chats settings" onPress={openPluginSettings} style={toggle(false)}>
+        <Icon name="Settings" size={13} color={tone(false)} />
       </Pressable>
       {extra}
     </View>
