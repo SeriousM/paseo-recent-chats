@@ -1,7 +1,7 @@
 // Recent Chats as the whole sidebar (Paseo 0.16 and later: Settings, Sidebar, Sidebar view). The same list
 // as the sidebar item, filling the space between Paseo's header and footer. Paseo says which chat is open
 // and opens chats by reference, so this view uses that instead of the pills and the go screen.
-import type { AgentRef, PluginSidebarViewProps } from "@getpaseo/plugin/client";
+import type { AgentRef, PluginSidebarViewProps, ProjectRef, WorkspaceRef } from "@getpaseo/plugin/client";
 // Only Paseo 0.16 has useAgents. A named import of it would stop the whole plugin from loading in an
 // older app; through the namespace it is just absent there, and this view is only registered on 0.16.
 import * as pluginClient from "@getpaseo/plugin/client";
@@ -12,6 +12,7 @@ import { reportOpenChat } from "./open-chat";
 import { HeaderControls, RecentPanel } from "./recent-panel";
 import { markSidebarViewShown } from "./sidebar-view-state";
 import type { OpenTarget } from "./use-recents";
+import { NavigationContext, type PaseoNavigation } from "./navigation";
 
 export const SIDEBAR_VIEW_ID = "recent-chats";
 
@@ -44,15 +45,34 @@ export function RecentSidebarView({
     }),
     [refs, navigation],
   );
+  // Workspaces and projects open through Paseo too, by their references (the ⋮ menus).
+  const workspaceRefs = pluginClient.useWorkspaces();
+  const projectRefs = pluginClient.useProjects();
+  const paseoNavigation = useMemo<PaseoNavigation>(() => {
+    const workspaces = new Map<string, WorkspaceRef>(workspaceRefs.map((ref) => [`${ref.hostId}:${ref.id}`, ref]));
+    const projects = new Map<string, ProjectRef>(projectRefs.map((ref) => [`${ref.hostId}:${ref.id}`, ref]));
+    return {
+      openWorkspace(hostId, workspaceId) {
+        const ref = workspaces.get(`${hostId}:${workspaceId}`);
+        if (ref) navigation.openWorkspace(ref);
+      },
+      newWorkspace(hostId, projectId) {
+        const ref = projects.get(`${hostId}:${projectId}`);
+        if (ref) navigation.openProject(ref);
+      },
+    };
+  }, [workspaceRefs, projectRefs, navigation]);
   return (
-    <View style={{ flex: 1, minHeight: 0 }}>
-      <RecentPanel
-        theme={theme}
-        compact={layout.compact}
-        target={target}
-        onShowAll={(q) => openScreen({ screenId: "recent", params: q ? { q } : {} })}
-        headerExtra={<HeaderControls theme={theme} compact={layout.compact} target={target} />}
-      />
-    </View>
+    <NavigationContext.Provider value={paseoNavigation}>
+      <View style={{ flex: 1, minHeight: 0 }}>
+        <RecentPanel
+          theme={theme}
+          compact={layout.compact}
+          target={target}
+          onShowAll={(q) => openScreen({ screenId: "recent", params: q ? { q } : {} })}
+          headerExtra={<HeaderControls theme={theme} compact={layout.compact} target={target} />}
+        />
+      </View>
+    </NavigationContext.Provider>
   );
 }

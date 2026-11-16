@@ -11,10 +11,12 @@ import type { StoreSnapshot } from "./store";
 import { hostGroupKey, sectionGroupKey, toggleCollapsed, useCollapsed } from "./collapsed";
 import { useOpenChat } from "./open-chat";
 import { RenameField } from "./rename-field";
-import { onDoubleClick } from "./web";
+import { onContextMenu } from "./web";
 import { useFontScale } from "./font-scale";
 import type { Section } from "../shared/sections";
 import { PROVIDER_ICONS } from "./provider-icons";
+import { copyText, MenuButton, MenuView, type MenuGroups } from "./row-menu";
+import { getStore } from "./runtime";
 
 /** Hover this long on a row before its full-names card shows. */
 const CARD_DELAY_MS = 450;
@@ -269,9 +271,16 @@ interface CardLayerApi {
   /** "card": under the row, nearly its width. "tip": a small label under the owner, its right edge aligned. */
   show(owner: View, card: ReactNode, place?: "card" | "tip"): void;
   hide(owner: View): void;
+  /** Opens a row's ⋮ menu under `anchor` (its button, or the row for a right-click or long press). */
+  openMenu(anchor: View, menu: { theme: PluginTheme; compact: boolean; title: string; groups: MenuGroups }): void;
 }
 
 const CardLayerContext = createContext<CardLayerApi | null>(null);
+
+/** Opens a row's menu, or null outside a CardLayer (no menus there, e.g. the settings previews). */
+export function useMenuOpener(): CardLayerApi["openMenu"] | null {
+  return useContext(CardLayerContext)?.openMenu ?? null;
+}
 
 /**
  * Draws the full-names card of a hovered row, and button tooltips, above everything in the list. React
@@ -282,6 +291,8 @@ export function CardLayer({ children }: { children: ReactNode }) {
   const container = useRef<View>(null);
   const containerWidth = useRef(0);
   const [card, setCard] = useState<{ owner: View; node: ReactNode; style: ViewStyle } | null>(null);
+  const [menu, setMenu] = useState<{ props: Parameters<CardLayerApi["openMenu"]>[1]; style: ViewStyle } | null>(null);
+  const closeMenu = useMemo(() => () => setMenu(null), []);
   const api = useMemo<CardLayerApi>(
     () => ({
       show(owner, node, place = "card") {
@@ -304,6 +315,17 @@ export function CardLayer({ children }: { children: ReactNode }) {
       hide(owner) {
         setCard((current) => (current?.owner === owner ? null : current));
       },
+      openMenu(anchor, props) {
+        setCard(null);
+        const root = container.current;
+        if (!root) return;
+        anchor.measureLayout(
+          root,
+          (x, y, width, height) =>
+            setMenu({ props, style: { top: y + height + 2, right: Math.max(4, containerWidth.current - x - width) } }),
+          () => setMenu({ props, style: { top: 0, right: 4 } }),
+        );
+      },
     }),
     [],
   );
@@ -319,6 +341,11 @@ export function CardLayer({ children }: { children: ReactNode }) {
         {card ? (
           <View pointerEvents="none" style={[{ position: "absolute", zIndex: 30 }, card.style]}>
             {card.node}
+          </View>
+        ) : null}
+        {menu ? (
+          <View style={[{ position: "absolute", zIndex: 40 }, menu.style]}>
+            <MenuView {...menu.props} onClose={closeMenu} />
           </View>
         ) : null}
       </View>
@@ -411,7 +438,7 @@ export interface RowViewProps {
   onMarkUnread(key: string): void;
   /** Pin or unpin the chat. */
   onSetPinned(key: string, pinned: boolean): void;
-  /** Present where chats can be renamed: long press (or double-click on the web) opens a title field. */
+  /** Present where chats can be renamed: Rename in the row's ⋮ menu opens a title field. */
   onRename?: (key: string, title: string) => Promise<void>;
 }
 
@@ -518,15 +545,57 @@ function ChatRow({
     layer.show(owner, <FullNamesCard row={row} theme={theme} showHost={showHost} transparency={cardTransparency} floating={false} />);
     return () => layer.hide(owner);
   }, [layer, cardShown, row, theme, showHost, cardTransparency]);
-  const startRename = onRename
-    ? () => {
+  // The ⋮ menu (button, right-click, long press) holds every action on the chat, Rename included.
+  const [hovered, setHovered] = useState(false);
+  const openMenuAt = useMenuOpener();
+  const menuButton = useRef<View>(null);
+  const openMenu = openMenuAt && !nested
+    ? (anchor: View | null) => {
+        cancelHover();
         setShowFull(false);
-        setEditing(true);
+        const at = anchor ?? rowNode.current;
+        if (!at) return;
+        const store = getStore();
+        openMenuAt(at, {
+          theme,
+          compact,
+          title,
+          groups: [
+            [
+              { label: "Open", icon: "ExternalLink", onPress: () => onOpen(row) },
+              onRename ? { label: "Rename", icon: "Pencil", onPress: () => setEditing(true) } : null,
+            ],
+            [
+              { label: row.pinned ? "Unpin" : "Pin", icon: row.pinned ? "PinOff" : "Pin", onPress: () => onSetPinned(row.key, !row.pinned) },
+              row.bucket === "unread"
+                ? { label: "Mark as read", icon: "Check", onPress: () => onMarkRead([row.key]) }
+                : { label: "Later (mark unread)", icon: "Clock", onPress: () => onMarkUnread(row.key) },
+            ],
+            [
+              {
+                label: "Reload session",
+                icon: "RotateCw",
+                hint: row.bucket === "running" ? "stops the turn" : undefined,
+                onPress: () => store.reloadChat(row.key),
+              },
+              copyText ? { label: "Copy title", icon: "Copy", onPress: () => copyText?.(title) } : null,
+            ],
+            [
+              {
+                label: "Archive chat",
+                icon: "Archive",
+                danger: true,
+                confirm: row.bucket === "running" ? "This chat is still running. Archiving it stops the agent." : undefined,
+                onPress: () => store.archiveChat(row.key),
+              },
+            ],
+          ],
+        });
       }
     : null;
-  const latestStart = useRef(startRename);
-  latestStart.current = startRename;
-  useEffect(() => onDoubleClick(rowNode.current, () => latestStart.current?.()), []);
+  const latestMenu = useRef(openMenu);
+  latestMenu.current = openMenu;
+  useEffect(() => onContextMenu(rowNode.current, () => latestMenu.current?.(null)), []);
   const renderToken = (token: RowToken): ReactElement | null => {
     if (token.id === "led") return <LedDot key="led" led={row.led} released={row.released} failed={row.failed} theme={theme} />;
     if (token.id === "host" && !showHost) return null;
@@ -631,7 +700,7 @@ function ChatRow({
       ref={rowNode}
       accessibilityRole="button"
       accessibilityLabel={`${row.hostLabel}, ${row.projectName}, ${row.workspaceName}, ${title}, ${state}`}
-      accessibilityHint={onRename ? "Long press to rename" : undefined}
+      accessibilityHint={openMenu ? "Long press for actions" : undefined}
       onPress={
         editing
           ? undefined
@@ -641,23 +710,18 @@ function ChatRow({
               onOpen(row);
             }
       }
-      onHoverIn={
-        fullNames && !editing
-          ? () => {
-              cancelHover();
-              hoverTimer.current = setTimeout(() => setShowFull(true), CARD_DELAY_MS);
-            }
-          : undefined
-      }
-      onHoverOut={
-        fullNames
-          ? () => {
-              cancelHover();
-              setShowFull(false);
-            }
-          : undefined
-      }
-      onLongPress={editing ? undefined : (startRename ?? (fullNames ? () => setShowFull((value) => !value) : undefined))}
+      onHoverIn={() => {
+        setHovered(true);
+        if (!fullNames || editing) return;
+        cancelHover();
+        hoverTimer.current = setTimeout(() => setShowFull(true), CARD_DELAY_MS);
+      }}
+      onHoverOut={() => {
+        setHovered(false);
+        cancelHover();
+        setShowFull(false);
+      }}
+      onLongPress={editing ? undefined : openMenu ? () => openMenu(null) : fullNames ? () => setShowFull((value) => !value) : undefined}
       style={[styles.row, cardShown && !layer ? { position: "relative", zIndex: 20 } : null]}
     >
       {editing && onRename ? (
@@ -715,6 +779,18 @@ function ChatRow({
       </Pressable>
         </>
       )}
+      {openMenu && !editing ? (
+        <MenuButton
+          theme={theme}
+          compact={compact}
+          shown={hovered}
+          label={title}
+          nodeRef={(node) => {
+            menuButton.current = node;
+          }}
+          onOpen={() => openMenu(menuButton.current)}
+        />
+      ) : null}
       {cardShown && !layer ? <FullNamesCard row={row} theme={theme} showHost={showHost} transparency={cardTransparency} /> : null}
     </Pressable>
   );
@@ -923,7 +999,7 @@ export interface TriageListProps {
   onMarkUnread(key: string): void;
   /** Pin or unpin a chat. */
   onSetPinned(key: string, pinned: boolean): void;
-  /** Sets a chat's title (long press or double-click on a row). */
+  /** Sets a chat's title (Rename in the row's ⋮ menu). */
   onRename(key: string, title: string): Promise<void>;
   /** The caller shows the host filter itself (the sidebar puts it above its search box). */
   hideHostFilter?: boolean;

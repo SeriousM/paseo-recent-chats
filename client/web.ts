@@ -92,13 +92,14 @@ interface DomPointerEvent {
   clientY: number;
   pointerType: string;
   button: number;
+  target: unknown;
   preventDefault(): void;
   stopPropagation(): void;
 }
 
 interface DomTarget {
-  addEventListener(type: string, listener: (event: DomPointerEvent) => void): void;
-  removeEventListener(type: string, listener: (event: DomPointerEvent) => void): void;
+  addEventListener(type: string, listener: (event: DomPointerEvent) => void, capture?: boolean): void;
+  removeEventListener(type: string, listener: (event: DomPointerEvent) => void, capture?: boolean): void;
 }
 
 declare const window: DomTarget;
@@ -202,15 +203,44 @@ export function watchShown(node: unknown, onChange: (shown: boolean) => void): (
   return () => observer.disconnect();
 }
 
-/** Calls `handler` on a double-click of a web element. Returns a cleanup; a no-op off the web. */
-export function onDoubleClick(node: unknown, handler: () => void): () => void {
+/** Calls `handler` on a right-click of a web element instead of the browser's own menu. Returns a cleanup; a no-op off the web. */
+export function onContextMenu(node: unknown, handler: () => void): () => void {
   if (Platform.OS !== "web" || !isDomTarget(node)) return () => {};
   const listener = (event: DomPointerEvent) => {
     event.preventDefault();
+    event.stopPropagation();
     handler();
   };
-  node.addEventListener("dblclick", listener);
-  return () => node.removeEventListener("dblclick", listener);
+  node.addEventListener("contextmenu", listener);
+  return () => node.removeEventListener("contextmenu", listener);
+}
+
+interface DomContains {
+  contains(other: unknown): boolean;
+}
+
+/**
+ * Calls `handler` once a pointer goes down outside `node`, or Escape is pressed: how a menu closes.
+ * Returns a cleanup; a no-op off the web.
+ */
+export function onDismiss(node: unknown, handler: () => void): () => void {
+  if (Platform.OS !== "web" || typeof node !== "object" || node === null || !("contains" in node)) return () => {};
+  const inside = node as DomContains;
+  const down = (event: DomPointerEvent) => {
+    if (!inside.contains(event.target)) handler();
+  };
+  const key = (event: DomKeyEvent) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    handler();
+  };
+  window.addEventListener("pointerdown", down, true);
+  document.addEventListener("keydown", key, true);
+  return () => {
+    window.removeEventListener("pointerdown", down, true);
+    document.removeEventListener("keydown", key, true);
+  };
 }
 
 interface DomKeyEvent {

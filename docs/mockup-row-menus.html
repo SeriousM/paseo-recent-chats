@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recent Chats: actions menus in the sidebar view (mockup)</title>
+<style>
+  :root { --bg:#16181d; --s1:#1c1f25; --s2:#252931; --fg:#e6e8eb; --muted:#8b929c; --faint:#5f6670; --border:#2c313a; --accent:#4f8cff;
+          --asking:#db932e; --running:#5caaf6; --ready:#35c264; --danger:#f7796d; --host:#a890d5; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px; background:#0f1115; color:var(--fg); font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:15px; margin:26px 0 6px; }
+  .lede { color:var(--muted); max-width:85ch; margin:0 0 14px; }
+  .stage { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  .side { width:360px; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:6px 4px 10px; position:relative; }
+  .bar { display:flex; align-items:center; gap:6px; padding:4px 8px 8px; color:var(--muted); font-size:12px; }
+  .seg { display:flex; border:1px solid var(--border); border-radius:8px; padding:2px; background:var(--s1); }
+  .seg span { padding:2px 9px; border-radius:6px; } .seg .on { background:var(--s2); color:var(--fg); }
+  .r { position:relative; display:flex; align-items:center; gap:6px; padding:3px 6px 3px 8px; min-height:26px; border-radius:7px; }
+  .r:hover, .r.hover { background:var(--s1); }
+  .project { font-size:12px; font-weight:600; letter-spacing:.6px; text-transform:uppercase; margin-top:6px; }
+  .ws { padding-left:22px; font-size:13px; } .chat { padding-left:40px; font-size:13px; }
+  .t { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ic { color:var(--muted); width:14px; text-align:center; flex:none; font-size:12px; }
+  .tag { font-size:10.5px; color:var(--muted); background:var(--s2); border-radius:5px; padding:1px 6px; }
+  .q { color:var(--asking); font-weight:800; } .tick { color:var(--ready); } .ring { color:var(--running); }
+  .kebab { width:20px; height:20px; display:grid; place-items:center; border-radius:5px; color:var(--muted); opacity:0; font-weight:700; letter-spacing:-1px; }
+  .r:hover .kebab, .r.hover .kebab, .touch .kebab { opacity:1; }
+  .kebab.open { opacity:1; background:var(--s2); color:var(--fg); }
+  .menu { text-transform:none; letter-spacing:normal; font-weight:400; position:absolute; right:6px; top:28px; z-index:5; width:236px; background:var(--s2); border:1px solid var(--border); border-radius:10px; padding:4px; box-shadow:0 8px 28px #0008; }
+  .mi { display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:6px; font-size:13px; }
+  .mi:hover { background:#30343e; } .mi .k { width:16px; text-align:center; color:var(--muted); }
+  .mi.danger { color:var(--danger); } .mi.danger .k { color:var(--danger); }
+  .mi .hint { margin-left:auto; font-size:11px; color:var(--faint); }
+  .sep { height:1px; background:var(--border); margin:4px 2px; }
+  .label { font-size:10.5px; letter-spacing:.6px; text-transform:uppercase; color:var(--faint); padding:6px 8px 2px; }
+  .caption { color:var(--muted); font-size:12px; margin:6px 2px 0; max-width:360px; }
+  table { border-collapse:collapse; font-size:13px; margin-top:6px; }
+  th,td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .yes { color:var(--ready); } .plug { color:var(--accent); } .no { color:var(--faint); }
+</style>
+</head>
+<body>
+<h1>A ⋮ menu on every project, workspace and chat</h1>
+<p class="lede">In the 0.16 sidebar view Recent Chats replaces Paseo's own list, so the actions of Paseo's row menus should be there too. Each row gets a vertical three-dot button at its right end: shown while the pointer is on the row (always shown on touch screens), and right-click or long press opens the same menu. The pin button stays where it is; the menu holds everything else.</p>
+
+<div class="stage">
+  <div>
+    <div class="side">
+      <div class="bar"><div class="seg"><span class="on">Projects</span><span>Triage</span></div><span style="flex:1"></span>🔍 ⚙</div>
+      <div class="r project hover"><span class="ic">▾</span><span class="ic">▢</span><span class="t">ajour-manager</span><span class="kebab open">⋮</span>
+        <div class="menu">
+          <div class="mi"><span class="k">＋</span>New workspace</div>
+          <div class="mi"><span class="k">↗</span>Open project</div>
+          <div class="sep"></div>
+          <div class="mi"><span class="k">📌</span>Pin project</div>
+          <div class="mi"><span class="k">✓</span>Mark all chats read</div>
+          <div class="mi"><span class="k">⇅</span>Collapse its workspaces</div>
+          <div class="sep"></div>
+          <div class="mi"><span class="k">⧉</span>Copy project name</div>
+        </div>
+      </div>
+      <div class="r ws"><span class="ic">▾</span><span class="ic">⋮⋮</span><span class="t">encryption</span><span class="tag">checkout</span><span class="kebab">⋮</span></div>
+      <div class="r chat"><span class="ic ring">◔</span><span class="t">sqlite encryption</span><span class="kebab">⋮</span></div>
+      <div style="height:190px"></div>
+    </div>
+    <p class="caption"><b>Project menu.</b> Paseo's own project menu has project settings, open in a new window, open in the file manager and remove project; plugins cannot do those.</p>
+  </div>
+
+  <div>
+    <div class="side">
+      <div class="bar"><div class="seg"><span class="on">Projects</span><span>Triage</span></div><span style="flex:1"></span>🔍 ⚙</div>
+      <div class="r project"><span class="ic">▾</span><span class="ic">▢</span><span class="t">ajour-manager</span><span class="kebab">⋮</span></div>
+      <div class="r ws hover"><span class="ic">▾</span><span class="ic">⋮⋮</span><span class="t">encryption</span><span class="tag">checkout</span><span class="kebab open">⋮</span>
+        <div class="menu">
+          <div class="mi"><span class="k">＋</span>New chat here</div>
+          <div class="mi"><span class="k">↗</span>Open workspace</div>
+          <div class="sep"></div>
+          <div class="mi"><span class="k">✎</span>Rename</div>
+          <div class="mi"><span class="k">📌</span>Pin workspace</div>
+          <div class="mi"><span class="k">✓</span>Mark as read</div>
+          <div class="mi"><span class="k">◷</span>Mark as unread</div>
+          <div class="mi"><span class="k">🏷</span>Labels…<span class="hint">›</span></div>
+          <div class="sep"></div>
+          <div class="mi"><span class="k">⧉</span>Copy path</div>
+          <div class="mi"><span class="k">⧉</span>Copy branch name</div>
+          <div class="sep"></div>
+          <div class="mi danger"><span class="k">🗄</span>Archive workspace</div>
+        </div>
+      </div>
+      <div class="r chat"><span class="ic ring">◔</span><span class="t">sqlite encryption</span><span class="kebab">⋮</span></div>
+      <div style="height:300px"></div>
+    </div>
+    <p class="caption"><b>Workspace menu.</b> The same items as Paseo's own workspace menu, without "Open in file manager". Archive asks first when a chat in it is still running.</p>
+  </div>
+
+  <div>
+    <div class="side touch">
+      <div class="bar"><div class="seg"><span>Projects</span><span class="on">Triage</span></div><span style="flex:1"></span>🔍 ⚙</div>
+      <div class="label">Needs you</div>
+      <div class="r chat" style="padding-left:20px"><span class="ic q">?</span><span class="t">Asks to run the test suite</span><span class="kebab">⋮</span></div>
+      <div class="r chat hover" style="padding-left:20px"><span class="ic tick">✓</span><span class="t">Settings screen regrouped</span><span class="kebab open">⋮</span>
+        <div class="menu">
+          <div class="mi"><span class="k">↗</span>Open</div>
+          <div class="mi"><span class="k">✎</span>Rename</div>
+          <div class="mi"><span class="k">📌</span>Pin</div>
+          <div class="mi"><span class="k">✓</span>Mark as read</div>
+          <div class="mi"><span class="k">◷</span>Later (mark unread)</div>
+          <div class="sep"></div>
+          <div class="mi"><span class="k">↻</span>Reload session<span class="hint">stops a turn</span></div>
+          <div class="mi"><span class="k">⧉</span>Copy title</div>
+          <div class="sep"></div>
+          <div class="mi danger"><span class="k">🗄</span>Archive chat</div>
+        </div>
+      </div>
+      <div class="label">Running</div>
+      <div class="r chat" style="padding-left:20px"><span class="ic ring">◔</span><span class="t">Refactor the host observer</span><span class="kebab">⋮</span></div>
+      <div style="height:200px"></div>
+    </div>
+    <p class="caption"><b>Chat menu</b>, on a touch screen (the ⋮ is always shown there). It gathers what is now spread over the row's small buttons, long press and double-click; those stay as shortcuts.</p>
+  </div>
+</div>
+
+<h2>What can be built</h2>
+<table>
+  <tr><th>Item</th><th>Where</th><th>Possible?</th></tr>
+  <tr><td>New workspace</td><td>project</td><td class="yes">yes, Paseo's own flow (project handle)</td></tr>
+  <tr><td>New chat here, open workspace / project</td><td>workspace, project</td><td class="yes">yes, Paseo navigation</td></tr>
+  <tr><td>Rename</td><td>workspace, chat</td><td class="yes">yes (already there by long press)</td></tr>
+  <tr><td>Pin</td><td>all three</td><td class="plug">yes, the plugin's own pins (Paseo's workspace pin stays separate)</td></tr>
+  <tr><td>Mark read / unread, Later</td><td>workspace, chat, project</td><td class="plug">yes, the plugin's read marks</td></tr>
+  <tr><td>Labels</td><td>workspace</td><td class="yes">yes (workspace labels)</td></tr>
+  <tr><td>Copy path, branch, title</td><td>workspace, chat</td><td class="yes">yes</td></tr>
+  <tr><td>Archive</td><td>workspace, chat</td><td class="yes">yes</td></tr>
+  <tr><td>Reload session</td><td>chat</td><td class="yes">yes</td></tr>
+  <tr><td>Open in file manager, open in new window, project settings, remove project</td><td>project, workspace</td><td class="no">no: not offered to plugins</td></tr>
+  <tr><td>Fork chat</td><td>chat</td><td class="no">no: not offered to plugins</td></tr>
+</table>
+</body>
+</html>

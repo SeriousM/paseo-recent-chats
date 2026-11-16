@@ -105,6 +105,7 @@ const workspace = (hostId: string, id: string, projectName: string, title: strin
   kind,
   branch,
   diff,
+  path: `~/src/${id}`,
 });
 
 /** Workspace details for the Projects preview, by `${hostId}:${workspaceId}`. */

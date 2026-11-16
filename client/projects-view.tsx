@@ -28,14 +28,54 @@ import { columnChars, visibleLines } from "./row-layout";
 import type { StoreSnapshot, WorkspaceInfo } from "./store";
 import { LED_RANK, type Led, type TriageRow } from "./triage";
 import { hostColors } from "./format";
-import { CardLayer, HostHeading, isDark, ledColor, TipButton, TriageRowView, type RowViewProps } from "./triage-list";
+import { CardLayer, HostHeading, isDark, ledColor, TipButton, TriageRowView, useMenuOpener, type RowViewProps } from "./triage-list";
 import { scoreRow } from "./fuzzy";
 import { filterTree } from "./tree-search";
 import { getStore, openPluginSettings } from "./runtime";
-import { flip, resolvedView, toggleNode, updateViewMode, useViewMode } from "./view-mode";
-import { attachVerticalDrag, onDoubleClick } from "./web";
+import { currentViewMode, flip, resolvedView, toggleNode, updateViewMode, useViewMode } from "./view-mode";
+import { attachVerticalDrag, onContextMenu } from "./web";
+import { copyText, MenuButton, type MenuGroups } from "./row-menu";
+import { usePaseoNavigation } from "./navigation";
 import { RenameField } from "./rename-field";
 import { useFontScale } from "./font-scale";
+
+/**
+ * A tree row's ⋮ menu: the button (while the pointer is on the row; always on touch screens), right-click
+ * on the row and long press. `build` makes the items when the menu opens, so they show the current state.
+ * Without a CardLayer around (settings preview) there is no menu.
+ */
+function useRowMenu(theme: PluginTheme, compact: boolean, title: string, build: () => MenuGroups) {
+  const open = useMenuOpener();
+  const [hovered, setHovered] = useState(false);
+  const row = useRef<View>(null);
+  const button = useRef<View | null>(null);
+  const latest = useRef(build);
+  latest.current = build;
+  const show = (anchor: View | null) => {
+    const at = anchor ?? row.current;
+    if (open && at) open(at, { theme, compact, title, groups: latest.current() });
+  };
+  const showRef = useRef(show);
+  showRef.current = show;
+  useEffect(() => onContextMenu(row.current, () => showRef.current(null)), []);
+  return {
+    row,
+    hover: { onHoverIn: () => setHovered(true), onHoverOut: () => setHovered(false) },
+    longPress: open ? () => show(null) : undefined,
+    button: open ? (
+      <MenuButton
+        theme={theme}
+        compact={compact}
+        shown={hovered}
+        label={title}
+        nodeRef={(node) => {
+          button.current = node;
+        }}
+        onOpen={() => show(button.current)}
+      />
+    ) : null,
+  };
+}
 
 /** Pins or unpins a project (`project:` key) or workspace (`workspace:` key) on every device. */
 function togglePin(key: string): void {
@@ -310,6 +350,7 @@ export function ProjectsView({
       toggled={toggled}
       hostTag={flat && show.hostTag ? hostOfProject(project, snapshot) : undefined}
       drag={drag}
+      projectId={project.workspaces.map((workspace) => workspaceInfo.get(workspace.key)?.projectId).find(Boolean)}
     >
       {inPinned ? (
         project.workspaces.map((workspace) => renderWorkspace(workspace, prefix, inPinned))
@@ -530,6 +571,7 @@ export function ProjectsPreview({
             ? { label: PREVIEW_HOSTS.find((host) => host.id === hostId)?.label ?? hostId, colorName: PREVIEW_HOST_COLORS[hostId] }
             : undefined
         }
+        projectId={undefined}
         drag={undefined}
       >
         {project.workspaces.map((workspace) => (
@@ -750,6 +792,7 @@ function ProjectNode({
   toggled,
   hostTag,
   drag,
+  projectId,
   children,
 }: {
   project: TreeProject;
@@ -762,10 +805,37 @@ function ProjectNode({
   hostTag: { label: string; colorName: string | undefined } | undefined;
   /** Present where projects can be reordered: the folder icon is the drag handle. */
   drag: ItemDrag | undefined;
+  /** Paseo's id of the project, when one of its workspaces is known; needed for "New workspace". */
+  projectId: string | undefined;
   children: ReactNode;
 }) {
   const key = `${prefix}project:${project.key}`;
   const folded = toggled.has(key);
+  const nav = usePaseoNavigation();
+  const menu = useRowMenu(theme, compact, project.name, () => {
+    const store = getStore();
+    const chats = project.workspaces.flatMap((workspace) => [...workspace.chats, ...workspace.older]);
+    const hostId = project.key.slice(0, project.key.indexOf(":"));
+    return [
+      [nav && projectId ? { label: "New workspace", icon: "Plus", onPress: () => nav.newWorkspace(hostId, projectId) } : null],
+      [
+        { label: pinned ? "Unpin project" : "Pin project", icon: pinned ? "PinOff" : "Pin", onPress: () => togglePin(`project:${project.key}`) },
+        chats.some((row) => row.bucket === "unread")
+          ? { label: "Mark all chats read", icon: "CheckCheck", onPress: () => store.markRead(chats.filter((row) => row.bucket === "unread").map((row) => row.key)) }
+          : null,
+        {
+          label: "Collapse its workspaces",
+          icon: "ChevronsDownUp",
+          onPress: () => {
+            const toggledNow = currentViewMode().toggled;
+            const add = project.workspaces.map((workspace) => `${prefix}workspace:${workspace.key}`).filter((k) => !toggledNow.includes(k));
+            updateViewMode({ toggled: [...toggledNow, ...add] });
+          },
+        },
+      ],
+      [copyText ? { label: "Copy project name", icon: "Copy", onPress: () => copyText?.(project.name) } : null],
+    ];
+  });
   const fs = useFontScale();
   // Like a workspace: full colour while something happens in one of its workspaces, grey otherwise.
   const busy = project.workspaces.some((workspace) => workspace.led !== "idle");
@@ -778,7 +848,7 @@ function ProjectNode({
   const folder = <Icon name="Folder" size={13} color={theme.colors.foregroundMuted} />;
   return (
     <View style={{ marginTop: 4 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6, paddingVertical: compact ? 5 : 0 }}>
+      <Pressable ref={menu.row} {...menu.hover} style={{ flexDirection: "row", alignItems: "center", paddingRight: 6, paddingVertical: compact ? 5 : 0 }}>
         <Pressable
           {...fold}
           hitSlop={4}
@@ -795,6 +865,7 @@ function ProjectNode({
         )}
         <Pressable
           {...fold}
+          onLongPress={menu.longPress}
           style={({ pressed }) => ({ flex: 1, paddingLeft: 6, paddingRight: 10, paddingVertical: compact ? 3 : 3, opacity: pressed ? 0.6 : 1 })}
         >
           <Text
@@ -812,7 +883,8 @@ function ProjectNode({
         </Pressable>
         {hostTag ? <HostPill theme={theme} label={hostTag.label} colorName={hostTag.colorName} /> : null}
         <PinButton theme={theme} compact={compact} pinned={pinned} label={`project ${project.name}`} onPress={() => togglePin(`project:${project.key}`)} />
-      </View>
+        {menu.button}
+      </Pressable>
       {folded ? null : <View style={{ paddingLeft: 12 }}>{children}</View>}
     </View>
   );
@@ -1094,18 +1166,53 @@ function WorkspaceNode({
   const branch = show.branch && (show.mainBranch || !MAIN_BRANCHES[workspace.branch]) ? workspace.branch : "";
   const name = info?.title ?? workspace.name;
   const foldKey = `${prefix}workspace:${workspace.key}`;
-  // Long press (or a double-click on the web) renames the workspace on its host, as with chats.
   const [editing, setEditing] = useState(false);
-  const nameNode = useRef<View>(null);
   const workspaceId = workspace.workspaceId;
-  const startRename = workspaceId ? () => setEditing(true) : null;
-  const latestStart = useRef(startRename);
-  latestStart.current = startRename;
-  useEffect(() => onDoubleClick(nameNode.current, () => latestStart.current?.()), [editing]);
+  const nav = usePaseoNavigation();
+  const all = [...workspace.chats, ...workspace.older];
+  const menu = useRowMenu(theme, compact, name, () => {
+    const store = getStore();
+    const newest = [...all].sort((a, b) => b.sortAt - a.sortAt)[0];
+    const running = all.some((row) => row.bucket === "running");
+    return [
+      [nav && workspaceId ? { label: "Open workspace", icon: "ExternalLink", onPress: () => nav.openWorkspace(workspace.hostId, workspaceId) } : null],
+      [
+        workspaceId ? { label: "Rename", icon: "Pencil", onPress: () => setEditing(true) } : null,
+        workspaceId
+          ? { label: pinned ? "Unpin workspace" : "Pin workspace", icon: pinned ? "PinOff" : "Pin", onPress: () => togglePin(`workspace:${workspace.key}`) }
+          : null,
+        all.some((row) => row.bucket === "unread")
+          ? { label: "Mark as read", icon: "Check", onPress: () => store.markRead(all.filter((row) => row.bucket === "unread").map((row) => row.key)) }
+          : null,
+        newest && newest.bucket !== "unread" ? { label: "Mark as unread", icon: "Clock", onPress: () => store.markUnread(newest.key) } : null,
+      ],
+      [
+        copyText && info?.path ? { label: "Copy path", icon: "Copy", onPress: () => copyText?.(info.path) } : null,
+        copyText && workspace.branch ? { label: "Copy branch name", icon: "Copy", onPress: () => copyText?.(workspace.branch) } : null,
+      ],
+      [
+        workspaceId
+          ? {
+              label: "Archive workspace",
+              icon: "Archive",
+              danger: true,
+              confirm: running
+                ? "A chat in this workspace is still running. Archiving the workspace stops it."
+                : "Archive this workspace and everything in it?",
+              onPress: () => store.archiveWorkspace(workspace.hostId, workspaceId),
+            }
+          : null,
+      ],
+    ];
+  });
   const grip = <Icon name="GripVertical" size={12} color={theme.colors.foregroundMuted} />;
   return (
     <View style={{ marginBottom: 2 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6, minHeight: compact ? 40 : 26 }}>
+      <Pressable
+        ref={menu.row}
+        {...menu.hover}
+        style={{ flexDirection: "row", alignItems: "center", paddingRight: 6, minHeight: compact ? 40 : 26 }}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${folded ? "Show" : "Hide"} ${name}`}
@@ -1135,13 +1242,11 @@ function WorkspaceNode({
           </View>
         ) : (
         <Pressable
-          ref={nameNode}
           accessibilityRole="button"
           accessibilityLabel={`${folded ? "Show" : "Hide"} ${name}`}
-          accessibilityHint={startRename ? "Long press to rename" : undefined}
           accessibilityState={{ expanded: !folded }}
           onPress={() => toggleNode(foldKey)}
-          onLongPress={startRename ?? undefined}
+          onLongPress={menu.longPress}
           style={({ pressed }) => ({
             flex: 1,
             flexDirection: "row",
@@ -1173,7 +1278,7 @@ function WorkspaceNode({
           ) : null}
         </Pressable>
         )}
-        {workspace.workspaceId ? (
+        {workspaceId ? (
           <PinButton
             theme={theme}
             compact={compact}
@@ -1182,7 +1287,8 @@ function WorkspaceNode({
             onPress={() => togglePin(`workspace:${workspace.key}`)}
           />
         ) : null}
-      </View>
+        {editing ? null : menu.button}
+      </Pressable>
       {folded ? null : (
         <View style={{ paddingLeft: 12 }}>
           {branch ? (

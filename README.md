@@ -25,7 +25,7 @@ The settings screen, where every row item can be shown, reordered, split over li
 - Pin a project, a workspace or a chat. The Pinned section shows each pinned item with its parents and
   everything below it; pinned items also stay in place. Pins are synced to every device.
 - Drag a project by its folder icon, or a workspace by its grip, to reorder the Projects view (long press
-  first on touch screens); the order is synced to every device. Long press or double-click a workspace name to rename it (on its host).
+  first on touch screens); the order is synced to every device.
   Icons above the tree and in the Pinned heading fold everything, open everything, or open only what is active.
   What the tree shows per workspace and chat (branch, also main/master, checkout or worktree, line
   changes, host tag, age, agent) is a setting.
@@ -40,7 +40,11 @@ The settings screen, where every row item can be shown, reordered, split over li
 - Pinned chats stay at the top in their own section, whatever their state.
 - A chevron on the Pinned, Running and Inactive headings, and on each host heading when grouped by host, folds that group away until you unfold it or restart the app.
 - The chat open on screen is highlighted in every list. Plugins are not told which chat is open, so this works while the Inbox or Later pill is shown in its composer.
-- Rename a chat in place: long press its row, or double-click it on desktop and web. The new title is saved on the chat's host through its `paseo agent update`, so that host needs a current Recent Chats.
+- A ⋮ menu on every project, workspace and chat (shown while the pointer is on the row, always on touch
+  screens; right-click or long press open it too): open, new workspace, rename, pin, mark read or unread,
+  reload a chat's session, copy path, branch, name or title, archive. Renames are saved on the item's host,
+  so that host needs a current Recent Chats. Opening workspaces and starting a new workspace need the
+  Paseo 0.16 sidebar view.
 - Opening a waiting chat leaves it in Needs you with a grey light until another chat is open or its state changes, so the list does not jump under the pointer.
 - Status symbols in Paseo's own colours: Paseo's turning blue ring while a chat runs, a pulsing amber "?" while it asks you (a question or permission request, also while it runs), a green tick when done and unseen (bold while the agent is in memory, thin once Paseo has released it), a red warning triangle when failed (filled, or outlined once released); inactive chats show how they last ended, in grey.
 - **Inbox pill** in every chat's composer with live counts and the same list as a popup.

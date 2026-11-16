@@ -36,6 +36,8 @@ export interface WorkspaceInfo {
   kind: "directory" | "worktree" | "checkout" | "local_checkout";
   branch: string;
   diff: { additions: number; deletions: number } | null;
+  /** Folder of the workspace on its host. */
+  path: string;
 }
 
 export interface HostChip {
@@ -85,6 +87,12 @@ export interface RecentsStore {
   renameChat(key: string, title: string): Promise<void>;
   /** Sets a workspace's title, through the plugin copy of the workspace's host. Rejects with a readable reason. */
   renameWorkspace(hostId: string, workspaceId: string, title: string): Promise<void>;
+  /** Archives a chat on its host (a running one is stopped). */
+  archiveChat(key: string): Promise<void>;
+  /** Archives a workspace and everything in it on its host. */
+  archiveWorkspace(hostId: string, workspaceId: string): Promise<void>;
+  /** Reopens a chat's session on its host (a running turn is interrupted). */
+  reloadChat(key: string): Promise<void>;
   /** Asks every reachable host's copy to check for a plugin update now. One entry per host. */
   checkForUpdates(): Promise<UpdateCheck[]>;
   /** Stops observation and drops every listener. Called when the plugin unloads. */
@@ -180,6 +188,12 @@ const asksYou = (agent: PaseoAgent): boolean =>
 export function createStore({ rpc, resolveSelf, directory = createPeerDirectory() }: StoreOptions): RecentsStore {
   const listeners = new Set<() => void>();
   const observers = new Map<string, { api: PaseoApi; observer: HostObserver }>();
+  /** The Paseo API of a connected host, for actions on its chats and workspaces. */
+  const hostApi = (hostId: string): PaseoApi => {
+    const api = observers.get(hostId)?.api;
+    if (!api) throw new Error("That host is not connected.");
+    return api;
+  };
   const hostData = new Map<string, HostData>();
   const hostErrors = new Map<string, string>();
   /** Passed with this store's change notices, so it does not re-read what it just wrote. */
@@ -269,6 +283,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
           kind: workspace.workspaceKind,
           branch: workspace.gitRuntime?.currentBranch ?? "",
           diff: workspace.diffStat ?? null,
+          path: workspace.workspaceDirectory ?? workspace.projectRootPath ?? "",
         });
       }
     }
@@ -777,6 +792,15 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
       const peer = directory.get(hostId);
       if (!peer) throw new Error("That workspace's host does not run a current Recent Chats.");
       await peer.rpc(renameWorkspace, { workspaceId, title });
+    },
+    async archiveChat(key) {
+      await hostApi(keyHost(key)).agents.ref(key.slice(key.indexOf(":") + 1)).archive();
+    },
+    async archiveWorkspace(hostId, workspaceId) {
+      await hostApi(hostId).workspaces.ref(workspaceId).archive();
+    },
+    async reloadChat(key) {
+      await hostApi(keyHost(key)).agents.ref(key.slice(key.indexOf(":") + 1)).reload();
     },
     async checkForUpdates() {
       const label = (hostId: string) => hosts.find((host) => host.serverId === hostId)?.label ?? hostId;
