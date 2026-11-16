@@ -971,17 +971,6 @@ function ProjectNode({
         {pinned ? (
           <PinButton theme={theme} compact={compact} pinned label={`project ${project.name}`} onPress={() => togglePin(`project:${project.key}`)} />
         ) : null}
-        {nav && projectId ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`New workspace in ${project.name}`}
-            onPress={() => nav.newWorkspace(project.key.slice(0, project.key.indexOf(":")), projectId)}
-            hitSlop={6}
-            style={({ pressed }) => ({ width: compact ? 32 : 20, height: compact ? 32 : 20, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.6 : 1 })}
-          >
-            <Icon name="Plus" size={13} color={theme.colors.foregroundMuted} />
-          </Pressable>
-        ) : null}
         {menu.button}
       </Pressable>
       {folded ? null : <View style={{ paddingLeft: 12 }}>{children}</View>}

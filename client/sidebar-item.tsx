@@ -5,7 +5,8 @@ import { PanResponder, Platform, Text, useWindowDimensions, View, type ViewStyle
 import { useFontScale } from "./font-scale";
 import { HeaderControls, RecentPanel } from "./recent-panel";
 import { useSidebarViewShown } from "./sidebar-view-state";
-import { useRecents } from "./use-recents";
+import { GO_SCREEN_ID, useRecents } from "./use-recents";
+import { NavigationContext, type PaseoNavigation } from "./navigation";
 import { attachVerticalDrag } from "./web";
 
 export const RECENT_SCREEN_ID = "recent";
@@ -78,6 +79,19 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   );
   const gripNode = useRef<View>(null);
   useEffect(() => attachVerticalDrag(gripNode.current, drag), [drag, expanded, viewShown]);
+  // The ⋮ menus open and start workspaces: this item has no navigation, so it goes through the go screen,
+  // and a new workspace is created here (a worktree off the default branch) before it is opened.
+  const navigation = useMemo<PaseoNavigation>(() => {
+    const openWorkspace = (hostId: string, workspaceId: string) =>
+      openScreen({ screenId: GO_SCREEN_ID, params: { workspaceId, serverId: hostId } });
+    return {
+      openWorkspace,
+      async newWorkspace(hostId, projectId) {
+        const workspaceId = await store.newWorktree(hostId, projectId);
+        if (workspaceId) openWorkspace(hostId, workspaceId);
+      },
+    };
+  }, [openScreen, store]);
 
   if (viewShown) return null;
   const target = { openScreen };
@@ -96,13 +110,15 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
       />
       {expanded ? (
         <View>
-          <RecentPanel
-            theme={theme}
-            compact={layout.compact}
-            target={target}
-            listHeight={listHeight}
-            onShowAll={(q) => openScreen({ screenId: RECENT_SCREEN_ID, params: q ? { q } : {} })}
-          />
+          <NavigationContext.Provider value={navigation}>
+            <RecentPanel
+              theme={theme}
+              compact={layout.compact}
+              target={target}
+              listHeight={listHeight}
+              onShowAll={(q) => openScreen({ screenId: RECENT_SCREEN_ID, params: q ? { q } : {} })}
+            />
+          </NavigationContext.Provider>
           <View
             ref={gripNode}
             {...grip.panHandlers}

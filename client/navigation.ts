@@ -1,11 +1,12 @@
-// Paseo's own navigation for workspaces and projects. Only the 0.16 sidebar view is handed it; the menus
-// leave out what it offers wherever it is missing (the sidebar item, pills, older apps).
+// Opening workspaces and starting new ones from the ⋮ menus. The 0.16 sidebar view uses Paseo's own
+// navigation; the sidebar item creates the workspace itself and opens it through the go screen.
+// Where no provider is set (pills, older apps) the menus leave these items out.
 import { createContext, useContext } from "react";
 
 export interface PaseoNavigation {
   openWorkspace(hostId: string, workspaceId: string): void;
-  /** Starts Paseo's new-workspace flow for a project. */
-  newWorkspace(hostId: string, projectId: string): void;
+  /** Starts a new workspace in a project; a rejection is shown as a toast by the menu. */
+  newWorkspace(hostId: string, projectId: string): void | Promise<void>;
 }
 
 export const NavigationContext = createContext<PaseoNavigation | null>(null);

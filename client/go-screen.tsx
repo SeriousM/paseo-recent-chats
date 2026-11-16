@@ -4,25 +4,31 @@ import { useEffect, useRef } from "react";
 import { Text, View } from "react-native";
 
 /**
- * Sidebar rows, pill popups and Command Center callbacks cannot navigate to a chat; only screens
- * and panels get `navigation`. They open this screen, which forwards to the chat.
+ * Sidebar rows, pill popups and Command Center callbacks cannot navigate to a chat or a workspace; only
+ * screens and panels get `navigation`. They open this screen with `agentId` or `workspaceId`, and it forwards.
  */
 export function GoScreen({ theme, navigation, params }: PluginScreenProps) {
-  const { agentId, serverId } = params;
+  const { agentId, workspaceId, serverId } = params;
   const openAgent = navigation?.openAgent;
+  const openWorkspace = navigation?.openWorkspace;
+  const open = agentId && openAgent
+    ? () => openAgent(serverId ? { agentId, serverId } : { agentId })
+    : workspaceId && openWorkspace
+      ? () => openWorkspace(serverId ? { workspaceId, serverId } : { workspaceId })
+      : null;
   // `navigation` may be a new object on every render; open each target once.
   const opened = useRef<string | null>(null);
   useEffect(() => {
-    const target = `${serverId ?? ""}/${agentId ?? ""}`;
-    if (!openAgent || !agentId || opened.current === target) return;
+    const target = `${serverId ?? ""}/${agentId ?? ""}/${workspaceId ?? ""}`;
+    if (!open || opened.current === target) return;
     opened.current = target;
-    openAgent(serverId ? { agentId, serverId } : { agentId });
-  }, [openAgent, agentId, serverId]);
-  if (openAgent && agentId) return <Loading />;
+    open();
+  }, [open, agentId, workspaceId, serverId]);
+  if (open) return <Loading />;
   return (
     <View style={{ flex: 1, padding: 24, backgroundColor: theme.colors.surface0 }}>
       <Text style={{ color: theme.colors.foreground }}>
-        This version of Paseo cannot open a chat from a plugin.
+        This version of Paseo cannot open a chat or a workspace from a plugin.
       </Text>
     </View>
   );
