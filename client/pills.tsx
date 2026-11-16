@@ -5,11 +5,11 @@ import type {
   PluginClientContext,
 } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/ui";
-import { useEffect, useRef } from "react";
-import { View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Pressable, View } from "react-native";
 import type { PaseoAgentListResult } from "./paseo-types";
 import { getStore } from "./runtime";
-import { ledColor, TriageList } from "./triage-list";
+import { HostFilter, ledColor, TriageList } from "./triage-list";
 import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
 import { limitsOf, openChat, useRecents } from "./use-recents";
 import { reportOpenChat } from "./open-chat";
@@ -84,12 +84,51 @@ function createInboxContent(client: PluginClientContext) {
     const { theme, layout, close } = props;
     const { store, snapshot, result } = useRecents();
     const target = { openScreen: (input: { screenId: string; params?: Record<string, string> }) => client.openScreen(input) };
+    const [hostsOpen, setHostsOpen] = useState(false);
+    const manyHosts = snapshot.hosts.length >= 2;
+    const tone = hostsOpen ? theme.colors.foreground : theme.colors.foregroundMuted;
     return (
       <View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 6, paddingTop: 4 }}>
+          {manyHosts ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Hosts: which hosts are listed, and grouping by host"
+              accessibilityState={{ expanded: hostsOpen }}
+              onPress={() => setHostsOpen(!hostsOpen)}
+              hitSlop={4}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                paddingHorizontal: 6,
+                minHeight: layout.compact ? 36 : 24,
+                borderRadius: 7,
+                borderWidth: 1,
+                borderColor: hostsOpen ? theme.colors.border : "transparent",
+                backgroundColor: hostsOpen ? theme.colors.surface2 : "transparent",
+              }}
+            >
+              <Icon name="Server" size={13} color={tone} />
+              <Icon name={hostsOpen ? "ChevronUp" : "ChevronDown"} size={11} color={tone} />
+            </Pressable>
+          ) : null}
+          <View style={{ flex: 1 }} />
           <HistoryButtons theme={theme} compact={layout.compact} target={target} onNavigate={close} />
         </View>
+        {manyHosts && hostsOpen ? (
+          <HostFilter
+            theme={theme}
+            compact={layout.compact}
+            hosts={snapshot.hosts}
+            hostColors={snapshot.hostColors}
+            onToggle={store.toggleHost}
+            groupByHost={snapshot.prefs.groupByHost}
+            onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
+          />
+        ) : null}
         <TriageList
+          hideHostFilter
           theme={theme}
           compact={layout.compact}
           result={result}
