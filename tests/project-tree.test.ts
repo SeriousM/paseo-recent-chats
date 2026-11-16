@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTree, foldAll, moveInOrder, pinnedTree } from "../client/project-tree";
+import { buildTree, emptyItems, foldAll, moveInOrder, pinnedTree } from "../client/project-tree";
 import type { TriageRow } from "../client/triage";
 
 const NOW = Date.UTC(2026, 10, 11, 21);
@@ -181,10 +181,10 @@ describe("fold all", () => {
 });
 
 describe("empty workspaces and projects", () => {
-  const empty = {
+  const all = {
     workspaces: [
-      { hostId: "h1", id: "w1", treeProject: "Everything", title: "IDP refactor", branch: "main" },
-      { hostId: "h1", id: "w2", treeProject: "Everything", title: "Spike", branch: "spike" },
+      { hostId: "h1", id: "w1", projectId: "p1", treeProject: "Everything", title: "IDP refactor", branch: "main" },
+      { hostId: "h1", id: "w2", projectId: "p1", treeProject: "Everything", title: "Spike", branch: "spike" },
     ],
     projects: [
       { hostId: "h1", id: "p1", treeProject: "Everything" },
@@ -192,18 +192,12 @@ describe("empty workspaces and projects", () => {
     ],
   };
 
-  it("lists a workspace without chats and a project without workspaces, also with active only", () => {
-    const tree = buildTree([row("a", { sortAt: NOW - 30 * DAY })], HOSTS, { ...options, empty });
-    const projects = tree[0]?.projects ?? [];
-    expect(projects.map((project) => [project.name, project.projectId, project.workspaces.map((w) => w.key)])).toEqual([
-      ["Everything", "p1", ["h1:w2"]],
+  it("lists only workspaces without chats and projects without workspaces", () => {
+    const rows = [row("a", { bucket: "running", led: "running" })];
+    const tree = buildTree([], HOSTS, { ...options, activeOnly: false, empty: emptyItems(rows, all) });
+    expect(tree[0]?.projects.map((project) => [project.name, project.projectId, project.workspaces.map((w) => w.key)])).toEqual([
+      ["Everything", undefined, ["h1:w2"]],
       ["Fresh", "p2", []],
     ]);
-    expect(tree[0]?.quiet).toEqual([]);
-  });
-
-  it("leaves them out unless asked", () => {
-    const tree = buildTree([row("a")], HOSTS, options);
-    expect(tree[0]?.projects.map((project) => project.workspaces.map((w) => w.key))).toEqual([["h1:w1"]]);
   });
 });

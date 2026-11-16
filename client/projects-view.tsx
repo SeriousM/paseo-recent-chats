@@ -12,6 +12,7 @@ import { PREVIEW_HOST_COLORS, PREVIEW_TREE_ROWS, PREVIEW_WORKSPACES } from "./pr
 import { useOpenChat } from "./open-chat";
 import {
   buildTree,
+  emptyItems,
   foldAll,
   type FoldAll,
   moveInOrder,
@@ -273,27 +274,29 @@ export function ProjectsView({
     const cutoff = Date.now() - prefs.staleDays * 86_400_000;
     return rows.filter((row) => row.bucket === "inactive" && !row.pinned && row.sortAt < cutoff);
   }, [rows, staleOnly, prefs.staleDays]);
-  // "Show empty": workspaces without chats and projects without workspaces join the tree (not in cleanup).
-  const showEmpty = mode.showEmpty === true;
+  // Cleanup: only workspaces without chats and projects without workspaces (exclusive with Stale).
+  const emptyOnly = !staleOnly && mode.emptyOnly === true;
+  const cleanup = staleOnly || emptyOnly;
   const empty = useMemo(
-    () => (showEmpty ? { workspaces: snapshot.workspaces, projects: snapshot.projects } : undefined),
-    [showEmpty, snapshot.workspaces, snapshot.projects],
+    () => (emptyOnly ? emptyItems(rows, { workspaces: snapshot.workspaces, projects: snapshot.projects }) : undefined),
+    [emptyOnly, rows, snapshot.workspaces, snapshot.projects],
   );
   const tree = useMemo(
     () =>
-      buildTree(staleRows, listed, {
+      buildTree(emptyOnly ? [] : staleRows, listed, {
         now: Date.now(),
         inactiveWindowDays: prefs.inactiveWindowDays,
-        activeOnly: staleOnly ? false : mode.activeOnly,
+        activeOnly: cleanup ? false : mode.activeOnly,
         chatsPerWorkspace: staleOnly ? Number.MAX_SAFE_INTEGER : prefs.chatsPerWorkspace,
         pinnedWorkspaces,
         pinnedProjects,
         projectOrder: prefs.projectOrder,
         workspaceOrder: prefs.workspaceOrder,
-        empty: staleOnly ? undefined : empty,
+        empty,
       }),
-    [staleRows, listed, prefs.inactiveWindowDays, staleOnly, mode.activeOnly, prefs.chatsPerWorkspace, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder, empty],
+    [staleRows, listed, prefs.inactiveWindowDays, staleOnly, emptyOnly, cleanup, mode.activeOnly, prefs.chatsPerWorkspace, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder, empty],
   );
+  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
   // Everything, unfiltered: the base of the Pinned section and of search.
   const full = useMemo(
     () =>
@@ -306,18 +309,17 @@ export function ProjectsView({
         pinnedProjects,
         projectOrder: prefs.projectOrder,
         workspaceOrder: prefs.workspaceOrder,
-        empty,
       }),
-    [rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder, empty],
+    [rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder],
   );
   const pinned = useMemo(() => filterTree(pinnedTree(full, pinnedProjects), query), [full, pinnedProjects, query]);
   // Searching looks through everything, also what "active only" and "+N older" hide.
-  const shownTree = useMemo(() => (searching ? filterTree(staleOnly ? tree : full, query) : tree), [searching, staleOnly, full, tree, query]);
+  const shownTree = useMemo(() => (searching ? filterTree(cleanup ? tree : full, query) : tree), [searching, cleanup, full, tree, query]);
 
   // Chats that wait for you or finished unseen, plus an opened one held in place (grey).
   const urgent = useMemo(
-    () => (staleOnly ? [] : rows.filter((row) => row.bucket === "unread" && (!searching || scoreRow(query, row) !== null))),
-    [rows, staleOnly, searching, query],
+    () => (cleanup ? [] : rows.filter((row) => row.bucket === "unread" && (!searching || scoreRow(query, row) !== null))),
+    [rows, cleanup, searching, query],
   );
   // The frame takes the light of its most urgent chat; grey when only a held (opened) chat is left.
   const stripLed = urgent.reduce<Led>((worst, row) => (LED_RANK[row.led] < LED_RANK[worst] ? row.led : worst), "idle");
@@ -487,7 +489,7 @@ export function ProjectsView({
               ) : null}
             </View>
           ) : null}
-          {staleOnly ? null : pinned.length > 0 ? (
+          {cleanup ? null : pinned.length > 0 ? (
             <View style={{ marginBottom: 6 }}>
               <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 6 }}>
                 <Pressable
@@ -508,7 +510,7 @@ export function ProjectsView({
                 </View>
               )}
             </View>
-          ) : searching || staleOnly ? null : (
+          ) : searching || cleanup ? null : (
             <Text style={{ fontSize: fs(11.5), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingBottom: 6 }}>
               Pin a project, workspace or chat to keep it here, with what is around it.
             </Text>
@@ -516,7 +518,7 @@ export function ProjectsView({
           {searching ? null : (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 6, paddingTop: 2 }}>
               {/* Hides workspaces with nothing newer than the inactive window (Settings, Sections, Inactive, Window). */}
-              {staleOnly
+              {cleanup
                 ? null
                 : filterChip(
                     mode.activeOnly,
@@ -525,21 +527,19 @@ export function ProjectsView({
                     `Only workspaces active in the last ${prefs.inactiveWindowDays} days`,
                     () => updateViewMode({ activeOnly: !mode.activeOnly }),
                   )}
-              {staleOnly
-                ? null
-                : filterChip(
-                    showEmpty,
-                    "FolderOpen",
-                    "Empty",
-                    "Also show workspaces without chats and projects without workspaces",
-                    () => updateViewMode({ showEmpty: !showEmpty }),
-                  )}
+              {filterChip(
+                emptyOnly,
+                "FolderOpen",
+                "Empty",
+                "Cleanup: only workspaces without chats and projects without workspaces",
+                () => updateViewMode({ emptyOnly: !emptyOnly, staleOnly: false }),
+              )}
               {filterChip(
                 staleOnly,
                 "Archive",
                 `Stale ${prefs.staleDays}d+`,
                 `Cleanup: only chats with nothing newer than ${prefs.staleDays} days`,
-                () => updateViewMode({ staleOnly: !staleOnly }),
+                () => updateViewMode({ staleOnly: !staleOnly, emptyOnly: false }),
               )}
               <View style={{ flex: 1 }} />
               {foldButtons(full, "")}
@@ -550,6 +550,13 @@ export function ProjectsView({
               {staleRows.length === 0
                 ? `No chat has been idle for more than ${prefs.staleDays} days.`
                 : `${staleRows.length} chat${staleRows.length > 1 ? "s" : ""} idle for more than ${prefs.staleDays} days. Archive them from their \u22EE menu, or a whole workspace from its own.`}
+            </Text>
+          ) : null}
+          {emptyOnly && empty && !searching ? (
+            <Text style={{ fontSize: fs(11.5), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: 4 }}>
+              {empty.workspaces.length + empty.projects.length === 0
+                ? "Every workspace has a chat and every project a workspace."
+                : `${plural(empty.workspaces.length, "workspace")} without chats, ${plural(empty.projects.length, "project")} without workspaces. Archive a workspace from its \u22EE menu.`}
             </Text>
           ) : null}
           {renderHosts(shownTree, "", false)}

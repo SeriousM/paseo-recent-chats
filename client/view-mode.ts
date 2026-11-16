@@ -15,8 +15,8 @@ export interface ViewMode {
   activeOnly: boolean;
   /** Projects: only chats nothing has happened in for a long time (prefs.staleDays), to clean them up. */
   staleOnly?: boolean;
-  /** Projects: also list workspaces without chats and projects without workspaces. */
-  showEmpty?: boolean;
+  /** Projects: only workspaces without chats and projects without workspaces, to clean them up. */
+  emptyOnly?: boolean;
   /** Tree nodes switched from their default: folded hosts, projects and workspaces, opened "+N older" and quiet lists. */
   toggled: readonly string[];
   /** Project and workspace pins made before pins were synced; moved to the settings once (see sidebar-item). */
@@ -43,7 +43,7 @@ function load(): ViewMode {
       activeOnly: stored.activeOnly !== false,
       toggled: strings(stored.toggled),
       staleOnly: stored.staleOnly === true,
-      showEmpty: stored.showEmpty === true,
+      emptyOnly: stored.emptyOnly === true,
       legacyPins: strings(stored.pins),
     };
   } catch {
@@ -59,8 +59,8 @@ function shared(scope: object = globalThis): Shared {
 export function updateViewMode(patch: Partial<ViewMode>): void {
   const state = shared();
   state.value = { ...state.value, ...patch };
-  const { view, activeOnly, staleOnly, showEmpty, toggled, legacyPins } = state.value;
-  writeDeviceValue(STORAGE_KEY, JSON.stringify({ view, activeOnly, staleOnly, showEmpty, toggled, pins: legacyPins }));
+  const { view, activeOnly, staleOnly, emptyOnly, toggled, legacyPins } = state.value;
+  writeDeviceValue(STORAGE_KEY, JSON.stringify({ view, activeOnly, staleOnly, emptyOnly, toggled, pins: legacyPins }));
   for (const listener of [...state.listeners]) {
     try {
       listener();

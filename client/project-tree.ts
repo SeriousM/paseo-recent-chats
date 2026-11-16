@@ -56,10 +56,22 @@ export interface TreeOptions {
   projectOrder?: readonly string[];
   /** Workspace keys (`${hostId}:${workspaceId}`) in the order the user dragged them inside their project. */
   workspaceOrder?: readonly string[];
-  /** Workspaces and projects to list even without chats ("Show empty"); those with chats are skipped here. */
-  empty?: {
-    workspaces: readonly { hostId: string; id: string; treeProject: string; title: string; branch: string }[];
-    projects: readonly { hostId: string; id: string; treeProject: string }[];
+  /** Workspaces and projects listed without chats (the Empty filter, see emptyItems). */
+  empty?: EmptyItems;
+}
+
+interface EmptyItems {
+  workspaces: readonly { hostId: string; id: string; projectId: string; treeProject: string; title: string; branch: string }[];
+  projects: readonly { hostId: string; id: string; treeProject: string }[];
+}
+
+/** For the Empty filter: workspaces no chat is in, and projects no workspace is in. */
+export function emptyItems(rows: readonly TriageRow[], all: EmptyItems): EmptyItems {
+  const withChats = new Set(rows.map((row) => `${row.hostId}:${row.workspaceId}`));
+  const withWorkspaces = new Set(all.workspaces.map((workspace) => `${workspace.hostId}:${workspace.projectId}`));
+  return {
+    workspaces: all.workspaces.filter((workspace) => !withChats.has(`${workspace.hostId}:${workspace.id}`)),
+    projects: all.projects.filter((project) => !withWorkspaces.has(`${project.hostId}:${project.id}`)),
   };
 }
 
@@ -123,10 +135,8 @@ export function buildTree(
   const emptyInfo = new Map<string, { hostId: string; id: string; title: string; branch: string }>();
   const projectIds = new Map<string, string>();
   if (options.empty) {
-    const withChats = new Set(rows.map((row) => `${row.hostId}:${row.workspaceId}`));
     for (const workspace of options.empty.workspaces) {
       const key = `${workspace.hostId}:${workspace.id}`;
-      if (withChats.has(key)) continue;
       emptyInfo.set(key, workspace);
       workspacesOf(workspace.hostId, workspace.treeProject).set(key, []);
     }
@@ -184,9 +194,7 @@ export function buildTree(
       for (const workspace of all) need += [...workspace.chats, ...workspace.older].filter(needsYou).length;
       const key = `${id}:${name}`;
       const projectPinned = options.pinnedProjects?.has(key) ?? false;
-      // Empty workspaces are listed only when asked for, so "active only" leaves them in.
-      const shown =
-        options.activeOnly && !projectPinned ? all.filter((w) => w.pinned || w.chats.some(live) || emptyInfo.has(w.key)) : all;
+      const shown = options.activeOnly && !projectPinned ? all.filter((w) => w.pinned || w.chats.some(live)) : all;
       const projectId = projectIds.get(key);
       if (shown.length > 0 || all.length === 0) projects.push({ key, name, projectId, workspaces: shown });
       else quiet.push({ key, name, projectId, workspaces: all });
