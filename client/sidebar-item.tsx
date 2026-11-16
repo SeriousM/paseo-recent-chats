@@ -19,6 +19,8 @@ export const RECENT_SCREEN_ID = "recent";
  */
 const MIN_LIST_HEIGHT = 100;
 const HEIGHT_PERCENT = { min: 15, max: 85 };
+/** Phone drawer height outside the scroll area that holds its header rows: status bar, title, footer. */
+const DRAWER_CHROME = 220;
 
 // Stops a touch screen from scrolling the drawer while the grip is dragged; resize cursor on desktop. React Native Web only.
 const GRIP_WEB = { touchAction: "none", cursor: "row-resize" } as unknown as ViewStyle;
@@ -39,22 +41,28 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   // Percent while the grip is dragged; saved once on release so a drag is one settings write.
   const [dragPercent, setDragPercent] = useState<number | null>(null);
   const percent = dragPercent ?? savedPercent;
-  const listHeight = Math.max(MIN_LIST_HEIGHT, Math.round((windowHeight * percent) / 100));
-  const live = useRef({ windowHeight, savedPercent, heightKey, updatePrefs: store.updatePrefs });
-  live.current = { windowHeight, savedPercent, heightKey, updatePrefs: store.updatePrefs };
+  // Phones (Paseo 0.16): the drawer puts its header rows, this item among them, in a scroll area of at most
+  // half the drawer. A taller item pushes the grip out of sight, so the list is held to what fits there:
+  // half the drawer, less what sits above the list (Paseo's rows, this row, the first row) and the grip.
+  const [fit, setFit] = useState({ top: 0, overhead: 0 });
+  const fitMax = layout.compact ? Math.round((windowHeight - DRAWER_CHROME) / 2) - fit.top - fit.overhead : Number.POSITIVE_INFINITY;
+  const maxPercent = Math.min(HEIGHT_PERCENT.max, Math.max(HEIGHT_PERCENT.min, Math.floor((fitMax / windowHeight) * 100)));
+  const listHeight = Math.max(MIN_LIST_HEIGHT, Math.min(fitMax, Math.round((windowHeight * percent) / 100)));
+  const live = useRef({ windowHeight, savedPercent, heightKey, maxPercent, updatePrefs: store.updatePrefs });
+  live.current = { windowHeight, savedPercent, heightKey, maxPercent, updatePrefs: store.updatePrefs };
   // One drag model for both input paths: React Native's responder on phones, pointer events on the web.
   const drag = useMemo(() => {
     let startPercent = 0;
     let current = 0;
     return {
       start() {
-        startPercent = live.current.savedPercent;
+        startPercent = Math.min(live.current.savedPercent, live.current.maxPercent);
         current = startPercent;
         setDragPercent(startPercent);
       },
       move(dy: number) {
         const next = Math.round(startPercent + (dy / live.current.windowHeight) * 100);
-        current = Math.min(HEIGHT_PERCENT.max, Math.max(HEIGHT_PERCENT.min, next));
+        current = Math.min(live.current.maxPercent, Math.max(HEIGHT_PERCENT.min, next));
         setDragPercent(current);
       },
       end() {
@@ -96,7 +104,13 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   if (viewShown) return null;
   const target = { openScreen };
   return (
-    <View>
+    <View
+      onLayout={(event) => {
+        const { y, height } = event.nativeEvent.layout;
+        const overhead = expanded ? height - listHeight : fit.overhead;
+        if (y !== fit.top || overhead !== fit.overhead) setFit({ top: y, overhead });
+      }}
+    >
       <SidebarRow
         icon="Inbox"
         label="Recent Chats"
@@ -128,7 +142,7 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
             accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
             onAccessibilityAction={(event) => {
               const step = event.nativeEvent.actionName === "increment" ? 5 : -5;
-              const next = Math.min(HEIGHT_PERCENT.max, Math.max(HEIGHT_PERCENT.min, savedPercent + step));
+              const next = Math.min(maxPercent, Math.max(HEIGHT_PERCENT.min, savedPercent + step));
               if (next !== savedPercent) store.updatePrefs({ [heightKey]: next });
             }}
             style={[{ height: layout.compact ? 24 : 12, alignItems: "center", justifyContent: "center" }, GRIP_WEB]}
