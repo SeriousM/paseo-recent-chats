@@ -66,7 +66,6 @@ function useRowMenu(theme: PluginTheme, compact: boolean, title: string, build: 
       <MenuButton
         theme={theme}
         compact={compact}
-        shown={hovered}
         label={title}
         nodeRef={(node) => {
           button.current = node;
@@ -882,7 +881,9 @@ function ProjectNode({
           </Text>
         </Pressable>
         {hostTag ? <HostPill theme={theme} label={hostTag.label} colorName={hostTag.colorName} /> : null}
-        <PinButton theme={theme} compact={compact} pinned={pinned} label={`project ${project.name}`} onPress={() => togglePin(`project:${project.key}`)} />
+        {pinned ? (
+          <PinButton theme={theme} compact={compact} pinned label={`project ${project.name}`} onPress={() => togglePin(`project:${project.key}`)} />
+        ) : null}
         {menu.button}
       </Pressable>
       {folded ? null : <View style={{ paddingLeft: 12 }}>{children}</View>}
@@ -1278,7 +1279,7 @@ function WorkspaceNode({
           ) : null}
         </Pressable>
         )}
-        {workspaceId ? (
+        {workspaceId && pinned ? (
           <PinButton
             theme={theme}
             compact={compact}

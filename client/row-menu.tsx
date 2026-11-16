@@ -1,5 +1,5 @@
 // The ⋮ menu of a chat, workspace or project row, like the ones in Paseo's own sidebar: a button at the
-// end of the row (shown while the pointer is on it, always on touch screens), right-click and long press.
+// end of the row (always shown), right-click and long press.
 // On wide screens it opens as a small menu under the button; on phones as Paseo's own sheet.
 import type { PluginTheme } from "@getpaseo/plugin";
 import * as pluginUi from "@getpaseo/plugin/client/ui";
@@ -40,15 +40,12 @@ const SheetModal: typeof pluginUi.Modal | undefined = "Modal" in pluginUi ? (plu
 export function MenuButton({
   theme,
   compact,
-  shown,
   label,
   onOpen,
   nodeRef,
 }: {
   theme: PluginTheme;
   compact: boolean;
-  /** The pointer is on the row (always true on touch screens). */
-  shown: boolean;
   label: string;
   onOpen(): void;
   nodeRef?: (node: View | null) => void;
@@ -67,7 +64,7 @@ export function MenuButton({
         alignItems: "center",
         justifyContent: "center",
         borderRadius: 6,
-        opacity: compact || shown ? (pressed ? 0.6 : 1) : 0,
+        opacity: pressed ? 0.6 : 1,
         backgroundColor: pressed ? theme.colors.surface2 : "transparent",
       })}
     >

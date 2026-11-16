@@ -767,6 +767,7 @@ function ChatRow({
           <Icon name="Clock" size={12} color={theme.colors.foregroundMuted} />
         </Pressable>
       ) : null}
+      {row.pinned ? (
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={row.pinned ? `Unpin ${title}` : `Pin ${title} to the top`}
@@ -777,13 +778,13 @@ function ChatRow({
       >
         <Icon name={row.pinned ? "PinOff" : "Pin"} size={12} color={row.pinned ? theme.colors.accent : theme.colors.foregroundMuted} />
       </Pressable>
+      ) : null}
         </>
       )}
       {openMenu && !editing ? (
         <MenuButton
           theme={theme}
           compact={compact}
-          shown={hovered}
           label={title}
           nodeRef={(node) => {
             menuButton.current = node;

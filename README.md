@@ -40,8 +40,7 @@ The settings screen, where every row item can be shown, reordered, split over li
 - Pinned chats stay at the top in their own section, whatever their state.
 - A chevron on the Pinned, Running and Inactive headings, and on each host heading when grouped by host, folds that group away until you unfold it or restart the app.
 - The chat open on screen is highlighted in every list. Plugins are not told which chat is open, so this works while the Inbox or Later pill is shown in its composer.
-- A ⋮ menu on every project, workspace and chat (shown while the pointer is on the row, always on touch
-  screens; right-click or long press open it too): open, new workspace, rename, pin, mark read or unread,
+- A ⋮ menu on every project, workspace and chat (right-click or long press open it too): open, new workspace, rename, pin, mark read or unread,
   reload a chat's session, copy path, branch, name or title, archive. Renames are saved on the item's host,
   so that host needs a current Recent Chats. Opening workspaces and starting a new workspace need the
   Paseo 0.16 sidebar view.
