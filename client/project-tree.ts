@@ -26,6 +26,8 @@ export interface TreeWorkspace {
 export interface TreeProject {
   key: string;
   name: string;
+  /** The daemon's project id, where known (always for an empty project). */
+  projectId?: string;
   workspaces: TreeWorkspace[];
 }
 
@@ -54,6 +56,11 @@ export interface TreeOptions {
   projectOrder?: readonly string[];
   /** Workspace keys (`${hostId}:${workspaceId}`) in the order the user dragged them inside their project. */
   workspaceOrder?: readonly string[];
+  /** Workspaces and projects to list even without chats ("Show empty"); those with chats are skipped here. */
+  empty?: {
+    workspaces: readonly { hostId: string; id: string; treeProject: string; title: string; branch: string }[];
+    projects: readonly { hostId: string; id: string; treeProject: string }[];
+  };
 }
 
 /** Collapse every project, expand everything, or open only what is active (see foldAll). */
@@ -94,18 +101,47 @@ export function buildTree(
   const live = (row: TriageRow) => row.bucket !== "inactive" || row.pinned || row.sortAt >= windowStart;
   // host -> project -> workspace key -> rows
   const grouped = new Map<string, Map<string, Map<string, TriageRow[]>>>();
+  const projectsOf = (hostId: string) => {
+    const projects = grouped.get(hostId) ?? new Map<string, Map<string, TriageRow[]>>();
+    grouped.set(hostId, projects);
+    return projects;
+  };
+  const workspacesOf = (hostId: string, project: string) => {
+    const projects = projectsOf(hostId);
+    const workspaces = projects.get(project) ?? new Map<string, TriageRow[]>();
+    projects.set(project, workspaces);
+    return workspaces;
+  };
   for (const row of rows) {
-    const projects = grouped.get(row.hostId) ?? new Map<string, Map<string, TriageRow[]>>();
-    grouped.set(row.hostId, projects);
-    const workspaces = projects.get(row.projectName) ?? new Map<string, TriageRow[]>();
-    projects.set(row.projectName, workspaces);
+    const workspaces = workspacesOf(row.hostId, row.projectName);
     const key = `${row.hostId}:${row.workspaceId ?? `name:${row.workspaceName}`}`;
     const list = workspaces.get(key);
     if (list) list.push(row);
     else workspaces.set(key, [row]);
   }
+  // Empty workspaces and projects join with no rows; `emptyInfo` names them.
+  const emptyInfo = new Map<string, { hostId: string; id: string; title: string; branch: string }>();
+  const projectIds = new Map<string, string>();
+  if (options.empty) {
+    const withChats = new Set(rows.map((row) => `${row.hostId}:${row.workspaceId}`));
+    for (const workspace of options.empty.workspaces) {
+      const key = `${workspace.hostId}:${workspace.id}`;
+      if (withChats.has(key)) continue;
+      emptyInfo.set(key, workspace);
+      workspacesOf(workspace.hostId, workspace.treeProject).set(key, []);
+    }
+    for (const project of options.empty.projects) {
+      workspacesOf(project.hostId, project.treeProject);
+      projectIds.set(`${project.hostId}:${project.treeProject}`, project.id);
+    }
+  }
 
   const toWorkspace = (key: string, list: TriageRow[]): TreeWorkspace => {
+    const info = emptyInfo.get(key);
+    if (list.length === 0 && info) {
+      const pinned = options.pinnedWorkspaces.has(key);
+      return { key, hostId: info.hostId, workspaceId: info.id, name: info.title, branch: info.branch, led: "idle", pinned, lastAt: 0, chats: [], older: [] };
+    }
     const sorted = [...list].sort((a, b) => LED_RANK[a.led] - LED_RANK[b.led] || b.sortAt - a.sortAt);
     const chats: TriageRow[] = [];
     const older: TriageRow[] = [];
@@ -148,9 +184,12 @@ export function buildTree(
       for (const workspace of all) need += [...workspace.chats, ...workspace.older].filter(needsYou).length;
       const key = `${id}:${name}`;
       const projectPinned = options.pinnedProjects?.has(key) ?? false;
-      const shown = options.activeOnly && !projectPinned ? all.filter((w) => w.pinned || w.chats.some(live)) : all;
-      if (shown.length > 0) projects.push({ key, name, workspaces: shown });
-      else quiet.push({ key, name, workspaces: all });
+      // Empty workspaces are listed only when asked for, so "active only" leaves them in.
+      const shown =
+        options.activeOnly && !projectPinned ? all.filter((w) => w.pinned || w.chats.some(live) || emptyInfo.has(w.key)) : all;
+      const projectId = projectIds.get(key);
+      if (shown.length > 0 || all.length === 0) projects.push({ key, name, projectId, workspaces: shown });
+      else quiet.push({ key, name, projectId, workspaces: all });
     }
     const byOrder = projectComparator(options.projectOrder ?? []);
     return { hostId: id, label, need, projects: projects.sort(byOrder), quiet: quiet.sort(byOrder) };

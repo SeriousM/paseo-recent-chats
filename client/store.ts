@@ -32,12 +32,22 @@ export interface WorkspaceInfo {
   id: string;
   projectId: string;
   projectName: string;
+  /** The project name the tree groups by: the daemon's display name, as the chats carry it. */
+  treeProject: string;
   title: string;
   kind: "directory" | "worktree" | "checkout" | "local_checkout";
   branch: string;
   diff: { additions: number; deletions: number } | null;
   /** Folder of the workspace on its host. */
   path: string;
+}
+
+/** A project as the projects view lists it when it has nothing in it. */
+export interface ProjectInfo {
+  hostId: string;
+  id: string;
+  /** The daemon's display name, as the tree groups by. */
+  treeProject: string;
 }
 
 export interface HostChip {
@@ -51,6 +61,8 @@ export interface StoreSnapshot {
   chats: readonly ChatInput[];
   /** Workspaces of the listed hosts, for the projects view. */
   workspaces: readonly WorkspaceInfo[];
+  /** Every project of the listed hosts, also those without a workspace (empty where the app has no project list). */
+  projects: readonly ProjectInfo[];
   overlay: Overlay;
   prefs: Prefs;
   /** Hosts whose chats are listed: online and not switched off in the host filter. */
@@ -250,6 +262,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
   function buildSnapshot(): StoreSnapshot {
     const chats: ChatInput[] = [];
     const workspaces: WorkspaceInfo[] = [];
+    const projects: ProjectInfo[] = [];
     let loading = false;
     const errors: string[] = [];
     // A host switched off in the filter stays hidden only while another online host is listed: with one host
@@ -289,6 +302,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
           id: workspace.id,
           projectId: workspace.projectId,
           projectName: workspace.projectCustomName || workspace.projectDisplayName,
+          treeProject: workspace.projectDisplayName,
           title: workspace.title || workspace.name,
           kind: workspace.workspaceKind,
           branch: workspace.gitRuntime?.currentBranch ?? "",
@@ -296,6 +310,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
           path: workspace.workspaceDirectory ?? workspace.projectRootPath ?? "",
         });
       }
+      for (const project of data.projects) projects.push({ hostId: host.serverId, id: project.projectId, treeProject: project.projectDisplayName });
     }
     const label = (hostId: string) => hosts.find((host) => host.serverId === hostId)?.label ?? hostId;
     for (const [hostId, error] of hostErrors) errors.push(`${label(hostId)}: ${error}`);
@@ -305,6 +320,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     return {
       chats,
       workspaces,
+      projects,
       overlay,
       prefs,
       hostCount: online.filter((host) => !hidden(host.serverId)).length,
@@ -832,6 +848,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
                   subAgents: data.agents.filter((agent) => isDelegated(agent.labels)).length,
                   archived: data.agents.filter((agent) => agent.archivedAt).length,
                   workspaces: data.workspaces.length,
+                  projects: data.projects.length,
                 }
               : null,
             observerError: hostErrors.get(host.serverId) ?? null,

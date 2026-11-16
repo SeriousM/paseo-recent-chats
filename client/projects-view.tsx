@@ -273,6 +273,12 @@ export function ProjectsView({
     const cutoff = Date.now() - prefs.staleDays * 86_400_000;
     return rows.filter((row) => row.bucket === "inactive" && !row.pinned && row.sortAt < cutoff);
   }, [rows, staleOnly, prefs.staleDays]);
+  // "Show empty": workspaces without chats and projects without workspaces join the tree (not in cleanup).
+  const showEmpty = mode.showEmpty === true;
+  const empty = useMemo(
+    () => (showEmpty ? { workspaces: snapshot.workspaces, projects: snapshot.projects } : undefined),
+    [showEmpty, snapshot.workspaces, snapshot.projects],
+  );
   const tree = useMemo(
     () =>
       buildTree(staleRows, listed, {
@@ -284,8 +290,9 @@ export function ProjectsView({
         pinnedProjects,
         projectOrder: prefs.projectOrder,
         workspaceOrder: prefs.workspaceOrder,
+        empty: staleOnly ? undefined : empty,
       }),
-    [staleRows, listed, prefs.inactiveWindowDays, staleOnly, mode.activeOnly, prefs.chatsPerWorkspace, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder],
+    [staleRows, listed, prefs.inactiveWindowDays, staleOnly, mode.activeOnly, prefs.chatsPerWorkspace, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder, empty],
   );
   // Everything, unfiltered: the base of the Pinned section and of search.
   const full = useMemo(
@@ -299,8 +306,9 @@ export function ProjectsView({
         pinnedProjects,
         projectOrder: prefs.projectOrder,
         workspaceOrder: prefs.workspaceOrder,
+        empty,
       }),
-    [rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder],
+    [rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder, empty],
   );
   const pinned = useMemo(() => filterTree(pinnedTree(full, pinnedProjects), query), [full, pinnedProjects, query]);
   // Searching looks through everything, also what "active only" and "+N older" hide.
@@ -395,7 +403,7 @@ export function ProjectsView({
       toggled={toggled}
       hostTag={flat && show.hostTag ? hostOfProject(project, snapshot) : undefined}
       drag={drag}
-      projectId={project.workspaces.map((workspace) => workspaceInfo.get(workspace.key)?.projectId).find(Boolean)}
+      projectId={project.projectId ?? project.workspaces.map((workspace) => workspaceInfo.get(workspace.key)?.projectId).find(Boolean)}
     >
       {inPinned ? (
         project.workspaces.map((workspace) => renderWorkspace(workspace, prefix, inPinned))
@@ -516,6 +524,15 @@ export function ProjectsView({
                     `Last ${prefs.inactiveWindowDays}d`,
                     `Only workspaces active in the last ${prefs.inactiveWindowDays} days`,
                     () => updateViewMode({ activeOnly: !mode.activeOnly }),
+                  )}
+              {staleOnly
+                ? null
+                : filterChip(
+                    showEmpty,
+                    "FolderOpen",
+                    "Empty",
+                    "Also show workspaces without chats and projects without workspaces",
+                    () => updateViewMode({ showEmpty: !showEmpty }),
                   )}
               {filterChip(
                 staleOnly,

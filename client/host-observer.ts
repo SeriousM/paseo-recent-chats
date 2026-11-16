@@ -6,6 +6,7 @@ import type {
   PaseoAgent,
   PaseoAgentListResult,
   PaseoApi,
+  PaseoProject,
   PaseoWorkspace,
   PaseoWorkspaceListResult,
   SessionOutboundMessage,
@@ -17,6 +18,8 @@ const MAX_PAGES = 100;
 export interface HostData {
   agents: PaseoAgent[];
   workspaces: PaseoWorkspace[];
+  /** Every project the host knows, also those without a workspace. Empty where the app has no project list. */
+  projects: PaseoProject[];
   loading: boolean;
   error: string | null;
 }
@@ -33,6 +36,7 @@ export function createHostObserver(api: PaseoApi, publish: (data: HostData) => v
   let cleanups: (() => void)[] = [];
   let agents = new Map<string, PaseoAgent>();
   let workspaces = new Map<string, PaseoWorkspace>();
+  let projects = new Map<string, PaseoProject>();
   const pending = new Set(["agents", "workspaces"]);
   const failures = new Map<string, string>();
 
@@ -41,6 +45,7 @@ export function createHostObserver(api: PaseoApi, publish: (data: HostData) => v
     publish({
       agents: [...agents.values()],
       workspaces: [...workspaces.values()],
+      projects: [...projects.values()],
       loading: pending.size > 0,
       error: failures.size ? [...failures.values()].join("; ") : null,
     });
@@ -132,8 +137,31 @@ export function createHostObserver(api: PaseoApi, publish: (data: HostData) => v
     }
   }
 
+  /** The project list: read once, then kept current from project updates. Optional: older apps lack it. */
+  async function startProjects(): Promise<void> {
+    const actions = (api as Partial<PaseoApi>).projects;
+    if (typeof actions?.list !== "function" || typeof actions.subscribe !== "function") return;
+    cleanups.push(
+      actions.subscribe((update) => {
+        if (update.kind === "upsert") projects.set(update.project.projectId, update.project);
+        else projects.delete(update.projectId);
+        emit();
+      }),
+    );
+    try {
+      const result = await actions.list();
+      if (stopped) return;
+      projects = new Map(result.projects.map((project) => [project.projectId, project]));
+      emit();
+    } catch (error) {
+      // Without the list only projects that have a workspace show; chats are unaffected.
+      console.warn(`Recent Chats: project list failed: ${message(error)}`);
+    }
+  }
+
   return {
     start() {
+      void startProjects();
       void startDirectory<PaseoWorkspace, PaseoWorkspaceListResult>({
         name: "workspaces",
         list: () => api.workspaces.list({ page: { limit: PAGE_SIZE }, subscribe: {} }),

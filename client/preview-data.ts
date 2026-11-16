@@ -101,6 +101,7 @@ const workspace = (hostId: string, id: string, projectName: string, title: strin
   id,
   projectId: projectName,
   projectName,
+  treeProject: projectName,
   title,
   kind,
   branch,

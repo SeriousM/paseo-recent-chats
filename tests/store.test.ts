@@ -126,7 +126,7 @@ function agent(id: string, patch: Record<string, unknown> = {}) {
   };
 }
 
-const data = (agents: unknown[], workspaces: unknown[] = []) => ({ agents, workspaces, loading: false, error: null });
+const data = (agents: unknown[], workspaces: unknown[] = []) => ({ agents, workspaces, projects: [], loading: false, error: null });
 
 const settle = () => vi.advanceTimersByTimeAsync(300);
 
@@ -263,7 +263,7 @@ describe("observing hosts", () => {
   });
 
   it("starts a host's subscription again after it failed", async () => {
-    fake.hostData.set("a", { agents: [], workspaces: [], loading: false, error: "agents: not ready" });
+    fake.hostData.set("a", { agents: [], workspaces: [], projects: [], loading: false, error: "agents: not ready" });
     const { store } = storeOn("a");
     store.setHosts([host("a")]);
     store.retain();

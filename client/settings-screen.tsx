@@ -181,6 +181,12 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
             value={mode.activeOnly}
             onValueChange={(next) => updateViewMode({ activeOnly: next })}
           />
+          <SettingsSwitch
+            label="Projects: show empty workspaces and projects"
+            hint="Also lists workspaces without chats and projects without workspaces. Same as the Empty filter above the tree. Not synced."
+            value={mode.showEmpty === true}
+            onValueChange={(next) => updateViewMode({ showEmpty: next })}
+          />
         </SettingsCard>
       </SettingsSection>
 

@@ -179,3 +179,31 @@ describe("fold all", () => {
     expect(foldAll(tree, toggled, "expand", "pinned/")).toEqual(["project:h1:live", "older:h1:w1"]);
   });
 });
+
+describe("empty workspaces and projects", () => {
+  const empty = {
+    workspaces: [
+      { hostId: "h1", id: "w1", treeProject: "Everything", title: "IDP refactor", branch: "main" },
+      { hostId: "h1", id: "w2", treeProject: "Everything", title: "Spike", branch: "spike" },
+    ],
+    projects: [
+      { hostId: "h1", id: "p1", treeProject: "Everything" },
+      { hostId: "h1", id: "p2", treeProject: "Fresh" },
+    ],
+  };
+
+  it("lists a workspace without chats and a project without workspaces, also with active only", () => {
+    const tree = buildTree([row("a", { sortAt: NOW - 30 * DAY })], HOSTS, { ...options, empty });
+    const projects = tree[0]?.projects ?? [];
+    expect(projects.map((project) => [project.name, project.projectId, project.workspaces.map((w) => w.key)])).toEqual([
+      ["Everything", "p1", ["h1:w2"]],
+      ["Fresh", "p2", []],
+    ]);
+    expect(tree[0]?.quiet).toEqual([]);
+  });
+
+  it("leaves them out unless asked", () => {
+    const tree = buildTree([row("a")], HOSTS, options);
+    expect(tree[0]?.projects.map((project) => project.workspaces.map((w) => w.key))).toEqual([["h1:w1"]]);
+  });
+});

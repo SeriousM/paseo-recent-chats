@@ -14,6 +14,8 @@ export type PaseoWorkspaceListResult = Awaited<ReturnType<PaseoApi["workspaces"]
 export type PaseoAgent = PaseoAgentListResult["entries"][number]["agent"];
 /** One workspace as the daemon describes it. */
 export type PaseoWorkspace = PaseoWorkspaceListResult["entries"][number];
+/** One project as the daemon describes it. */
+export type PaseoProject = Awaited<ReturnType<PaseoApi["projects"]["list"]>>["projects"][number];
 
 type EventSubscription = ReturnType<PaseoApi["observeEvents"]>;
 type EventObserver = Parameters<EventSubscription["subscribe"]>[0];
