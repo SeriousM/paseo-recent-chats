@@ -46,14 +46,12 @@ export function RecentSidebarView({
   );
   return (
     <View style={{ flex: 1, minHeight: 0 }}>
-      <View style={{ flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: 8, paddingTop: 4 }}>
-        <HeaderControls theme={theme} compact={layout.compact} target={target} />
-      </View>
       <RecentPanel
         theme={theme}
         compact={layout.compact}
         target={target}
         onShowAll={(q) => openScreen({ screenId: "recent", params: q ? { q } : {} })}
+        headerExtra={<HeaderControls theme={theme} compact={layout.compact} target={target} />}
       />
     </View>
   );

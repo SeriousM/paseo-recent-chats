@@ -83,6 +83,7 @@ export function ViewModeBar({
   onHosts,
   searchOpen,
   onSearch,
+  extra,
 }: {
   theme: PluginTheme;
   compact: boolean;
@@ -92,6 +93,8 @@ export function ViewModeBar({
   onHosts(): void;
   searchOpen: boolean;
   onSearch(): void;
+  /** Placed at the end of the row, after the search button (the sidebar view's back, forward, counts and cog). */
+  extra?: ReactNode;
 }) {
   const mode = useViewMode();
   const fs = useFontScale();
@@ -162,6 +165,7 @@ export function ViewModeBar({
       >
         <Icon name="Search" size={13} color={tone(searchOpen)} />
       </Pressable>
+      {extra}
     </View>
   );
 }

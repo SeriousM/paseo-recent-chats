@@ -82,30 +82,36 @@ function createInboxContent(client: PluginClientContext) {
   return function InboxContent(props: PluginButtonContentProps) {
     const { theme, layout, close } = props;
     const { store, snapshot, result } = useRecents();
+    const target = { openScreen: (input: { screenId: string; params?: Record<string, string> }) => client.openScreen(input) };
     return (
-      <TriageList
-        theme={theme}
-        compact={layout.compact}
-        result={result}
-        snapshot={snapshot}
-        onToggleHost={store.toggleHost}
-        onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
-        onToggleSort={store.toggleSort}
-        onOpen={(row) => {
-          close();
-          openChat(store, row, { openScreen: (input) => client.openScreen(input) });
-        }}
-        onMarkRead={store.markRead}
-        onMarkUnread={store.markUnread}
-        onSetPinned={store.setPinned}
-        onRename={store.renameChat}
-        footer="first"
-        showSettingsButton
-        onShowAll={() => {
-          close();
-          client.openScreen({ screenId: RECENT_SCREEN_ID });
-        }}
-      />
+      <View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 6, paddingTop: 4 }}>
+          <HistoryButtons theme={theme} compact={layout.compact} target={target} onNavigate={close} />
+        </View>
+        <TriageList
+          theme={theme}
+          compact={layout.compact}
+          result={result}
+          snapshot={snapshot}
+          onToggleHost={store.toggleHost}
+          onToggleGroupByHost={() => store.updatePrefs({ groupByHost: !snapshot.prefs.groupByHost })}
+          onToggleSort={store.toggleSort}
+          onOpen={(row) => {
+            close();
+            openChat(store, row, target);
+          }}
+          onMarkRead={store.markRead}
+          onMarkUnread={store.markUnread}
+          onSetPinned={store.setPinned}
+          onRename={store.renameChat}
+          footer="first"
+          showSettingsButton
+          onShowAll={() => {
+            close();
+            client.openScreen({ screenId: RECENT_SCREEN_ID });
+          }}
+        />
+      </View>
     );
   };
 }

@@ -20,29 +20,28 @@ import { attachWheelScroll, excludeFromWindowDrag } from "./web";
 // The search box stays open (or closed) until the search button is pressed again, also across remounts.
 let searchOpen = false;
 
-/** Back and forward through visited chats, the unread and running counts, and the settings cog. */
-export function HeaderControls({
+/** Back and forward through the chats you had open. `onNavigate` runs before a chat opens (a popup closes). */
+export function HistoryButtons({
   theme,
   compact,
   target,
-  children,
+  onNavigate,
 }: {
   theme: PluginTheme;
   compact: boolean;
   target: OpenTarget;
-  /** Placed between the counts and the cog (the sidebar item's open/closed caret). */
-  children?: React.ReactNode;
+  onNavigate?: () => void;
 }) {
   const { store, result } = useRecents();
-  const { unread, running } = result.counts;
-  const fs = useFontScale();
   const history = useChatHistory();
   const size = compact ? 36 : 24;
   const go = (by: -1 | 1) => {
     const key = moveInHistory(by);
-    if (key) openChatByKey(store, result.all, key, target);
+    if (!key) return;
+    onNavigate?.();
+    openChatByKey(store, result.all, key, target);
   };
-  const historyButton = (by: -1 | 1, enabled: boolean) => (
+  const button = (by: -1 | 1, enabled: boolean) => (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={by < 0 ? "Back to the previous chat" : "Forward to the next chat"}
@@ -56,9 +55,33 @@ export function HeaderControls({
     </Pressable>
   );
   return (
+    <>
+      {button(-1, history.index > 0)}
+      {button(1, history.index < history.entries.length - 1)}
+    </>
+  );
+}
+
+/** Back and forward through visited chats, the unread and running counts, and the settings cog. */
+export function HeaderControls({
+  theme,
+  compact,
+  target,
+  children,
+}: {
+  theme: PluginTheme;
+  compact: boolean;
+  target: OpenTarget;
+  /** Placed between the counts and the cog (the sidebar item's open/closed caret). */
+  children?: React.ReactNode;
+}) {
+  const { result } = useRecents();
+  const { unread, running } = result.counts;
+  const fs = useFontScale();
+  const size = compact ? 36 : 24;
+  return (
     <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-      {historyButton(-1, history.index > 0)}
-      {historyButton(1, history.index < history.entries.length - 1)}
+      <HistoryButtons theme={theme} compact={compact} target={target} />
       {unread > 0 ? (
         <Text style={{ color: ledColor(theme, result.worstUnread ?? "finished"), fontWeight: "600", fontSize: fs(12) }}>{unread}</Text>
       ) : null}
@@ -82,6 +105,7 @@ export function RecentPanel({
   target,
   listHeight,
   onShowAll,
+  headerExtra,
 }: {
   theme: PluginTheme;
   compact: boolean;
@@ -91,6 +115,8 @@ export function RecentPanel({
   listHeight?: number;
   /** Opens the full list; without it Triage lists every chat itself. */
   onShowAll?: (query: string) => void;
+  /** Controls at the end of the first row (the sidebar view puts back, forward, counts and cog there). */
+  headerExtra?: React.ReactNode;
 }) {
   const { store, snapshot, result } = useRecents();
   const [query, setQuery] = useState("");
@@ -158,6 +184,7 @@ export function RecentPanel({
         onHosts={() => setHostsOpen(!hostsOpen)}
         searchOpen={showSearch}
         onSearch={toggleSearch}
+        extra={headerExtra}
       />
       {hostsOpen && snapshot.hosts.length >= 2 ? (
         <HostFilter
