@@ -9,7 +9,8 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import type { PaseoAgentListResult } from "./paseo-types";
 import { getStore } from "./runtime";
-import { HostFilter, ledColor, TriageList } from "./triage-list";
+import { HostFilter, isDark, ledColor, TriageList } from "./triage-list";
+import { hostColors } from "./format";
 import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
 import { limitsOf, openChat, useRecents } from "./use-recents";
 import { reportOpenChat } from "./open-chat";
@@ -19,6 +20,7 @@ import { HistoryButtons } from "./recent-panel";
 
 const INBOX_PILL_ID = "inbox";
 const LATER_PILL_ID = "later";
+const HOST_PILL_ID = "host";
 const PILL_PAGE_SIZE = 200;
 const PILL_MAX_PAGES = 25;
 
@@ -77,6 +79,13 @@ function LaterIcon(props: PluginButtonIconProps) {
       <Icon name="Clock" size={props.size} color={props.theme.colors.foregroundMuted} />
     </View>
   );
+}
+
+/** The chat's host (the host whose copy registered the pill) in the colour set for it in Paseo. */
+function HostIcon(props: PluginButtonIconProps) {
+  const { snapshot } = useRecents();
+  const tint = hostColors(snapshot.hostColors[props.host.id], isDark(props.theme.colors.surface0));
+  return <Icon name="Server" size={props.size} color={tint?.text ?? props.theme.colors.foregroundMuted} />;
 }
 
 function createInboxContent(client: PluginClientContext) {
@@ -163,11 +172,23 @@ export function registerPills(client: PluginClientContext): () => void {
   const InboxContent = createInboxContent(client);
   const registered = new Map<
     string,
-    { workspaceId: string; inbox: PluginButtonRegistration; later: PluginButtonRegistration }
+    { workspaceId: string; inbox: PluginButtonRegistration; later: PluginButtonRegistration; host: PluginButtonRegistration }
   >();
   let lastLabel = "Inbox";
   let lastInboxVisible = true;
   let lastLaterVisible = true;
+  let lastHostVisible = false;
+  // This copy's host: every chat that gets these pills runs on it. Its label names the host pill.
+  let selfId: string | null = null;
+  let lastHostLabel = "Host";
+  const hostLabel = () => store.getSnapshot().hosts.find((host) => host.id === selfId)?.label ?? "Host";
+  void client.paseo.hosts
+    .list()
+    .then(({ self }) => {
+      selfId = self.serverId;
+      refresh();
+    })
+    .catch(() => {});
   let release: (() => Promise<void>) | null = null;
 
   async function later(agentId: string): Promise<void> {
@@ -195,6 +216,7 @@ export function registerPills(client: PluginClientContext): () => void {
     if (existing?.workspaceId === agent.workspaceId) return;
     existing?.inbox.remove();
     existing?.later.remove();
+    existing?.host.remove();
     const workspaceId = agent.workspaceId;
     const agentId = agent.id;
     registered.set(agentId, {
@@ -223,6 +245,18 @@ export function registerPills(client: PluginClientContext): () => void {
           behavior: { kind: "action", onPress: () => later(agentId) },
         },
       }),
+      host: client.addComposerPill({
+        id: HOST_PILL_ID,
+        workspaceId,
+        agentId,
+        button: {
+          title: "The host this chat runs on",
+          icon: HostIcon,
+          label: lastHostLabel,
+          visible: lastHostVisible,
+          behavior: { kind: "action", onPress: () => client.openScreen({ screenId: RECENT_SCREEN_ID }) },
+        },
+      }),
     });
   }
 
@@ -230,23 +264,37 @@ export function registerPills(client: PluginClientContext): () => void {
     const entry = registered.get(agentId);
     entry?.inbox.remove();
     entry?.later.remove();
+    entry?.host.remove();
     registered.delete(agentId);
   }
 
-  const unsubscribe = store.subscribe(() => {
+  function refresh() {
     const snapshot = store.getSnapshot();
     const label = inboxLabel(buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now()));
     const inboxVisible = snapshot.prefs.showInboxPill;
     const laterVisible = snapshot.prefs.showLaterPill;
-    if (label === lastLabel && inboxVisible === lastInboxVisible && laterVisible === lastLaterVisible) return;
+    const hostVisible = snapshot.prefs.showHostPill;
+    const host = hostLabel();
+    if (
+      label === lastLabel &&
+      inboxVisible === lastInboxVisible &&
+      laterVisible === lastLaterVisible &&
+      hostVisible === lastHostVisible &&
+      host === lastHostLabel
+    )
+      return;
     lastLabel = label;
     lastInboxVisible = inboxVisible;
     lastLaterVisible = laterVisible;
+    lastHostVisible = hostVisible;
+    lastHostLabel = host;
     for (const entry of registered.values()) {
       entry.inbox.update({ label, visible: inboxVisible });
       entry.later.update({ visible: laterVisible });
+      entry.host.update({ label: host, visible: hostVisible });
     }
-  });
+  }
+  const unsubscribe = store.subscribe(refresh);
 
   const directory = { filter: { includeArchived: false }, sort: [{ key: "updated_at" as const, direction: "desc" as const }] };
 

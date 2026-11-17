@@ -376,6 +376,12 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
             value={prefs.showLaterPill}
             onValueChange={(next) => change({ showLaterPill: next })}
           />
+          <SettingsSwitch
+            label="Host pill"
+            hint="The host the chat runs on, in the colour you gave it in Paseo."
+            value={prefs.showHostPill}
+            onValueChange={(next) => change({ showHostPill: next })}
+          />
           <SettingsSelect
             label="After Later"
             hint="Open the next chat, or stay on this one."

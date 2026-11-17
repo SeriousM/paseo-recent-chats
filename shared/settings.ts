@@ -60,6 +60,8 @@ export const prefsSettings = defineSettings({
     laterBehavior: z.enum(["jump", "stay"]).default("jump"),
     showInboxPill: z.boolean().default(true),
     showLaterPill: z.boolean().default(true),
+    /** A pill with the chat's host, in the host's colour. Off by default. */
+    showHostPill: z.boolean().default(false),
     /** What each list row shows, in which order and how long. See shared/layout.ts. */
     layout: z
       .preprocess(
