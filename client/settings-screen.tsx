@@ -13,6 +13,7 @@ import { useRecents } from "./use-recents";
 import { updateViewMode, useViewMode } from "./view-mode";
 import type { UpdateCheck } from "./store";
 import { copyText } from "./row-menu";
+import { PHONE_ROW_ONLY } from "./sidebar-item";
 
 /** The browser's navigator where there is one (desktop and web); undefined on phones. */
 declare const navigator: { userAgent: string; clipboard?: { writeText(text: string): Promise<void> } } | undefined;
@@ -307,7 +308,13 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
             value={prefs.sidebarExpanded}
             onValueChange={(next) => change({ sidebarExpanded: next })}
           />
-          {(["sidebarHeightPhone", "sidebarHeightDesktop"] as const).map((key) => (
+          {PHONE_ROW_ONLY ? (
+            <Text style={[muted, { padding: 12 }]}>
+              On phones the sidebar shows only the Recent Chats row, which opens the full list: Paseo gives the rows above its own
+              list too little room. For the list in the drawer, choose Recent Chats under Paseo Settings, Sidebar, Sidebar view.
+            </Text>
+          ) : null}
+          {(PHONE_ROW_ONLY ? (["sidebarHeightDesktop"] as const) : (["sidebarHeightPhone", "sidebarHeightDesktop"] as const)).map((key) => (
             <View key={key} style={{ padding: 12, gap: 8 }}>
               <Text style={{ color: theme.colors.foreground, fontSize: 14 }}>
                 {key === "sidebarHeightPhone" ? "Height on phones" : "Height on wide screens"}
