@@ -320,3 +320,15 @@ export function attachWheelScroll(scrollView: unknown, area: unknown): () => voi
   target.addEventListener("wheel", listener, { passive: false, capture: true });
   return () => target.removeEventListener("wheel", listener, { capture: true });
 }
+
+/** The browser's navigator where there is one (desktop and web); undefined on phones. */
+declare const navigator: { userAgent: string; clipboard?: { writeText(text: string): Promise<void> } } | undefined;
+
+export function readUserAgent(): string | null {
+  return typeof navigator === "undefined" ? null : navigator.userAgent;
+}
+
+export function clipboardWriter(): ((text: string) => Promise<void>) | null {
+  const clipboard = typeof navigator === "undefined" ? undefined : navigator?.clipboard;
+  return clipboard ? (text) => clipboard.writeText(text) : null;
+}

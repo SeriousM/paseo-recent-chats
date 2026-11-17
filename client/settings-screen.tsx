@@ -14,9 +14,7 @@ import { updateViewMode, useViewMode } from "./view-mode";
 import type { UpdateCheck } from "./store";
 import { copyText } from "./row-menu";
 import { PHONE_ROW_ONLY } from "./sidebar-item";
-
-/** The browser's navigator where there is one (desktop and web); undefined on phones. */
-declare const navigator: { userAgent: string; clipboard?: { writeText(text: string): Promise<void> } } | undefined;
+import { clipboardWriter, readUserAgent } from "./web";
 
 /** Each composer pill's switch in the settings. */
 const PILL_SETTINGS: Record<PillId, { label: string; hint: string; key: "showInboxPill" | "showLaterPill" | "showHostPill" }> = {
@@ -81,7 +79,7 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
         createdAt: new Date().toISOString(),
         device: {
           platform: Platform.OS,
-          userAgent: typeof navigator === "undefined" ? null : navigator.userAgent,
+          userAgent: readUserAgent(),
           compact,
           viewMode: { ...mode, toggled: mode.toggled.length, legacyPins: mode.legacyPins.length },
         },
@@ -92,8 +90,7 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
     );
     setDiagnostics(report);
     setCopied(null);
-    const clipboard = typeof navigator === "undefined" ? undefined : navigator?.clipboard;
-    const copy = copyText ?? (clipboard ? (text: string) => clipboard.writeText(text) : null);
+    const copy = copyText ?? clipboardWriter();
     if (copy) void copy(report).then(() => setCopied("copied"), () => setCopied("failed"));
   };
   const where = snapshot.storageHosts.length
