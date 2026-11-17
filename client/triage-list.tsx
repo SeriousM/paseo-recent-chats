@@ -18,6 +18,7 @@ import { PROVIDER_ICONS } from "./provider-icons";
 import { copyText, MenuButton, MenuView, type MenuGroups } from "./row-menu";
 import { getStore } from "./runtime";
 import { moveInOrder } from "./project-tree";
+import { usePaseoNavigation } from "./navigation";
 
 /** Hover this long on a row before its full-names card shows. */
 const CARD_DELAY_MS = 450;
@@ -456,6 +457,8 @@ export interface RowViewProps {
   onSetPinned(key: string, pinned: boolean): void;
   /** Present where chats can be renamed: Rename in the row's ⋮ menu opens a title field. */
   onRename?: (key: string, title: string) => Promise<void>;
+  /** A row inside the Projects tree, under its workspace: its menu leaves out what the workspace row offers. */
+  inTree?: boolean;
 }
 
 /** A chat's row, followed by its sub-agents that ask you something, each indented under it. */
@@ -494,6 +497,7 @@ function ChatRow({
   onSetPinned,
   onRename: renameChat,
   nested = false,
+  inTree = false,
 }: RowViewProps & {
   /** A sub-agent listed under its parent: no pin, read or Later buttons, no renaming. */
   nested?: boolean;
@@ -563,6 +567,7 @@ function ChatRow({
   }, [layer, cardShown, row, theme, showHost, cardTransparency]);
   // The ⋮ menu (button, right-click, long press) holds every action on the chat, Rename included.
   const openMenuAt = useMenuOpener();
+  const nav = usePaseoNavigation();
   const menuButton = useRef<View>(null);
   const openMenu = openMenuAt && !nested
     ? (anchor: View | null) => {
@@ -578,6 +583,9 @@ function ChatRow({
           groups: [
             [
               { label: "Open", icon: "ExternalLink", onPress: () => onOpen(row) },
+              nav && row.workspaceId && !inTree
+                ? { label: "Open workspace", icon: "FolderOpen", onPress: () => nav.openWorkspace(row.hostId, row.workspaceId as string) }
+                : null,
               onRename ? { label: "Rename", icon: "Pencil", onPress: () => setEditing(true) } : null,
             ],
             [

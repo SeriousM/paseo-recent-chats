@@ -379,6 +379,7 @@ export function ProjectsView({
       lines={inStrip ? stripLines : treeLines}
       columns={inStrip ? stripColumns : treeColumns}
       current={row.key === openKey}
+      inTree={!inStrip}
     />
   );
   const link = { fontSize: fs(12), color: theme.colors.accent, paddingHorizontal: 10, paddingVertical: compact ? 10 : 3 };
@@ -823,25 +824,54 @@ function HostNode({
   const folded = toggled.has(foldKey);
   const quietOpen = toggled.has(quietKey);
   const names = host.quiet.map((project) => project.name);
+  const menu = useRowMenu(theme, compact, host.label, () => {
+    const store = getStore();
+    const chats = [...host.projects, ...host.quiet].flatMap((project) =>
+      project.workspaces.flatMap((workspace) => [...workspace.chats, ...workspace.older]),
+    );
+    const unread = chats.filter((row) => row.bucket === "unread").map((row) => row.key);
+    return [
+      [
+        unread.length ? { label: "Mark all chats read", icon: "CheckCheck", onPress: () => store.markRead(unread) } : null,
+        {
+          label: "Collapse its projects",
+          icon: "ChevronsDownUp",
+          onPress: () => {
+            const toggledNow = currentViewMode().toggled;
+            const add = [...host.projects, ...host.quiet].map((project) => `${prefix}project:${project.key}`).filter((k) => !toggledNow.includes(k));
+            updateViewMode({ toggled: [...toggledNow, ...add] });
+          },
+        },
+      ],
+      [
+        // The Hosts dropdown switches it on again.
+        store.getSnapshot().hosts.length >= 2 ? { label: "Hide this host", icon: "EyeOff", onPress: () => store.toggleHost(host.hostId) } : null,
+        copyText ? { label: "Copy host name", icon: "Copy", onPress: () => copyText?.(host.label) } : null,
+      ],
+    ];
+  });
   return (
     <View>
-      <HostHeading
-        theme={theme}
-        label={host.label}
-        colorName={colorName}
-        unread={host.need}
-        collapsed={folded}
-        onToggleCollapsed={() => toggleNode(foldKey)}
-        before={
-          drag ? (
-            <View style={{ paddingLeft: 4, paddingBottom: 2 }}>
-              <DragHandle drag={drag} label={host.label}>
-                <Icon name="GripVertical" size={12} color={theme.colors.foregroundMuted} />
-              </DragHandle>
-            </View>
-          ) : undefined
-        }
-      />
+      <View ref={menu.row}>
+        <HostHeading
+          theme={theme}
+          label={host.label}
+          colorName={colorName}
+          unread={host.need}
+          collapsed={folded}
+          onToggleCollapsed={() => toggleNode(foldKey)}
+          before={
+            drag ? (
+              <View style={{ paddingLeft: 4, paddingBottom: 2 }}>
+                <DragHandle drag={drag} label={host.label}>
+                  <Icon name="GripVertical" size={12} color={theme.colors.foregroundMuted} />
+                </DragHandle>
+              </View>
+            ) : undefined
+          }
+          after={menu.button ? <View style={{ paddingRight: 6 }}>{menu.button}</View> : undefined}
+        />
+      </View>
       {folded ? null : (
         <View>
           {sortable ? (
@@ -1276,10 +1306,7 @@ function WorkspaceNode({
     const newest = [...all].sort((a, b) => b.sortAt - a.sortAt)[0];
     const running = all.some((row) => row.bucket === "running");
     return [
-      [
-        nav && workspaceId ? { label: "Open workspace", icon: "ExternalLink", onPress: () => nav.openWorkspace(workspace.hostId, workspaceId) } : null,
-        nav && info?.projectId ? { label: "New workspace", icon: "Plus", onPress: () => nav.newWorkspace(workspace.hostId, info.projectId) } : null,
-      ],
+      [nav && workspaceId ? { label: "Open workspace", icon: "ExternalLink", onPress: () => nav.openWorkspace(workspace.hostId, workspaceId) } : null],
       [
         workspaceId ? { label: "Rename", icon: "Pencil", onPress: () => setEditing(true) } : null,
         workspaceId
