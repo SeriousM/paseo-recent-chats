@@ -3,6 +3,13 @@ import { z } from "zod";
 import { DEFAULT_LAYOUT, ROW_TOKEN_IDS, rowTokenSchema } from "./layout";
 import { DEFAULT_SECTION_SORT, SECTIONS } from "./sections";
 
+/** This plugin's composer pills, in their default order. */
+export const PILL_IDS = ["inbox", "later", "host"] as const;
+export type PillId = (typeof PILL_IDS)[number];
+
+/** The saved pill order made complete: every pill once, those missing from it after, in their default order. */
+export const pillsInOrder = (order: readonly PillId[]): PillId[] => [...new Set([...order, ...PILL_IDS])];
+
 /**
  * Drops list entries a newer version of this plugin knows and this one does not (a new row item, a new
  * section), so settings written by a newer version stay readable here instead of becoming invalid.
@@ -62,6 +69,8 @@ export const prefsSettings = defineSettings({
     showLaterPill: z.boolean().default(true),
     /** A pill with the chat's host, in the host's colour. Off by default. */
     showHostPill: z.boolean().default(false),
+    /** Order of this plugin's composer pills; ones a newer version adds and this list lacks follow. */
+    pillOrder: z.preprocess(knownOnly(PILL_IDS, (id) => id), z.array(z.enum(PILL_IDS))).default([...PILL_IDS]),
     /** What each list row shows, in which order and how long. See shared/layout.ts. */
     layout: z
       .preprocess(

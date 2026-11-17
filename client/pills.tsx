@@ -1,4 +1,5 @@
 import type {
+  PluginButton,
   PluginButtonContentProps,
   PluginButtonIconProps,
   PluginButtonRegistration,
@@ -17,10 +18,8 @@ import { reportOpenChat } from "./open-chat";
 import { watchShown } from "./web";
 import { RECENT_SCREEN_ID } from "./sidebar-item";
 import { HistoryButtons } from "./recent-panel";
+import { PILL_IDS, pillsInOrder, type PillId } from "../shared/settings";
 
-const INBOX_PILL_ID = "inbox";
-const LATER_PILL_ID = "later";
-const HOST_PILL_ID = "host";
 const PILL_PAGE_SIZE = 200;
 const PILL_MAX_PAGES = 25;
 
@@ -170,14 +169,12 @@ export function registerPills(client: PluginClientContext): () => void {
   const store = getStore();
   const lifetime = new AbortController();
   const InboxContent = createInboxContent(client);
-  const registered = new Map<
-    string,
-    { workspaceId: string; inbox: PluginButtonRegistration; later: PluginButtonRegistration; host: PluginButtonRegistration }
-  >();
+  // Per chat: its workspace and its pills. Paseo shows a chat's pills in the order they were added, so they
+  // are added in the order chosen in the settings, and added again when that order changes.
+  const registered = new Map<string, { workspaceId: string; pills: Map<PillId, PluginButtonRegistration> }>();
   let lastLabel = "Inbox";
-  let lastInboxVisible = true;
-  let lastLaterVisible = true;
-  let lastHostVisible = false;
+  let lastVisible: Record<PillId, boolean> = { inbox: true, later: true, host: false };
+  let lastOrder: PillId[] = [...PILL_IDS];
   // This copy's host: every chat that gets these pills runs on it. Its label names the host pill.
   let selfId: string | null = null;
   let lastHostLabel = "Host";
@@ -210,88 +207,77 @@ export function registerPills(client: PluginClientContext): () => void {
     if (next) openChat(store, next, { openScreen: (input) => client.openScreen(input) });
   }
 
+  function button(pill: PillId, agentId: string): PluginButton {
+    switch (pill) {
+      case "inbox":
+        return {
+          title: "Recent Chats inbox",
+          icon: InboxIcon,
+          label: lastLabel,
+          visible: lastVisible.inbox,
+          behavior: { kind: "popover", Content: InboxContent },
+        };
+      case "later":
+        return {
+          title: "Mark this chat unread and open the next one",
+          icon: LaterIcon,
+          label: "Later",
+          visible: lastVisible.later,
+          behavior: { kind: "action", onPress: () => later(agentId) },
+        };
+      case "host":
+        return {
+          title: "The host this chat runs on",
+          icon: HostIcon,
+          label: lastHostLabel,
+          visible: lastVisible.host,
+          behavior: { kind: "action", onPress: () => client.openScreen({ screenId: RECENT_SCREEN_ID }) },
+        };
+    }
+  }
+
+  function addPills(agentId: string, workspaceId: string) {
+    const pills = new Map<PillId, PluginButtonRegistration>();
+    for (const pill of lastOrder) pills.set(pill, client.addComposerPill({ id: pill, workspaceId, agentId, button: button(pill, agentId) }));
+    registered.set(agentId, { workspaceId, pills });
+  }
+
   function register(agent: { id: string; workspaceId?: string | null }) {
     if (lifetime.signal.aborted || !agent.workspaceId) return;
     const existing = registered.get(agent.id);
     if (existing?.workspaceId === agent.workspaceId) return;
-    existing?.inbox.remove();
-    existing?.later.remove();
-    existing?.host.remove();
-    const workspaceId = agent.workspaceId;
-    const agentId = agent.id;
-    registered.set(agentId, {
-      workspaceId,
-      inbox: client.addComposerPill({
-        id: INBOX_PILL_ID,
-        workspaceId,
-        agentId,
-        button: {
-          title: "Recent Chats inbox",
-          icon: InboxIcon,
-          label: lastLabel,
-          visible: lastInboxVisible,
-          behavior: { kind: "popover", Content: InboxContent },
-        },
-      }),
-      later: client.addComposerPill({
-        id: LATER_PILL_ID,
-        workspaceId,
-        agentId,
-        button: {
-          title: "Mark this chat unread and open the next one",
-          icon: LaterIcon,
-          label: "Later",
-          visible: lastLaterVisible,
-          behavior: { kind: "action", onPress: () => later(agentId) },
-        },
-      }),
-      host: client.addComposerPill({
-        id: HOST_PILL_ID,
-        workspaceId,
-        agentId,
-        button: {
-          title: "The host this chat runs on",
-          icon: HostIcon,
-          label: lastHostLabel,
-          visible: lastHostVisible,
-          behavior: { kind: "action", onPress: () => client.openScreen({ screenId: RECENT_SCREEN_ID }) },
-        },
-      }),
-    });
+    unregister(agent.id);
+    addPills(agent.id, agent.workspaceId);
   }
 
   function unregister(agentId: string) {
-    const entry = registered.get(agentId);
-    entry?.inbox.remove();
-    entry?.later.remove();
-    entry?.host.remove();
+    for (const pill of registered.get(agentId)?.pills.values() ?? []) pill.remove();
     registered.delete(agentId);
   }
 
   function refresh() {
     const snapshot = store.getSnapshot();
     const label = inboxLabel(buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now()));
-    const inboxVisible = snapshot.prefs.showInboxPill;
-    const laterVisible = snapshot.prefs.showLaterPill;
-    const hostVisible = snapshot.prefs.showHostPill;
+    const visible = { inbox: snapshot.prefs.showInboxPill, later: snapshot.prefs.showLaterPill, host: snapshot.prefs.showHostPill };
+    const order = pillsInOrder(snapshot.prefs.pillOrder);
     const host = hostLabel();
-    if (
-      label === lastLabel &&
-      inboxVisible === lastInboxVisible &&
-      laterVisible === lastLaterVisible &&
-      hostVisible === lastHostVisible &&
-      host === lastHostLabel
-    )
-      return;
+    const reorder = order.join() !== lastOrder.join();
+    const changed =
+      label !== lastLabel || host !== lastHostLabel || PILL_IDS.some((pill) => visible[pill] !== lastVisible[pill]);
+    if (!reorder && !changed) return;
     lastLabel = label;
-    lastInboxVisible = inboxVisible;
-    lastLaterVisible = laterVisible;
-    lastHostVisible = hostVisible;
+    lastVisible = visible;
+    lastOrder = order;
     lastHostLabel = host;
-    for (const entry of registered.values()) {
-      entry.inbox.update({ label, visible: inboxVisible });
-      entry.later.update({ visible: laterVisible });
-      entry.host.update({ label: host, visible: hostVisible });
+    for (const [agentId, entry] of [...registered]) {
+      if (reorder) {
+        unregister(agentId);
+        addPills(agentId, entry.workspaceId);
+        continue;
+      }
+      entry.pills.get("inbox")?.update({ label, visible: visible.inbox });
+      entry.pills.get("later")?.update({ visible: visible.later });
+      entry.pills.get("host")?.update({ label: host, visible: visible.host });
     }
   }
   const unsubscribe = store.subscribe(refresh);

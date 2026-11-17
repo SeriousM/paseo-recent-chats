@@ -3,8 +3,8 @@ import { SettingsCard, SettingsSection, SettingsSelect, SettingsSwitch } from "@
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { RowToken } from "../shared/layout";
-import type { Prefs } from "../shared/settings";
-import { LayoutEditor, LayoutPreview, TooltipPreview } from "./layout-editor";
+import { pillsInOrder, type PillId, type Prefs } from "../shared/settings";
+import { IconButton, LayoutEditor, LayoutPreview, TooltipPreview } from "./layout-editor";
 import { ProjectsPreview } from "./projects-view";
 import { BOTH_VIEWS, presetOptions, SectionEditor } from "./section-editor";
 import { Slider } from "./slider";
@@ -17,6 +17,17 @@ import { PHONE_ROW_ONLY } from "./sidebar-item";
 
 /** The browser's navigator where there is one (desktop and web); undefined on phones. */
 declare const navigator: { userAgent: string; clipboard?: { writeText(text: string): Promise<void> } } | undefined;
+
+/** Each composer pill's switch in the settings. */
+const PILL_SETTINGS: Record<PillId, { label: string; hint: string; key: "showInboxPill" | "showLaterPill" | "showHostPill" }> = {
+  inbox: {
+    label: "Inbox pill",
+    hint: "Counts and the chat list inside every chat. Also tells the plugin which chat is open (highlight, back and forward).",
+    key: "showInboxPill",
+  },
+  later: { label: "Later pill", hint: "Marks the current chat unread.", key: "showLaterPill" },
+  host: { label: "Host pill", hint: "The host the chat runs on, in the colour you gave it in Paseo.", key: "showHostPill" },
+};
 
 /** The Projects tree's switches, in the order they are shown. */
 const PROJECT_SWITCHES: readonly [keyof Prefs["projectsShow"], string, string][] = [
@@ -364,24 +375,35 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
 
       <SettingsSection title="Composer pills">
         <SettingsCard>
-          <SettingsSwitch
-            label="Inbox pill"
-            hint="Counts and the chat list inside every chat. Also tells the plugin which chat is open (highlight, back and forward)."
-            value={prefs.showInboxPill}
-            onValueChange={(next) => change({ showInboxPill: next })}
-          />
-          <SettingsSwitch
-            label="Later pill"
-            hint="Marks the current chat unread."
-            value={prefs.showLaterPill}
-            onValueChange={(next) => change({ showLaterPill: next })}
-          />
-          <SettingsSwitch
-            label="Host pill"
-            hint="The host the chat runs on, in the colour you gave it in Paseo."
-            value={prefs.showHostPill}
-            onValueChange={(next) => change({ showHostPill: next })}
-          />
+          <Text style={[muted, { paddingHorizontal: 12, paddingTop: 12 }]}>
+            Recent Chats' pills next to the composer, in this order; the arrows move one. Where they sit among the pills of Paseo
+            and other plugins is up to Paseo.
+          </Text>
+          {pillsInOrder(prefs.pillOrder).map((pill, index, order) => {
+            const move = (by: number) => {
+              const next = [...order];
+              next.splice(index, 1);
+              next.splice(index + by, 0, pill);
+              change({ pillOrder: next });
+            };
+            const { label, hint, key } = PILL_SETTINGS[pill];
+            return (
+              <View key={pill} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 8 }}>
+                <IconButton theme={theme} compact={compact} label={`Move ${label} up`} icon="ChevronUp" disabled={index === 0} onPress={() => move(-1)} />
+                <IconButton
+                  theme={theme}
+                  compact={compact}
+                  label={`Move ${label} down`}
+                  icon="ChevronDown"
+                  disabled={index === order.length - 1}
+                  onPress={() => move(1)}
+                />
+                <View style={{ flex: 1 }}>
+                  <SettingsSwitch label={label} hint={hint} value={prefs[key]} onValueChange={(next) => change({ [key]: next })} />
+                </View>
+              </View>
+            );
+          })}
           <SettingsSelect
             label="After Later"
             hint="Open the next chat, or stay on this one."

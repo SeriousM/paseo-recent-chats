@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PREFS, parseStoredPrefs, toggleHiddenHost } from "../client/prefs";
 import { buildTriage, type ChatInput, type TriageLimits } from "../client/triage";
-import { prefsSettings } from "../shared/settings";
+import { pillsInOrder, prefsSettings } from "../shared/settings";
 
 const NOW = Date.UTC(2026, 10, 5, 12, 0, 0);
 const MIN = 60_000;
@@ -154,5 +154,12 @@ describe("settings written by a newer version", () => {
     expect(newer.success).toBe(true);
     expect(newer.data?.layout.map((token) => token.id)).toEqual(["title"]);
     expect(newer.data?.sectionOrder).toEqual(["unread", "pinned", "running", "inactive"]);
+  });
+});
+
+describe("pill order", () => {
+  it("keeps a stored order, drops pills this version does not know and adds the ones it lacks", () => {
+    const parsed = prefsSettings.schema.parse({ pillOrder: ["host", "future", "inbox"] });
+    expect(pillsInOrder(parsed.pillOrder)).toEqual(["host", "inbox", "later"]);
   });
 });
