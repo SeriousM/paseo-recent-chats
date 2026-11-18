@@ -41,7 +41,7 @@ export function HistoryButtons({
     onNavigate?.();
     openChatByKey(store, result.all, key, target);
   };
-  // The mouse's back and forward buttons step the same way, while these buttons are on screen.
+  // The mouse's back and forward buttons and Alt+← / Alt+→ step the same way, while these buttons are on screen.
   const latestGo = useRef(go);
   latestGo.current = go;
   useEffect(() => onBackForward((by) => latestGo.current(by)), []);
