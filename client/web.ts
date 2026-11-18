@@ -593,3 +593,37 @@ export function onAltShiftHeld(handler: (held: boolean) => void): () => void {
     window.removeEventListener("blur", blur as never);
   };
 }
+
+/**
+ * Presses the composer pill with this title (its accessibility label) in the chat on screen: the one in the
+ * pane that holds the focus, else the first one shown. Returns whether one was found. A no-op off the web.
+ */
+export function pressComposerPill(title: string): boolean {
+  if (Platform.OS !== "web" || typeof document === "undefined") return false;
+  const pills = Array.from(document.querySelectorAll(`[aria-label="${title}"]`)).filter((pill) => pill.offsetParent !== null);
+  const focused = pills.find((pill) => {
+    const pane = chatPaneOf(pill);
+    return pane?.contains(document.activeElement) ?? false;
+  });
+  const pill = focused ?? pills[0];
+  if (!pill) return false;
+  pill.click();
+  return true;
+}
+
+/**
+ * ↑, ↓ and Enter without modifiers, from anywhere but a terminal, while the caller is shown (a popup's list).
+ * `handler` returns whether it used the key; then the key is taken. A no-op off the web.
+ */
+export function onListKeys(handler: (key: "up" | "down" | "enter") => boolean): () => void {
+  if (Platform.OS !== "web" || typeof document === "undefined") return () => {};
+  const key = (event: DomKeyEvent) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isTerminal(event.target)) return;
+    const name = event.key === "ArrowUp" ? "up" : event.key === "ArrowDown" ? "down" : event.key === "Enter" ? "enter" : null;
+    if (!name || !handler(name)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  document.addEventListener("keydown", key, true);
+  return () => document.removeEventListener("keydown", key, true);
+}

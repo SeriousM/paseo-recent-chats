@@ -467,6 +467,8 @@ export interface RowViewProps {
   narrow?: boolean;
   /** Its place in Needs you (1-9): shown on the row while Alt+Shift is held, see numbered.ts. */
   number?: number;
+  /** Chosen with the arrow keys in a popup's list: framed in the accent colour. */
+  selected?: boolean;
 }
 
 /** A chat's row, followed by its sub-agents that ask you something, each indented under it. */
@@ -508,6 +510,7 @@ function ChatRow({
   inTree = false,
   narrow = false,
   number,
+  selected = false,
 }: RowViewProps & {
   /** A sub-agent listed under its parent: no pin, read or Later buttons, no renaming. */
   nested?: boolean;
@@ -781,7 +784,11 @@ function ChatRow({
         setShowFull(false);
       }}
       onLongPress={editing ? undefined : openMenu ? () => openMenu(null) : fullNames ? () => setShowFull((value) => !value) : undefined}
-      style={[styles.row, cardShown && !layer ? { position: "relative", zIndex: 20 } : null]}
+      style={[
+        styles.row,
+        selected ? { borderWidth: 1, borderColor: theme.colors.accent, paddingVertical: 2, paddingLeft: (compact ? 10 : 8) - 1, paddingRight: 5 } : null,
+        cardShown && !layer ? { position: "relative", zIndex: 20 } : null,
+      ]}
     >
       {number !== undefined && numbersShown ? (
         <View
@@ -1137,6 +1144,10 @@ export interface TriageListProps {
   searching?: boolean;
   /** Adds a cog to the footer that opens the plugin settings. */
   showSettingsButton?: boolean;
+  /** The row chosen with the arrow keys (the Inbox popup). */
+  selectedKey?: string | null;
+  /** Told the rows on screen, in order (not folded away), so the arrow keys can step through them. */
+  onVisibleRows?: (keys: readonly string[]) => void;
 }
 
 export function TriageList({
@@ -1159,6 +1170,8 @@ export function TriageList({
   footer = "last",
   searching = false,
   showSettingsButton = false,
+  selectedKey = null,
+  onVisibleRows,
 }: TriageListProps) {
   const folded = useCollapsed();
   // Highlighted wherever the list is shown: the chat whose composer is on screen.
@@ -1280,6 +1293,17 @@ export function TriageList({
       ? []
       : shown.filter((row) => row.bucket === "unread" && !(grouped && folded.has(hostGroupKey(row.hostId)))).slice(0, 9).map((row) => row.key);
   const numberOf = new Map(numbered.map((key, index) => [key, index + 1]));
+  const headingsShown = prefs.groupHeadings && !searching;
+  const visibleKeys = shown
+    .filter((row) => {
+      const section = row.pinned ? "pinned" : row.bucket;
+      const hostFolded = grouped && folded.has(hostGroupKey(row.hostId));
+      const sectionFolded = headingsShown && section !== "unread" && folded.has(sectionGroupKey(section, grouped ? row.hostId : null));
+      return !hostFolded && !sectionFolded;
+    })
+    .map((row) => row.key)
+    .join("\n");
+  useEffect(() => onVisibleRows?.(visibleKeys ? visibleKeys.split("\n") : []), [visibleKeys, onVisibleRows]);
   useNumberedChats(numbered);
 
   if (footer === "only") return footerNode;
@@ -1402,6 +1426,7 @@ export function TriageList({
                 onSetPinned={onSetPinned}
                 onRename={onRename}
                 number={numberOf.get(row.key)}
+                selected={row.key === selectedKey}
               />
               </View>
               )}

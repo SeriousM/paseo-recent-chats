@@ -15,7 +15,7 @@ import { hostColors } from "./format";
 import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
 import { limitsOf, openChat, useRecents } from "./use-recents";
 import { currentOpenChat, reportOpenChat } from "./open-chat";
-import { onAltKey, onAltShiftHeld, watchShown } from "./web";
+import { onAltKey, onAltShiftHeld, onListKeys, pressComposerPill, watchShown } from "./web";
 import { isLater } from "./overlay";
 import { browsedChat, endBrowsing } from "./browse";
 import { currentLinger } from "./linger";
@@ -25,6 +25,8 @@ import { HistoryButtons } from "./recent-panel";
 import { PILL_IDS, pillsInOrder, type PillId } from "../shared/settings";
 import { useTouchInput } from "./input";
 
+/** The Inbox pill's title, which is also how Alt+I finds it on screen. */
+const INBOX_TITLE = "Recent Chats inbox";
 const PILL_PAGE_SIZE = 200;
 const PILL_MAX_PAGES = 25;
 
@@ -103,8 +105,35 @@ function createInboxContent(client: PluginClientContext) {
     const touch = useTouchInput();
     const manyHosts = snapshot.hosts.length >= 2;
     const tone = hostsOpen ? theme.colors.foreground : theme.colors.foregroundMuted;
+    // ↑ ↓ choose a row, Enter opens it (Alt+I opens this popup from the keyboard).
+    const [visible, setVisible] = useState<readonly string[]>([]);
+    const [chosen, setChosen] = useState<string | null>(null);
+    const selected = chosen !== null && visible.includes(chosen) ? chosen : (visible[0] ?? null);
+    const keys = useRef({ visible, selected, result });
+    keys.current = { visible, selected, result };
+    const root = useRef<View>(null);
+    useEffect(
+      () =>
+        onListKeys((key) => {
+          const { visible: list, selected: current, result: latest } = keys.current;
+          // Only while this popup is on screen: the app may keep it mounted after it closes.
+          if (list.length === 0 || (root.current as unknown as { offsetParent?: unknown } | null)?.offsetParent === null) return false;
+          if (key === "enter") {
+            const row = latest.all.find((candidate) => candidate.key === current);
+            if (!row) return false;
+            close();
+            openChat(store, row, target);
+            return true;
+          }
+          const at = current === null ? -1 : list.indexOf(current);
+          const next = key === "down" ? Math.min(list.length - 1, at + 1) : Math.max(0, at - 1);
+          setChosen(list[next] ?? null);
+          return true;
+        }),
+      [close, store],
+    );
     return (
-      <View>
+      <View ref={root}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 6, paddingTop: 4 }}>
           {manyHosts ? (
             <Pressable
@@ -163,6 +192,8 @@ function createInboxContent(client: PluginClientContext) {
           onRename={store.renameChat}
           footer="first"
           showSettingsButton
+          selectedKey={selected}
+          onVisibleRows={setVisible}
           onShowAll={() => {
             close();
             client.openScreen({ screenId: RECENT_SCREEN_ID });
@@ -237,6 +268,9 @@ export function registerPills(client: PluginClientContext): () => void {
     return true;
   });
 
+  // Alt+I opens (or closes) the Inbox pill's list of the chat on screen.
+  const stopAltI = onAltKey("KeyI", () => pressComposerPill(INBOX_TITLE));
+
   // Alt+Shift+1 … 9 open the first to ninth chat of Needs you as the list on screen numbers them; the numbers
   // show while Alt+Shift is held. Alt+1 … 9 and Ctrl+1 … 9 are Paseo's (tabs and workspaces), which takes them
   // before a plugin sees them.
@@ -263,7 +297,7 @@ export function registerPills(client: PluginClientContext): () => void {
     switch (pill) {
       case "inbox":
         return {
-          title: "Recent Chats inbox",
+          title: INBOX_TITLE,
           icon: InboxIcon,
           label: lastLabel,
           visible: lastVisible.inbox,
@@ -397,6 +431,7 @@ export function registerPills(client: PluginClientContext): () => void {
     pillHostId = null;
     unsubscribe();
     stopAltL();
+    stopAltI();
     for (const stop of stopAltDigits) stop();
     stopNumbersShown();
     setNumbersShown(false);
