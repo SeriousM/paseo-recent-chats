@@ -12,21 +12,18 @@ import type { PaseoAgentListResult } from "./paseo-types";
 import { getStore } from "./runtime";
 import { HostFilter, isDark, ledColor, TriageList } from "./triage-list";
 import { hostColors } from "./format";
-import { buildTriage, chatKey, nextUp, type Overlay, type TriageResult } from "./triage";
+import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
 import { limitsOf, openChat, useRecents } from "./use-recents";
 import { currentOpenChat, reportOpenChat } from "./open-chat";
 import { onAltKey, onAltShiftHeld, watchShown } from "./web";
 import { isLater } from "./overlay";
-import { browsedChat, endBrowsing, subscribeBrowsing, useBrowsedChat } from "./browse";
+import { browsedChat, endBrowsing } from "./browse";
 import { currentLinger } from "./linger";
 import { numberedChats, setNumbersShown } from "./numbered";
 import { RECENT_SCREEN_ID } from "./sidebar-item";
 import { HistoryButtons } from "./recent-panel";
 import { PILL_IDS, pillsInOrder, type PillId } from "../shared/settings";
 import { useTouchInput } from "./input";
-
-/** Marked Later by you; a chat that is only being looked at (kept unread until you act in it) is not. */
-const markedLater = (overlay: Overlay, key: string, browsed: string | null): boolean => key !== browsed && isLater(overlay, key);
 
 const PILL_PAGE_SIZE = 200;
 const PILL_MAX_PAGES = 25;
@@ -82,8 +79,7 @@ function InboxIcon(props: PluginButtonIconProps) {
 function LaterIcon(props: PluginButtonIconProps) {
   const { snapshot } = useRecents();
   const node = useShownChat(props);
-  const browsed = useBrowsedChat();
-  const marked = props.context === "agent" && markedLater(snapshot.overlay, chatKey(props.host.id, props.agentId), browsed);
+  const marked = props.context === "agent" && isLater(snapshot.overlay, chatKey(props.host.id, props.agentId));
   return (
     <View ref={node}>
       <Icon name={marked ? "Check" : "Clock"} size={props.size} color={props.theme.colors.foregroundMuted} />
@@ -201,23 +197,19 @@ export function registerPills(client: PluginClientContext): () => void {
     .catch(() => {});
   let release: (() => Promise<void>) | null = null;
 
-  /** The Later pill's text for a chat of this host: what a press does, "Later" or, once set aside, "Read". */
+  /** The Later pill's text for a chat of this host: what a press does, "Later", or "Read" while it is unread. */
   function laterLabel(agentId: string): string {
     const host = selfId ?? pillHostId;
-    return host && markedLater(store.getSnapshot().overlay, chatKey(host, agentId), browsedChat()) ? "Read" : "Later";
+    return host && isLater(store.getSnapshot().overlay, chatKey(host, agentId)) ? "Read" : "Later";
   }
 
   /**
-   * Later on a chat, or off again: marks it unread (then opens the next chat when "After Later" says so), or,
-   * when it already is marked Later, marks it read.
+   * Read or Later for a chat. Kept unread (set aside with Later, or opened and not yet acted in): marks it read,
+   * which counts as acting in it. Otherwise: marks it unread, then opens the next chat when "After Later" says so.
    */
   function toggleLater(key: string): void {
-    // A chat that is only being looked at is already kept unread; Later makes that stick past the next click.
-    if (key === browsedChat()) {
-      endBrowsing();
-      return;
-    }
     if (isLater(store.getSnapshot().overlay, key)) {
+      if (key === browsedChat()) endBrowsing();
       store.markRead([key]);
       return;
     }
@@ -350,7 +342,6 @@ export function registerPills(client: PluginClientContext): () => void {
     }
   }
   const unsubscribe = store.subscribe(refresh);
-  const stopBrowsing = subscribeBrowsing(refresh);
 
   const directory = { filter: { includeArchived: false }, sort: [{ key: "updated_at" as const, direction: "desc" as const }] };
 
@@ -409,7 +400,6 @@ export function registerPills(client: PluginClientContext): () => void {
     for (const stop of stopAltDigits) stop();
     stopNumbersShown();
     setNumbersShown(false);
-    stopBrowsing();
     for (const id of [...registered.keys()]) unregister(id);
     void release?.().catch(() => {});
   };
