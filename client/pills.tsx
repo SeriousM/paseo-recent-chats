@@ -238,10 +238,10 @@ export function registerPills(client: PluginClientContext): () => void {
     .catch(() => {});
   let release: (() => Promise<void>) | null = null;
 
-  /** The Later pill's text for a chat of this host: what a press does, "Later", or "Read" while it is unread. */
+  /** The Later pill's text for a chat of this host: its state, "Read", or "Unread" while it is kept unread. */
   function laterLabel(agentId: string): string {
     const host = selfId ?? pillHostId;
-    return host && isLater(store.getSnapshot().overlay, chatKey(host, agentId)) ? "\u2713 Read" : "\u{1F552} Later";
+    return host && isLater(store.getSnapshot().overlay, chatKey(host, agentId)) ? "\u{1F552} Unread" : "\u2713 Read";
   }
 
   /**
@@ -333,7 +333,7 @@ export function registerPills(client: PluginClientContext): () => void {
         };
       case "later":
         return {
-          title: "Later keeps this chat unread for later; Read takes it off the list again (Alt+L)",
+          title: "Whether this chat is read or unread. Press (or Alt+L) to switch: unread keeps it in Needs you for later",
           icon: LaterIcon,
           label: laterLabel(agentId),
           visible: lastVisible.later,
