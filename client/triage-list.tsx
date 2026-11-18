@@ -788,7 +788,7 @@ function ChatRow({
           pointerEvents="none"
           style={{
             position: "absolute",
-            left: 0,
+            left: 6,
             top: 0,
             bottom: 0,
             justifyContent: "center",
