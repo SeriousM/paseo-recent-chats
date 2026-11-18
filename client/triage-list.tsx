@@ -741,7 +741,8 @@ function ChatRow({
           {
             fontSize: isTitle ? fontSize : smallFont,
             fontFamily: mono ? MONO : undefined,
-            color: isTitle && row.bucket !== "inactive" ? theme.colors.foreground : theme.colors.foregroundMuted,
+            // White while the chat waits for you (unread); grey once read, also the open chat held in Needs you.
+            color: isTitle && row.bucket === "unread" && row.led !== "idle" ? theme.colors.foreground : theme.colors.foregroundMuted,
           },
         ]}
       >
