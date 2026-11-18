@@ -13,7 +13,8 @@ import { getStore } from "./runtime";
 import { HostFilter, isDark, ledColor, TriageList } from "./triage-list";
 import { hostColors } from "./format";
 import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
-import { limitsOf, openChat, openChatByKey, useRecents } from "./use-recents";
+import { limitsOf, openChat, openChatByKey, useRecents, type OpenTarget } from "./use-recents";
+import { directOpener } from "./navigation";
 import { moveInHistory } from "./chat-history";
 import { currentOpenChat, reportOpenChat } from "./open-chat";
 import { hideStrayPopup, onAltKey, onAltShiftHeld, onBackForward, onListKeys, pressComposerPill, watchShown } from "./web";
@@ -285,6 +286,12 @@ export function registerPills(client: PluginClientContext): () => void {
   // Alt+I opens (or closes) the Inbox pill's list of the chat on screen.
   const stopAltI = onAltKey("KeyI", () => pressComposerPill(INBOX_TITLE));
 
+  // Keys open chats the way Paseo does when the sidebar view offers it, else through the go screen.
+  const keyTarget = (): OpenTarget => {
+    const open = directOpener();
+    return open ? { navigation: { openAgent: open } } : { openScreen: (input) => client.openScreen(input) };
+  };
+
   // The mouse's back and forward buttons and Alt+← / Alt+→ step through the visited chats, whatever is on screen
   // (also in focus mode, with the sidebar hidden).
   const stopBackForward = onBackForward((by) => {
@@ -292,7 +299,7 @@ export function registerPills(client: PluginClientContext): () => void {
     if (!key) return;
     const snapshot = store.getSnapshot();
     const rows = buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), { linger: currentLinger() }).all;
-    openChatByKey(store, rows, key, { openScreen: (input) => client.openScreen(input) });
+    openChatByKey(store, rows, key, keyTarget());
   });
 
   // Alt+P pins the chat on screen, or unpins it.
@@ -317,7 +324,7 @@ export function registerPills(client: PluginClientContext): () => void {
           linger: currentLinger(),
         }).all.find((candidate) => candidate.key === key);
         if (!row) return false;
-        openChat(store, row, { openScreen: (input) => client.openScreen(input) });
+        openChat(store, row, keyTarget());
         return true;
       },
       true,

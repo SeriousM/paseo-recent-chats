@@ -12,7 +12,7 @@ import { reportOpenChat } from "./open-chat";
 import { HeaderControls, RecentPanel } from "./recent-panel";
 import { markSidebarViewShown } from "./sidebar-view-state";
 import type { OpenTarget } from "./use-recents";
-import { NavigationContext, type PaseoNavigation } from "./navigation";
+import { NavigationContext, publishDirectOpener, type PaseoNavigation } from "./navigation";
 
 export const SIDEBAR_VIEW_ID = "recent-chats";
 
@@ -45,6 +45,7 @@ export function RecentSidebarView({
     }),
     [refs, navigation],
   );
+  useEffect(() => publishDirectOpener(target.navigation!.openAgent), [target]);
   // Workspaces and projects open through Paseo too, by their references (the ⋮ menus).
   const workspaceRefs = pluginClient.useWorkspaces();
   const projectRefs = pluginClient.useProjects();
