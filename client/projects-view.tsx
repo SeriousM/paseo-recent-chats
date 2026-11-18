@@ -10,6 +10,7 @@ import type { RowToken, RowTokenId } from "../shared/layout";
 import type { Prefs } from "../shared/settings";
 import { PREVIEW_HOST_COLORS, PREVIEW_TREE_ROWS, PREVIEW_WORKSPACES } from "./preview-data";
 import { useOpenChat } from "./open-chat";
+import { useNumberedChats } from "./numbered";
 import {
   buildTree,
   emptyItems,
@@ -350,6 +351,8 @@ export function ProjectsView({
   const stripShown = stripAll ? urgent : urgent.slice(0, prefs.maxUnread);
   const stripLines = useMemo(() => visibleLines(prefs.layout), [prefs.layout]);
   const stripColumns = useMemo(() => columnChars(stripShown, prefs.layout), [stripShown, prefs.layout]);
+  // The strip's chats are numbered for Alt+Shift+1 … 9 (see numbered.ts).
+  useNumberedChats(searching ? [] : stripShown.slice(0, 9).map((row) => row.key));
   const show = prefs.projectsShow;
   const treeLayout = useMemo(() => treeLayoutOf(prefs.layout, show), [prefs.layout, show]);
   const treeLines = useMemo(() => visibleLines(treeLayout), [treeLayout]);
@@ -380,7 +383,7 @@ export function ProjectsView({
       <Text style={{ fontSize: fs(11), color: on ? theme.colors.foreground : theme.colors.foregroundMuted }}>{label}</Text>
     </Pressable>
   );
-  const chatRow = (row: TriageRow, inStrip: boolean) => (
+  const chatRow = (row: TriageRow, inStrip: boolean, number?: number) => (
     <TriageRowView
       key={row.key}
       {...rowShared}
@@ -390,6 +393,7 @@ export function ProjectsView({
       lines={inStrip ? stripLines : treeLines}
       columns={inStrip ? stripColumns : treeColumns}
       current={row.key === openKey}
+      number={number}
       inTree={!inStrip}
     />
   );
@@ -508,7 +512,7 @@ export function ProjectsView({
               <Text style={[heading, { paddingHorizontal: 10, paddingBottom: 2 }]}>
                 {`Needs you \u00B7 ${urgent.filter(needsYou).length}`}
               </Text>
-              {stripShown.map((row) => chatRow(row, true))}
+              {stripShown.map((row, index) => chatRow(row, true, !searching && index < 9 ? index + 1 : undefined))}
               {urgent.length > stripShown.length ? (
                 <Pressable accessibilityRole="button" onPress={() => setStripAll(true)}>
                   <Text style={link}>{`+${urgent.length - stripShown.length} more`}</Text>

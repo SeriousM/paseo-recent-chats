@@ -15,10 +15,11 @@ import { hostColors } from "./format";
 import { buildTriage, chatKey, nextUp, type Overlay, type TriageResult } from "./triage";
 import { limitsOf, openChat, useRecents } from "./use-recents";
 import { currentOpenChat, reportOpenChat } from "./open-chat";
-import { onAltKey, watchShown } from "./web";
+import { onAltKey, onAltShiftHeld, watchShown } from "./web";
 import { isLater } from "./overlay";
 import { browsedChat, endBrowsing, subscribeBrowsing, useBrowsedChat } from "./browse";
 import { currentLinger } from "./linger";
+import { numberedChats, setNumbersShown } from "./numbered";
 import { RECENT_SCREEN_ID } from "./sidebar-item";
 import { HistoryButtons } from "./recent-panel";
 import { PILL_IDS, pillsInOrder, type PillId } from "../shared/settings";
@@ -244,24 +245,27 @@ export function registerPills(client: PluginClientContext): () => void {
     return true;
   });
 
-  // Alt+Shift+1 … 9 open the first to ninth chat of Needs you, in the order the lists show it. Alt+1 … 9 and
-  // Ctrl+1 … 9 are Paseo's (tabs and workspaces), which takes them before a plugin sees them.
+  // Alt+Shift+1 … 9 open the first to ninth chat of Needs you as the list on screen numbers them; the numbers
+  // show while Alt+Shift is held. Alt+1 … 9 and Ctrl+1 … 9 are Paseo's (tabs and workspaces), which takes them
+  // before a plugin sees them.
   const stopAltDigits = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((number) =>
-    onAltKey(`Digit${number}`, () => {
-      const snapshot = store.getSnapshot();
-      const needsYou = buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), {
-        groupByHost: snapshot.prefs.groupByHost,
-        hostOrder: snapshot.hosts.map((host) => host.id),
-        sectionOrder: snapshot.prefs.sectionOrder,
-        sectionSort: snapshot.prefs.sectionSort,
-        linger: currentLinger(),
-      }).all.filter((row) => row.bucket === "unread");
-      const row = needsYou[number - 1];
-      if (!row) return false;
-      openChat(store, row, { openScreen: (input) => client.openScreen(input) });
-      return true;
-    }, true),
+    onAltKey(
+      `Digit${number}`,
+      () => {
+        const key = numberedChats()[number - 1];
+        if (!key) return false;
+        const snapshot = store.getSnapshot();
+        const row = buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), {
+          linger: currentLinger(),
+        }).all.find((candidate) => candidate.key === key);
+        if (!row) return false;
+        openChat(store, row, { openScreen: (input) => client.openScreen(input) });
+        return true;
+      },
+      true,
+    ),
   );
+  const stopNumbersShown = onAltShiftHeld(setNumbersShown);
 
   function button(pill: PillId, agentId: string): PluginButton {
     switch (pill) {
@@ -403,6 +407,8 @@ export function registerPills(client: PluginClientContext): () => void {
     unsubscribe();
     stopAltL();
     for (const stop of stopAltDigits) stop();
+    stopNumbersShown();
+    setNumbersShown(false);
     stopBrowsing();
     for (const id of [...registered.keys()]) unregister(id);
     void release?.().catch(() => {});

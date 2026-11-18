@@ -164,11 +164,17 @@ interface DomKeyEvent {
 
 /** Where Alt+arrow already means something: a terminal (xterm types into a helper text area), and on a Mac every text field. */
 function movesByWord(target: unknown): boolean {
-  const node = target as { tagName?: string; isContentEditable?: boolean; className?: unknown } | null;
+  const node = target as { tagName?: string; isContentEditable?: boolean; closest?(selector: string): unknown } | null;
   if (!node) return false;
-  if (typeof node.className === "string" && node.className.includes("xterm")) return true;
+  if (isTerminal(node)) return true;
   const editable = node.isContentEditable === true || node.tagName === "INPUT" || node.tagName === "TEXTAREA";
   return editable && /Mac|iPhone|iPad/.test(readUserAgent() ?? "");
+}
+
+/** Inside Paseo's terminal (xterm), whose keys are never taken. */
+function isTerminal(target: unknown): boolean {
+  const node = target as { closest?(selector: string): unknown } | null;
+  return typeof node?.closest === "function" && node.closest(".xterm") !== null;
 }
 
 /**
@@ -320,8 +326,8 @@ interface DomElement {
 }
 
 declare const document: {
-  addEventListener(type: "keydown", listener: (event: DomKeyEvent) => void, capture: boolean): void;
-  removeEventListener(type: "keydown", listener: (event: DomKeyEvent) => void, capture: boolean): void;
+  addEventListener(type: "keydown" | "keyup", listener: (event: DomKeyEvent) => void, capture: boolean): void;
+  removeEventListener(type: "keydown" | "keyup", listener: (event: DomKeyEvent) => void, capture: boolean): void;
   querySelectorAll(selector: string): ArrayLike<DomElement>;
   activeElement: unknown;
 };
@@ -440,9 +446,15 @@ function scrollPaneToBottom(pane: DomElement): void {
  */
 export function attachPromptJumpKeys(): () => void {
   if (Platform.OS !== "web" || typeof document === "undefined" || typeof document.querySelectorAll !== "function") return () => {};
+  // The prompt the last Alt+↑/↓ went to. A prompt near the end cannot scroll up to the top of the chat, so
+  // Paseo keeps the one before it active; without this the next Alt+↓ would go to that same prompt again.
+  const memo = ((globalThis as Record<string, unknown>)["__paseoRecentChats.promptJump.v1"] ??= { rail: null, index: -1 }) as {
+    rail: DomElement | null;
+    index: number;
+  };
   const key = (event: DomKeyEvent) => {
     if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown" && event.key !== "End") return;
     const target = event.target as { closest?(selector: string): unknown } | null;
     if (movesByWord(event.target) || target?.closest?.(".cm-editor")) return;
     const marked = event as DomKeyEvent & { __recentChatsPrompt?: boolean };
@@ -450,29 +462,40 @@ export function attachPromptJumpKeys(): () => void {
     const rails = Array.from(document.querySelectorAll(OUTLINE_RAIL)).filter((rail) => rail.offsetParent !== null);
     const panes = rails.map((rail) => ({ rail, pane: chatPaneOf(rail) }));
     const chosen = panes.find(({ pane }) => pane?.contains(document.activeElement)) ?? panes[0];
-    const fallbackPane = Array.from(document.querySelectorAll('[data-testid="agent-chat-scroll"]')).find((el) => el.offsetParent !== null);
-    if (!chosen && !fallbackPane) return;
+    const scrolls = Array.from(document.querySelectorAll('[data-testid="agent-chat-scroll"]')).filter((el) => el.offsetParent !== null);
+    const focusedPane = scrolls.find((el) => el.parentElement?.contains(document.activeElement))?.parentElement ?? scrolls[0]?.parentElement;
+    const pane = chosen?.pane ?? focusedPane ?? null;
+    if (!pane) return;
     marked.__recentChatsPrompt = true;
     event.preventDefault();
     event.stopPropagation();
+    // Alt+End: straight to the end of the chat.
+    if (event.key === "End") {
+      scrollPaneToBottom(pane);
+      return;
+    }
     const down = event.key === "ArrowDown";
     if (!chosen) {
       // Fewer than two prompts, or the pane is too narrow for the outline: only "to the bottom" is left.
-      if (down && fallbackPane?.parentElement) scrollPaneToBottom(fallbackPane.parentElement);
+      if (down) scrollPaneToBottom(pane);
       return;
     }
     const ticks = Array.from(chosen.rail.querySelectorAll(OUTLINE_TICK));
     // An inactive tick's pill is 10 px wide and the active one's 18, so the widest pill marks the active prompt.
     const widths = ticks.map((tick) => tick.firstElementChild?.offsetWidth ?? 0);
     const widest = Math.max(...widths);
-    const active = widest > Math.min(...widths) ? widths.indexOf(widest) : -1;
-    const current = active < 0 ? ticks.length - 1 : active;
+    const active = widest > Math.min(...widths) ? widths.indexOf(widest) : ticks.length - 1;
+    const current = memo.rail === chosen.rail && memo.index - 1 === active ? memo.index : active;
     const next = current + (down ? 1 : -1);
     if (next >= ticks.length) {
-      if (chosen.pane) scrollPaneToBottom(chosen.pane);
+      memo.index = -1;
+      scrollPaneToBottom(chosen.pane ?? pane);
       return;
     }
-    ticks[Math.max(0, next)]?.click();
+    const index = Math.max(0, next);
+    memo.rail = chosen.rail;
+    memo.index = index;
+    ticks[index]?.click();
   };
   document.addEventListener("keydown", key, true);
   return () => document.removeEventListener("keydown", key, true);
@@ -498,7 +521,7 @@ export function onChatInteraction(handler: () => void): () => void {
   const key = (event: DomKeyEvent) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const node = event.target as { tagName?: string; isContentEditable?: boolean; className?: unknown } | null;
-    if (!node || (typeof node.className === "string" && node.className.includes("xterm"))) return;
+    if (!node || isTerminal(node)) return;
     const editable = node.isContentEditable === true || node.tagName === "INPUT" || node.tagName === "TEXTAREA";
     if (editable && (event.key.length === 1 || event.key === "Enter" || event.key === "Backspace")) once(event);
   };
@@ -528,4 +551,28 @@ export function onAltKey(code: string, handler: () => boolean, shift = false): (
   };
   document.addEventListener("keydown", key, true);
   return () => document.removeEventListener("keydown", key, true);
+}
+
+/**
+ * Calls `handler(true)` while Alt and Shift are both held with nothing else, and `handler(false)` once either
+ * is let go, another key joins, or the window loses focus. Only watches: no key is taken. A no-op off the web.
+ */
+export function onAltShiftHeld(handler: (held: boolean) => void): () => void {
+  if (Platform.OS !== "web" || typeof document === "undefined" || !isDomTarget(window)) return () => {};
+  const down = (event: DomKeyEvent) => {
+    const modifierOnly = event.key === "Alt" || event.key === "Shift";
+    handler(event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && (modifierOnly || /^Digit[1-9]$/.test((event as DomKeyEvent & { code?: string }).code ?? "")));
+  };
+  const up = (event: DomKeyEvent) => {
+    if (!event.altKey || !event.shiftKey) handler(false);
+  };
+  const blur = () => handler(false);
+  document.addEventListener("keydown", down, true);
+  document.addEventListener("keyup", up, true);
+  window.addEventListener("blur", blur as never);
+  return () => {
+    document.removeEventListener("keydown", down, true);
+    document.removeEventListener("keyup", up, true);
+    window.removeEventListener("blur", blur as never);
+  };
 }

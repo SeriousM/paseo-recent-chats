@@ -18,6 +18,7 @@ import { PROVIDER_ICONS } from "./provider-icons";
 import { copyText, MenuButton, MenuView, type MenuGroups } from "./row-menu";
 import { getStore } from "./runtime";
 import { moveInOrder } from "./project-tree";
+import { useNumberedChats, useNumbersShown } from "./numbered";
 import { usePaseoNavigation } from "./navigation";
 
 /** Hover this long on a row before its full-names card shows. */
@@ -464,6 +465,8 @@ export interface RowViewProps {
   inTree?: boolean;
   /** Paseo's narrow (phone) layout: names on the second line, swipes instead of the read, Later and pin buttons. */
   narrow?: boolean;
+  /** Its place in Needs you (1-9): shown on the row while Alt+Shift is held, see numbered.ts. */
+  number?: number;
 }
 
 /** A chat's row, followed by its sub-agents that ask you something, each indented under it. */
@@ -504,11 +507,13 @@ function ChatRow({
   nested = false,
   inTree = false,
   narrow = false,
+  number,
 }: RowViewProps & {
   /** A sub-agent listed under its parent: no pin, read or Later buttons, no renaming. */
   nested?: boolean;
 }) {
   const onRename = nested ? undefined : renameChat;
+  const numbersShown = useNumbersShown();
   const lines = useMemo(() => (narrow ? phoneLines(layoutLines) : layoutLines), [narrow, layoutLines]);
   // Phones swipe instead of pressing small buttons: left marks a waiting chat read, right sends an
   // inactive one to Later. The ⋮ menu offers both too.
@@ -778,6 +783,23 @@ function ChatRow({
       onLongPress={editing ? undefined : openMenu ? () => openMenu(null) : fullNames ? () => setShowFull((value) => !value) : undefined}
       style={[styles.row, cardShown && !layer ? { position: "relative", zIndex: 20 } : null]}
     >
+      {number !== undefined && numbersShown ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            justifyContent: "center",
+            zIndex: 5,
+          }}
+        >
+          <View style={{ minWidth: 18, paddingHorizontal: 4, borderRadius: 5, backgroundColor: theme.colors.accent, alignItems: "center" }}>
+            <Text style={{ fontSize: smallFont, fontWeight: "700", color: theme.colors.accentForeground }}>{number}</Text>
+          </View>
+        </View>
+      ) : null}
       {editing && onRename ? (
         <RenameField
           theme={theme}
@@ -1252,6 +1274,14 @@ export function TriageList({
         ? "Loading chats\u2026"
         : "Nothing to look at.";
 
+  // Needs you as shown (not folded away), numbered for Alt+Shift+1 … 9.
+  const numbered =
+    searching || footer === "only"
+      ? []
+      : shown.filter((row) => row.bucket === "unread" && !(grouped && folded.has(hostGroupKey(row.hostId)))).slice(0, 9).map((row) => row.key);
+  const numberOf = new Map(numbered.map((key, index) => [key, index + 1]));
+  useNumberedChats(numbered);
+
   if (footer === "only") return footerNode;
 
   return (
@@ -1371,6 +1401,7 @@ export function TriageList({
                 onMarkUnread={onMarkUnread}
                 onSetPinned={onSetPinned}
                 onRename={onRename}
+                number={numberOf.get(row.key)}
               />
               </View>
               )}
