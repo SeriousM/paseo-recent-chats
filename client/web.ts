@@ -109,30 +109,63 @@ function isDomTarget(node: unknown): node is DomTarget {
 }
 
 /**
- * The mouse's back (button 3) and forward (button 4) buttons anywhere in the window. Several lists can be on
- * screen, and every host's copy of the plugin mounts its own, so the first listener that sees a press marks
- * the event and the others leave it. The browser's own back navigation on those buttons is prevented.
- * Returns a cleanup; a no-op off the web.
+ * Back and forward through visited chats from anywhere in the window: the mouse's back (button 3) and
+ * forward (button 4) buttons, and Alt+← / Alt+→. Those keys are left alone in a terminal, and on a Mac in any
+ * text field, where they move by word. Several lists can be on screen, and every host's copy of the plugin
+ * mounts its own, so the first listener that sees an event marks it and the others leave it. The browser's
+ * own navigation on those inputs is prevented. Returns a cleanup; a no-op off the web.
  */
-export function onMouseBackForward(handler: (by: -1 | 1) => void): () => void {
+export function onBackForward(handler: (by: -1 | 1) => void): () => void {
   if (Platform.OS !== "web" || typeof window === "undefined" || !isDomTarget(window)) return () => {};
+  const once = (event: object, by: -1 | 1) => {
+    const marked = event as { __recentChatsHistory?: boolean };
+    if (marked.__recentChatsHistory) return;
+    marked.__recentChatsHistory = true;
+    handler(by);
+  };
   const swallow = (event: DomPointerEvent) => {
     if (event.button === 3 || event.button === 4) event.preventDefault();
   };
   const press = (event: DomPointerEvent) => {
     if (event.button !== 3 && event.button !== 4) return;
     event.preventDefault();
-    const marked = event as DomPointerEvent & { __recentChatsHistory?: boolean };
-    if (marked.__recentChatsHistory) return;
-    marked.__recentChatsHistory = true;
-    handler(event.button === 3 ? -1 : 1);
+    once(event, event.button === 3 ? -1 : 1);
+  };
+  const key = (raw: DomPointerEvent) => {
+    const event = raw as unknown as DomKeyEvent;
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    if (movesByWord(event.target)) return;
+    event.preventDefault();
+    once(event, event.key === "ArrowLeft" ? -1 : 1);
   };
   window.addEventListener("mousedown", swallow);
   window.addEventListener("mouseup", press);
+  window.addEventListener("keydown", key);
   return () => {
     window.removeEventListener("mousedown", swallow);
     window.removeEventListener("mouseup", press);
+    window.removeEventListener("keydown", key);
   };
+}
+
+interface DomKeyEvent {
+  key: string;
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+  target: unknown;
+  preventDefault(): void;
+}
+
+/** Where Alt+arrow already means something: a terminal (xterm types into a helper text area), and on a Mac every text field. */
+function movesByWord(target: unknown): boolean {
+  const node = target as { tagName?: string; isContentEditable?: boolean; className?: unknown } | null;
+  if (!node) return false;
+  if (typeof node.className === "string" && node.className.includes("xterm")) return true;
+  const editable = node.isContentEditable === true || node.tagName === "INPUT" || node.tagName === "TEXTAREA";
+  return editable && /Mac|iPhone|iPad/.test(readUserAgent() ?? "");
 }
 
 /**

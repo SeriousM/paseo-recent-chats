@@ -16,7 +16,7 @@ import type { TriageRow } from "./triage";
 import { CardLayer, HostFilter, ledColor, TriageList, type TriageListProps } from "./triage-list";
 import { openChat, openChatByKey, useRecents, type OpenTarget } from "./use-recents";
 import { resolvedView, updateViewMode, useViewMode } from "./view-mode";
-import { attachWheelScroll, excludeFromWindowDrag, onMouseBackForward } from "./web";
+import { attachWheelScroll, excludeFromWindowDrag, onBackForward } from "./web";
 import { useTouchInput } from "./input";
 
 // The search box stays open (or closed) until the search button is pressed again, also across remounts.
@@ -44,7 +44,7 @@ export function HistoryButtons({
   // The mouse's back and forward buttons step the same way, while these buttons are on screen.
   const latestGo = useRef(go);
   latestGo.current = go;
-  useEffect(() => onMouseBackForward((by) => latestGo.current(by)), []);
+  useEffect(() => onBackForward((by) => latestGo.current(by)), []);
   const button = (by: -1 | 1, enabled: boolean) => (
     <Pressable
       accessibilityRole="button"
