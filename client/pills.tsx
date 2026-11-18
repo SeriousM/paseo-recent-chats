@@ -238,7 +238,7 @@ export function registerPills(client: PluginClientContext): () => void {
   /** The Later pill's text for a chat of this host: what a press does, "Later", or "Read" while it is unread. */
   function laterLabel(agentId: string): string {
     const host = selfId ?? pillHostId;
-    return host && isLater(store.getSnapshot().overlay, chatKey(host, agentId)) ? "Read" : "Later";
+    return host && isLater(store.getSnapshot().overlay, chatKey(host, agentId)) ? "\u2713 Read" : "\u{1F552} Later";
   }
 
   /**
