@@ -615,11 +615,12 @@ export function pressComposerPill(title: string): boolean {
  * ↑, ↓ and Enter without modifiers, from anywhere but a terminal, while the caller is shown (a popup's list).
  * `handler` returns whether it used the key; then the key is taken. A no-op off the web.
  */
-export function onListKeys(handler: (key: "up" | "down" | "enter") => boolean): () => void {
+export function onListKeys(handler: (key: "up" | "down" | "pageUp" | "pageDown" | "home" | "end" | "enter") => boolean): () => void {
   if (Platform.OS !== "web" || typeof document === "undefined") return () => {};
   const key = (event: DomKeyEvent) => {
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isTerminal(event.target)) return;
-    const name = event.key === "ArrowUp" ? "up" : event.key === "ArrowDown" ? "down" : event.key === "Enter" ? "enter" : null;
+    const names = { ArrowUp: "up", ArrowDown: "down", PageUp: "pageUp", PageDown: "pageDown", Home: "home", End: "end", Enter: "enter" } as const;
+    const name = names[event.key as keyof typeof names] ?? null;
     if (!name || !handler(name)) return;
     event.preventDefault();
     event.stopPropagation();

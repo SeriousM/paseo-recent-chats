@@ -13,9 +13,10 @@ import { getStore } from "./runtime";
 import { HostFilter, isDark, ledColor, TriageList } from "./triage-list";
 import { hostColors } from "./format";
 import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
-import { limitsOf, openChat, useRecents } from "./use-recents";
+import { limitsOf, openChat, openChatByKey, useRecents } from "./use-recents";
+import { moveInHistory } from "./chat-history";
 import { currentOpenChat, reportOpenChat } from "./open-chat";
-import { onAltKey, onAltShiftHeld, onListKeys, pressComposerPill, watchShown } from "./web";
+import { onAltKey, onAltShiftHeld, onBackForward, onListKeys, pressComposerPill, watchShown } from "./web";
 import { isLater } from "./overlay";
 import { browsedChat, endBrowsing } from "./browse";
 import { currentLinger } from "./linger";
@@ -133,7 +134,9 @@ function createInboxContent(client: PluginClientContext) {
             return true;
           }
           const at = current === null ? -1 : list.indexOf(current);
-          const next = key === "down" ? Math.min(list.length - 1, at + 1) : Math.max(0, at - 1);
+          // Page Up / Page Down move by five rows; Home and End to the first and last.
+          const step = { up: -1, down: 1, pageUp: -5, pageDown: 5, home: -list.length, end: list.length }[key];
+          const next = Math.max(0, Math.min(list.length - 1, (at < 0 ? 0 : at) + step));
           setChosen(list[next] ?? null);
           return true;
         }),
@@ -277,6 +280,16 @@ export function registerPills(client: PluginClientContext): () => void {
 
   // Alt+I opens (or closes) the Inbox pill's list of the chat on screen.
   const stopAltI = onAltKey("KeyI", () => pressComposerPill(INBOX_TITLE));
+
+  // The mouse's back and forward buttons and Alt+← / Alt+→ step through the visited chats, whatever is on screen
+  // (also in focus mode, with the sidebar hidden).
+  const stopBackForward = onBackForward((by) => {
+    const key = moveInHistory(by);
+    if (!key) return;
+    const snapshot = store.getSnapshot();
+    const rows = buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), { linger: currentLinger() }).all;
+    openChatByKey(store, rows, key, { openScreen: (input) => client.openScreen(input) });
+  });
 
   // Alt+P pins the chat on screen, or unpins it.
   const stopAltP = onAltKey("KeyP", () => {
@@ -448,6 +461,7 @@ export function registerPills(client: PluginClientContext): () => void {
     stopAltL();
     stopAltI();
     stopAltP();
+    stopBackForward();
     for (const stop of stopAltDigits) stop();
     stopNumbersShown();
     setNumbersShown(false);
