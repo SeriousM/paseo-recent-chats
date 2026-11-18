@@ -271,6 +271,14 @@ export function registerPills(client: PluginClientContext): () => void {
   // Alt+I opens (or closes) the Inbox pill's list of the chat on screen.
   const stopAltI = onAltKey("KeyI", () => pressComposerPill(INBOX_TITLE));
 
+  // Alt+P pins the chat on screen, or unpins it.
+  const stopAltP = onAltKey("KeyP", () => {
+    const key = currentOpenChat();
+    if (!key) return false;
+    store.setPinned(key, store.getSnapshot().overlay[key]?.pinnedAt === undefined);
+    return true;
+  });
+
   // Alt+Shift+1 … 9 open the first to ninth chat of Needs you as the list on screen numbers them; the numbers
   // show while Alt+Shift is held. Alt+1 … 9 and Ctrl+1 … 9 are Paseo's (tabs and workspaces), which takes them
   // before a plugin sees them.
@@ -432,6 +440,7 @@ export function registerPills(client: PluginClientContext): () => void {
     unsubscribe();
     stopAltL();
     stopAltI();
+    stopAltP();
     for (const stop of stopAltDigits) stop();
     stopNumbersShown();
     setNumbersShown(false);
