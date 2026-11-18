@@ -630,3 +630,50 @@ export function onListKeys(handler: (key: "up" | "down" | "pageUp" | "pageDown" 
   document.addEventListener("keydown", key, true);
   return () => document.removeEventListener("keydown", key, true);
 }
+
+interface DomBoxElement {
+  parentElement: DomBoxElement | null;
+  getBoundingClientRect(): { left: number; top: number; width: number };
+  style: { visibility: string; pointerEvents: string };
+}
+
+/**
+ * Paseo keeps one open flag per composer pill and draws its popup for every copy of the composer it keeps
+ * mounted, also hidden ones (earlier tabs). A hidden copy has no place on screen, so its popup lands in the
+ * window's top-left corner. This hides that stray popup: the outermost frame around `node` that sits in the
+ * corner. Checked a few times, since a popup is positioned a moment after it appears; a popup that moves
+ * away from the corner is shown again. Returns a cleanup; a no-op off the web.
+ */
+export function hideStrayPopup(node: unknown, onStray: (stray: boolean) => void): () => void {
+  if (Platform.OS !== "web" || !node || typeof (node as Partial<DomBoxElement>).getBoundingClientRect !== "function") return () => {};
+  const inCorner = (element: DomBoxElement) => {
+    const box = element.getBoundingClientRect();
+    return box.left < 40 && box.top < 40 && box.width > 0;
+  };
+  let frame: DomBoxElement | null = null;
+  const check = () => {
+    let at = node as DomBoxElement;
+    let outer: DomBoxElement | null = inCorner(at) ? at : null;
+    // Up to the popup's frame: the ancestors that still sit in the corner, short of the whole window.
+    for (let step = 0; step < 10 && at.parentElement; step++) {
+      at = at.parentElement;
+      const box = at.getBoundingClientRect();
+      if (box.width >= 900 || !inCorner(at)) break;
+      outer = at;
+    }
+    if (outer) {
+      frame = outer;
+      outer.style.visibility = "hidden";
+      outer.style.pointerEvents = "none";
+    } else if (frame) {
+      frame.style.visibility = "";
+      frame.style.pointerEvents = "";
+      frame = null;
+    }
+    onStray(outer !== null);
+  };
+  const timers = [0, 60, 150, 350, 700].map((delay) => setTimeout(check, delay));
+  return () => {
+    for (const timer of timers) clearTimeout(timer);
+  };
+}

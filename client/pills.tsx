@@ -16,7 +16,7 @@ import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
 import { limitsOf, openChat, openChatByKey, useRecents } from "./use-recents";
 import { moveInHistory } from "./chat-history";
 import { currentOpenChat, reportOpenChat } from "./open-chat";
-import { onAltKey, onAltShiftHeld, onBackForward, onListKeys, pressComposerPill, watchShown } from "./web";
+import { hideStrayPopup, onAltKey, onAltShiftHeld, onBackForward, onListKeys, pressComposerPill, watchShown } from "./web";
 import { isLater } from "./overlay";
 import { browsedChat, endBrowsing } from "./browse";
 import { currentLinger } from "./linger";
@@ -121,12 +121,15 @@ function createInboxContent(client: PluginClientContext) {
     const keys = useRef({ visible, selected, result });
     keys.current = { visible, selected, result };
     const root = useRef<View>(null);
+    // A stray copy of this popup (from a hidden copy of the composer) is hidden and ignores the keys.
+    const stray = useRef(false);
+    useEffect(() => hideStrayPopup(root.current, (value) => (stray.current = value)), []);
     useEffect(
       () =>
         onListKeys((key) => {
           const { visible: list, selected: current, result: latest } = keys.current;
           // Only while this popup is on screen: the app may keep it mounted after it closes.
-          if (list.length === 0 || (root.current as unknown as { offsetParent?: unknown } | null)?.offsetParent === null) return false;
+          if (stray.current || list.length === 0 || (root.current as unknown as { offsetParent?: unknown } | null)?.offsetParent === null) return false;
           if (key === "enter") {
             const row = latest.all.find((candidate) => candidate.key === current);
             if (!row) return false;
