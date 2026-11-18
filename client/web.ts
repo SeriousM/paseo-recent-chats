@@ -454,7 +454,7 @@ export function attachPromptJumpKeys(): () => void {
   };
   const key = (event: DomKeyEvent) => {
     if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-    if (event.key !== "ArrowUp" && event.key !== "ArrowDown" && event.key !== "End") return;
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown" && event.key !== "End" && event.key !== "Home") return;
     const target = event.target as { closest?(selector: string): unknown } | null;
     if (movesByWord(event.target) || target?.closest?.(".cm-editor")) return;
     const marked = event as DomKeyEvent & { __recentChatsPrompt?: boolean };
@@ -469,9 +469,22 @@ export function attachPromptJumpKeys(): () => void {
     marked.__recentChatsPrompt = true;
     event.preventDefault();
     event.stopPropagation();
-    // Alt+End: straight to the end of the chat.
+    // Alt+End: straight to the end of the chat. Alt+Home: to its first message (the top without the outline).
     if (event.key === "End") {
+      memo.index = -1;
       scrollPaneToBottom(pane);
+      return;
+    }
+    const ticks = chosen ? Array.from(chosen.rail.querySelectorAll(OUTLINE_TICK)) : [];
+    if (event.key === "Home") {
+      if (chosen && ticks[0]) {
+        memo.rail = chosen.rail;
+        memo.index = 0;
+        ticks[0].click();
+      } else {
+        const scroll = pane.querySelector('[data-testid="agent-chat-scroll"]');
+        if (scroll) scroll.scrollTop = 0;
+      }
       return;
     }
     const down = event.key === "ArrowDown";
@@ -480,11 +493,15 @@ export function attachPromptJumpKeys(): () => void {
       if (down) scrollPaneToBottom(pane);
       return;
     }
-    const ticks = Array.from(chosen.rail.querySelectorAll(OUTLINE_TICK));
     // An inactive tick's pill is 10 px wide and the active one's 18, so the widest pill marks the active prompt.
     const widths = ticks.map((tick) => tick.firstElementChild?.offsetWidth ?? 0);
     const widest = Math.max(...widths);
-    const active = widest > Math.min(...widths) ? widths.indexOf(widest) : ticks.length - 1;
+    const highlighted = widest > Math.min(...widths) ? widths.indexOf(widest) : -1;
+    // No active prompt (above the first one, or the outline not caught up after a jump): where the last jump
+    // went, else the top or the end of the chat by the scroll position.
+    const scroll = pane.querySelector('[data-testid="agent-chat-scroll"]');
+    const fallback = memo.rail === chosen.rail && memo.index >= 0 ? memo.index : scroll && scroll.scrollTop < 40 ? -1 : ticks.length - 1;
+    const active = highlighted >= 0 ? highlighted : fallback;
     const current = memo.rail === chosen.rail && memo.index - 1 === active ? memo.index : active;
     const next = current + (down ? 1 : -1);
     if (next >= ticks.length) {
