@@ -105,10 +105,13 @@ function createInboxContent(client: PluginClientContext) {
     const touch = useTouchInput();
     const manyHosts = snapshot.hosts.length >= 2;
     const tone = hostsOpen ? theme.colors.foreground : theme.colors.foregroundMuted;
-    // ↑ ↓ choose a row, Enter opens it (Alt+I opens this popup from the keyboard).
+    // ↑ ↓ choose a row, Enter opens it (Alt+I opens this popup from the keyboard). The choice starts on the
+    // chat this popup belongs to when it is listed, else on the first row.
     const [visible, setVisible] = useState<readonly string[]>([]);
     const [chosen, setChosen] = useState<string | null>(null);
-    const selected = chosen !== null && visible.includes(chosen) ? chosen : (visible[0] ?? null);
+    const own = props.context === "agent" ? chatKey(props.host.id, props.agentId) : null;
+    const selected =
+      chosen !== null && visible.includes(chosen) ? chosen : own !== null && visible.includes(own) ? own : (visible[0] ?? null);
     const keys = useRef({ visible, selected, result });
     keys.current = { visible, selected, result };
     const root = useRef<View>(null);
