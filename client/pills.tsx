@@ -18,6 +18,7 @@ import { currentOpenChat, reportOpenChat } from "./open-chat";
 import { onAltKey, watchShown } from "./web";
 import { isLater } from "./overlay";
 import { browsedChat, endBrowsing, subscribeBrowsing, useBrowsedChat } from "./browse";
+import { currentLinger } from "./linger";
 import { RECENT_SCREEN_ID } from "./sidebar-item";
 import { HistoryButtons } from "./recent-panel";
 import { PILL_IDS, pillsInOrder, type PillId } from "../shared/settings";
@@ -76,7 +77,7 @@ function InboxIcon(props: PluginButtonIconProps) {
   );
 }
 
-/** Clock while the chat is not marked Later, a filled accent clock while it is. */
+/** The Later pill names what a press does: a clock for "Later", a check for "Read" once the chat is set aside. */
 function LaterIcon(props: PluginButtonIconProps) {
   const { snapshot } = useRecents();
   const node = useShownChat(props);
@@ -84,7 +85,7 @@ function LaterIcon(props: PluginButtonIconProps) {
   const marked = props.context === "agent" && markedLater(snapshot.overlay, chatKey(props.host.id, props.agentId), browsed);
   return (
     <View ref={node}>
-      <Icon name={marked ? "AlarmClockCheck" : "Clock"} size={props.size} color={marked ? props.theme.colors.accent : props.theme.colors.foregroundMuted} />
+      <Icon name={marked ? "Check" : "Clock"} size={props.size} color={props.theme.colors.foregroundMuted} />
     </View>
   );
 }
@@ -199,10 +200,10 @@ export function registerPills(client: PluginClientContext): () => void {
     .catch(() => {});
   let release: (() => Promise<void>) | null = null;
 
-  /** The Later pill's text for a chat of this host: whether that chat is marked Later. */
+  /** The Later pill's text for a chat of this host: what a press does, "Later" or, once set aside, "Read". */
   function laterLabel(agentId: string): string {
     const host = selfId ?? pillHostId;
-    return host && markedLater(store.getSnapshot().overlay, chatKey(host, agentId), browsedChat()) ? "Later \u2713" : "Later";
+    return host && markedLater(store.getSnapshot().overlay, chatKey(host, agentId), browsedChat()) ? "Read" : "Later";
   }
 
   /**
@@ -243,6 +244,25 @@ export function registerPills(client: PluginClientContext): () => void {
     return true;
   });
 
+  // Alt+Shift+1 … 9 open the first to ninth chat of Needs you, in the order the lists show it. Alt+1 … 9 and
+  // Ctrl+1 … 9 are Paseo's (tabs and workspaces), which takes them before a plugin sees them.
+  const stopAltDigits = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((number) =>
+    onAltKey(`Digit${number}`, () => {
+      const snapshot = store.getSnapshot();
+      const needsYou = buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), {
+        groupByHost: snapshot.prefs.groupByHost,
+        hostOrder: snapshot.hosts.map((host) => host.id),
+        sectionOrder: snapshot.prefs.sectionOrder,
+        sectionSort: snapshot.prefs.sectionSort,
+        linger: currentLinger(),
+      }).all.filter((row) => row.bucket === "unread");
+      const row = needsYou[number - 1];
+      if (!row) return false;
+      openChat(store, row, { openScreen: (input) => client.openScreen(input) });
+      return true;
+    }, true),
+  );
+
   function button(pill: PillId, agentId: string): PluginButton {
     switch (pill) {
       case "inbox":
@@ -255,7 +275,7 @@ export function registerPills(client: PluginClientContext): () => void {
         };
       case "later":
         return {
-          title: "Later: mark this chat unread, or take the mark off again (Alt+L)",
+          title: "Later keeps this chat unread for later; Read takes it off the list again (Alt+L)",
           icon: LaterIcon,
           label: laterLabel(agentId),
           visible: lastVisible.later,
@@ -382,6 +402,7 @@ export function registerPills(client: PluginClientContext): () => void {
     pillHostId = null;
     unsubscribe();
     stopAltL();
+    for (const stop of stopAltDigits) stop();
     stopBrowsing();
     for (const id of [...registered.keys()]) unregister(id);
     void release?.().catch(() => {});

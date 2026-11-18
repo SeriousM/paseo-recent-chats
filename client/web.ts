@@ -415,15 +415,19 @@ function chatPaneOf(node: DomElement): DomElement | null {
   return null;
 }
 
-/** Scrolls a chat pane to its newest message: Paseo's own button when it shows, else the scroll area itself. */
+/**
+ * Scrolls a chat pane to its very end. Paseo's "scroll to bottom" button is not pressed: the test id sits on
+ * its animated frame, not on the button inside, so a click there does nothing. The chat's scroll area is
+ * moved instead, and again on the next two frames, since a virtualized list grows as it lays out its end.
+ */
 function scrollPaneToBottom(pane: DomElement): void {
-  const button = pane.querySelector('[data-testid="scroll-to-bottom-button"]');
-  if (button && button.offsetParent !== null) {
-    button.click();
-    return;
-  }
   const scroll = pane.querySelector('[data-testid="agent-chat-scroll"]');
-  if (scroll) scroll.scrollTop = scroll.scrollHeight;
+  if (!scroll) return;
+  const end = () => {
+    scroll.scrollTop = scroll.scrollHeight;
+  };
+  end();
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => (end(), requestAnimationFrame(end)));
 }
 
 /**
@@ -507,15 +511,15 @@ export function onChatInteraction(handler: () => void): () => void {
 }
 
 /**
- * Alt plus the key with `code` ("KeyL"), from anywhere in the window except a terminal and, on a Mac, a text
+ * Alt (with `shift`, Alt+Shift) plus the key with `code` ("KeyL"), from anywhere in the window except a terminal and, on a Mac, a text
  * field (where Option types a character). `handler` returns whether it used the key; then the event is taken.
  * Every host's copy registers it; the first listener that uses the event marks it. A no-op off the web.
  */
-export function onAltKey(code: string, handler: () => boolean): () => void {
+export function onAltKey(code: string, handler: () => boolean, shift = false): () => void {
   if (Platform.OS !== "web" || typeof document === "undefined") return () => {};
   const key = (event: DomKeyEvent) => {
     const keyed = event as DomKeyEvent & { code?: string; __recentChatsAltKey?: boolean };
-    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || keyed.code !== code) return;
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey !== shift || keyed.code !== code) return;
     if (keyed.__recentChatsAltKey || movesByWord(event.target)) return;
     if (!handler()) return;
     keyed.__recentChatsAltKey = true;
