@@ -219,6 +219,11 @@ export function RecentPanel({
             onChange={setQuery}
             placeholder={projects ? "Filter projects, workspaces, chats" : "Filter chats"}
             autoFocus
+            onEscape={() => {
+              searchOpen = false;
+              setShowSearch(false);
+              setQuery("");
+            }}
           />
         </View>
       ) : null}

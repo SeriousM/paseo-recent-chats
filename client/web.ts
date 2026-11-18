@@ -333,13 +333,15 @@ declare const document: {
 };
 
 /**
- * Calls `handler` when Escape is pressed while `node` has the focus. Listens in the capture phase, ahead
- * of the app's own Escape handling, which would otherwise take the key first. A no-op off the web.
+ * Calls `handler` when Escape is pressed while `node`, or something inside it, has the focus. Listens in the
+ * capture phase, ahead of the app's own Escape handling, which would otherwise take the key first. A no-op off
+ * the web.
  */
 export function onEscapeKey(node: unknown, handler: () => void): () => void {
   if (Platform.OS !== "web" || !node) return () => {};
+  const inside = (node as Partial<DomContains>).contains?.bind(node);
   const listener = (event: DomKeyEvent) => {
-    if (event.key !== "Escape" || event.target !== node) return;
+    if (event.key !== "Escape" || (event.target !== node && !inside?.(event.target))) return;
     event.preventDefault();
     event.stopPropagation();
     handler();

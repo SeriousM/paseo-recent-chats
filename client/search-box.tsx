@@ -1,7 +1,9 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon, TextInput } from "@getpaseo/plugin/client/ui";
+import { useEffect, useRef } from "react";
 import { Pressable, View } from "react-native";
 import { useFontScale } from "./font-scale";
+import { onEscapeKey } from "./web";
 
 /** Search field with a clear button. Used by the sidebar list and the all-chats screen. */
 export function SearchBox({
@@ -11,6 +13,7 @@ export function SearchBox({
   onChange,
   placeholder = "Search chats",
   autoFocus = false,
+  onEscape,
 }: {
   theme: PluginTheme;
   compact: boolean;
@@ -18,11 +21,18 @@ export function SearchBox({
   onChange(text: string): void;
   placeholder?: string;
   autoFocus?: boolean;
+  /** Escape while typing in the field (desktop and web). */
+  onEscape?: () => void;
 }) {
   const height = compact ? 44 : 32;
   const fs = useFontScale();
+  const box = useRef<View>(null);
+  const latestEscape = useRef(onEscape);
+  latestEscape.current = onEscape;
+  useEffect(() => onEscapeKey(box.current, () => latestEscape.current?.()), []);
   return (
     <View
+      ref={box}
       style={{
         flexDirection: "row",
         alignItems: "center",
