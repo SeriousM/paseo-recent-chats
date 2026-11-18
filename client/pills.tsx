@@ -6,7 +6,7 @@ import type {
   PluginClientContext,
 } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/ui";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import type { PaseoAgentListResult } from "./paseo-types";
 import { getStore } from "./runtime";
@@ -124,7 +124,8 @@ function createInboxContent(client: PluginClientContext) {
     const root = useRef<View>(null);
     // A stray copy of this popup (from a hidden copy of the composer) is hidden and ignores the keys.
     const stray = useRef(false);
-    useEffect(() => hideStrayPopup(root.current, (value) => (stray.current = value)), []);
+    // Before the first paint, so the stray copy is never seen.
+    useLayoutEffect(() => hideStrayPopup(root.current, (value) => (stray.current = value)), []);
     useEffect(
       () =>
         onListKeys((key) => {
