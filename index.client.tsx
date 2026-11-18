@@ -47,7 +47,7 @@ export default function contribute(client: PluginClientContext) {
     }),
     registerPills(client),
     attachPromptJumpKeys(),
-    // A chat opened from the visit history is marked read once you do something in it (see browse.ts).
+    // A chat that was opened while it waited for you is marked read once you do something in it (see browse.ts).
     onChatInteraction(() => {
       const key = browsedChat();
       if (!key || key !== currentOpenChat()) return;

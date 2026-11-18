@@ -12,16 +12,19 @@ import type { PaseoAgentListResult } from "./paseo-types";
 import { getStore } from "./runtime";
 import { HostFilter, isDark, ledColor, TriageList } from "./triage-list";
 import { hostColors } from "./format";
-import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
+import { buildTriage, chatKey, nextUp, type Overlay, type TriageResult } from "./triage";
 import { limitsOf, openChat, useRecents } from "./use-recents";
 import { currentOpenChat, reportOpenChat } from "./open-chat";
 import { onAltKey, watchShown } from "./web";
 import { isLater } from "./overlay";
-import { browsedChat, endBrowsing } from "./browse";
+import { browsedChat, endBrowsing, subscribeBrowsing, useBrowsedChat } from "./browse";
 import { RECENT_SCREEN_ID } from "./sidebar-item";
 import { HistoryButtons } from "./recent-panel";
 import { PILL_IDS, pillsInOrder, type PillId } from "../shared/settings";
 import { useTouchInput } from "./input";
+
+/** Marked Later by you; a chat that is only being looked at (kept unread until you act in it) is not. */
+const markedLater = (overlay: Overlay, key: string, browsed: string | null): boolean => key !== browsed && isLater(overlay, key);
 
 const PILL_PAGE_SIZE = 200;
 const PILL_MAX_PAGES = 25;
@@ -77,7 +80,8 @@ function InboxIcon(props: PluginButtonIconProps) {
 function LaterIcon(props: PluginButtonIconProps) {
   const { snapshot } = useRecents();
   const node = useShownChat(props);
-  const marked = props.context === "agent" && isLater(snapshot.overlay, chatKey(props.host.id, props.agentId));
+  const browsed = useBrowsedChat();
+  const marked = props.context === "agent" && markedLater(snapshot.overlay, chatKey(props.host.id, props.agentId), browsed);
   return (
     <View ref={node}>
       <Icon name={marked ? "AlarmClockCheck" : "Clock"} size={props.size} color={marked ? props.theme.colors.accent : props.theme.colors.foregroundMuted} />
@@ -198,7 +202,7 @@ export function registerPills(client: PluginClientContext): () => void {
   /** The Later pill's text for a chat of this host: whether that chat is marked Later. */
   function laterLabel(agentId: string): string {
     const host = selfId ?? pillHostId;
-    return host && isLater(store.getSnapshot().overlay, chatKey(host, agentId)) ? "Later \u2713" : "Later";
+    return host && markedLater(store.getSnapshot().overlay, chatKey(host, agentId), browsedChat()) ? "Later \u2713" : "Later";
   }
 
   /**
@@ -206,7 +210,7 @@ export function registerPills(client: PluginClientContext): () => void {
    * when it already is marked Later, marks it read.
    */
   function toggleLater(key: string): void {
-    // A chat opened from the visit history is already kept unread; Later makes that stick past the next click.
+    // A chat that is only being looked at is already kept unread; Later makes that stick past the next click.
     if (key === browsedChat()) {
       endBrowsing();
       return;
@@ -322,6 +326,7 @@ export function registerPills(client: PluginClientContext): () => void {
     }
   }
   const unsubscribe = store.subscribe(refresh);
+  const stopBrowsing = subscribeBrowsing(refresh);
 
   const directory = { filter: { includeArchived: false }, sort: [{ key: "updated_at" as const, direction: "desc" as const }] };
 
@@ -377,6 +382,7 @@ export function registerPills(client: PluginClientContext): () => void {
     pillHostId = null;
     unsubscribe();
     stopAltL();
+    stopBrowsing();
     for (const id of [...registered.keys()]) unregister(id);
     void release?.().catch(() => {});
   };

@@ -62,36 +62,39 @@ export interface OpenTarget {
   openScreen?: (input: { screenId: string; params?: Record<string, string> }) => void;
 }
 
-/** Opens the chat and marks it read. A surface that has no way to navigate leaves the chat unread. */
+/**
+ * Opens the chat. A chat that waits for you is not marked read yet: it stays unread (and in Needs you) until
+ * you type in it or click into its messages (see browse.ts), so opening a chat to look at it, from the list or
+ * the visit history, changes nothing. Once read it keeps its place in Needs you, grey, until another chat is
+ * open (see linger.ts). A surface that has no way to navigate does nothing.
+ */
 export function openChat(store: RecentsStore, row: TriageRow, target: OpenTarget): void {
   const { navigation, openScreen } = target;
   if (navigation) navigation.openAgent({ agentId: row.agentId, serverId: row.hostId });
   else if (openScreen) openScreen({ screenId: GO_SCREEN_ID, params: { agentId: row.agentId, serverId: row.hostId } });
   else return;
-  // A waiting chat keeps its place in Needs you (grey) until another chat is open; see linger.ts.
-  if (row.bucket === "unread") {
-    const status = store.getSnapshot().chats.find((chat) => chat.hostId === row.hostId && chat.agentId === row.agentId)?.status;
-    if (status) holdOpened(row.key, row.sortAt, status);
+  // A held chat (opened, grey) is already read; only a chat that still waits for you stays unread.
+  if (row.bucket !== "unread" || row.led === "idle") {
+    endBrowsing();
+    return;
   }
-  endBrowsing();
-  store.markRead([row.key]);
+  const status = store.getSnapshot().chats.find((chat) => chat.hostId === row.hostId && chat.agentId === row.agentId)?.status;
+  if (status) holdOpened(row.key, row.sortAt, status);
+  // Paseo clears its own attention flag as soon as the chat is on screen; this keeps it unread meanwhile.
+  store.keepUnread(row.key, row.sortAt);
+  startBrowsing(row.key);
 }
 
-/**
- * Opens the chat with `key` from the visit history. Unlike a press on a row it does not mark the chat read: an
- * unread chat stays unread (and in Needs you) until you type in it or click into its messages, so the history
- * can be browsed. See browse.ts.
- */
+/** Opens the chat with `key` from the visit history: like a row when it is listed, else by its key. */
 export function openChatByKey(store: RecentsStore, rows: readonly TriageRow[], key: string, target: OpenTarget): void {
+  const row = rows.find((candidate) => candidate.key === key);
+  if (row) {
+    openChat(store, row, target);
+    return;
+  }
+  endBrowsing();
   const hostId = key.slice(0, key.indexOf(":"));
   const agentId = key.slice(key.indexOf(":") + 1);
   if (target.navigation) target.navigation.openAgent({ agentId, serverId: hostId });
-  else if (target.openScreen) target.openScreen({ screenId: GO_SCREEN_ID, params: { agentId, serverId: hostId } });
-  else return;
-  const row = rows.find((candidate) => candidate.key === key);
-  // A held chat (opened, grey) is already read; only a chat that still waits for you stays unread.
-  if (row?.bucket === "unread" && row.led !== "idle") {
-    store.keepUnread(key, row.sortAt);
-    startBrowsing(key);
-  } else endBrowsing();
+  else target.openScreen?.({ screenId: GO_SCREEN_ID, params: { agentId, serverId: hostId } });
 }
