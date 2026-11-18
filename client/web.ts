@@ -473,3 +473,55 @@ export function attachPromptJumpKeys(): () => void {
   document.addEventListener("keydown", key, true);
   return () => document.removeEventListener("keydown", key, true);
 }
+
+/**
+ * Something done in the chat on screen: a click into its messages, or typing in a text field (the composer)
+ * other than Alt, Ctrl or Cmd shortcuts. Every host's copy registers it; the first listener marks the event.
+ * Returns a cleanup; a no-op off the web.
+ */
+export function onChatInteraction(handler: () => void): () => void {
+  if (Platform.OS !== "web" || typeof document === "undefined" || !isDomTarget(window)) return () => {};
+  const once = (event: object) => {
+    const marked = event as { __recentChatsInteraction?: boolean };
+    if (marked.__recentChatsInteraction) return;
+    marked.__recentChatsInteraction = true;
+    handler();
+  };
+  const pointer = (event: DomPointerEvent) => {
+    const target = event.target as { closest?(selector: string): unknown } | null;
+    if (target?.closest?.('[data-testid="agent-chat-scroll"]')) once(event);
+  };
+  const key = (event: DomKeyEvent) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const node = event.target as { tagName?: string; isContentEditable?: boolean; className?: unknown } | null;
+    if (!node || (typeof node.className === "string" && node.className.includes("xterm"))) return;
+    const editable = node.isContentEditable === true || node.tagName === "INPUT" || node.tagName === "TEXTAREA";
+    if (editable && (event.key.length === 1 || event.key === "Enter" || event.key === "Backspace")) once(event);
+  };
+  window.addEventListener("pointerdown", pointer, true);
+  document.addEventListener("keydown", key, true);
+  return () => {
+    window.removeEventListener("pointerdown", pointer, true);
+    document.removeEventListener("keydown", key, true);
+  };
+}
+
+/**
+ * Alt plus the key with `code` ("KeyL"), from anywhere in the window except a terminal and, on a Mac, a text
+ * field (where Option types a character). `handler` returns whether it used the key; then the event is taken.
+ * Every host's copy registers it; the first listener that uses the event marks it. A no-op off the web.
+ */
+export function onAltKey(code: string, handler: () => boolean): () => void {
+  if (Platform.OS !== "web" || typeof document === "undefined") return () => {};
+  const key = (event: DomKeyEvent) => {
+    const keyed = event as DomKeyEvent & { code?: string; __recentChatsAltKey?: boolean };
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || keyed.code !== code) return;
+    if (keyed.__recentChatsAltKey || movesByWord(event.target)) return;
+    if (!handler()) return;
+    keyed.__recentChatsAltKey = true;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  document.addEventListener("keydown", key, true);
+  return () => document.removeEventListener("keydown", key, true);
+}

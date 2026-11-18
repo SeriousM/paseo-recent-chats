@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chatTitle, ellipsize, hostColors, parseHostColorNames } from "../client/format";
-import { markRead, markUnread, pinChat, pruneOverlay, unpinChat } from "../client/overlay";
+import { isLater, keepUnread, markRead, markUnread, pinChat, pruneOverlay, unpinChat } from "../client/overlay";
 import {
   buildTriage,
   chatKey,
@@ -547,5 +547,20 @@ describe("a running chat that asked you", () => {
     const result = buildTriage([answered], opened, limits, NOW, { linger: { key: "h1:a", sortAt: ago(3 * MIN), status: "running" } });
     expect(result.rows[0]).toMatchObject({ agentId: "a", bucket: "running", led: "running" });
     expect(result.counts.running).toBe(1);
+  });
+});
+
+describe("browsing the visit history", () => {
+  it("keeps a chat unread at its place after Paseo clears its attention, until it is marked read", () => {
+    const waiting = chat("a", { attention: attention(20) });
+    const kept = keepUnread({}, "h1:a", ago(20 * MIN));
+    const cleared = chat("a", { attention: null });
+    const row = buildTriage([cleared], kept, limits, NOW).rows[0];
+    expect(row?.bucket).toBe("unread");
+    expect(row?.sortAt).toBe(buildTriage([waiting], {}, limits, NOW).rows[0]?.sortAt);
+    expect(isLater(kept, "h1:a")).toBe(true);
+    const read = markRead(kept, ["h1:a"], NOW);
+    expect(buildTriage([cleared], read, limits, NOW).rows[0]?.bucket).not.toBe("unread");
+    expect(isLater(read, "h1:a")).toBe(false);
   });
 });

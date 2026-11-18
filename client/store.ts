@@ -4,7 +4,7 @@
 import { getPaseoClient, type PluginCommandCapabilities, type PluginHostSummary } from "@getpaseo/plugin/client";
 import { settingsRpc } from "@getpaseo/plugin";
 import { createHostObserver, type HostData, type HostObserver } from "./host-observer";
-import { markRead, markUnread, mergeOverlays, pinChat, pruneOverlay, unpinChat } from "./overlay";
+import { keepUnread, markRead, markUnread, mergeOverlays, pinChat, pruneOverlay, unpinChat } from "./overlay";
 import type { PaseoAgent, PaseoApi } from "./paseo-types";
 import { createPeerDirectory, type Peer, type PeerDirectory } from "./peers";
 import { chatKey, isDelegated, keyHost, PARENT_AGENT_LABEL, type ChatInput, type Overlay, type OverlayEntry } from "./triage";
@@ -87,6 +87,8 @@ export interface RecentsStore {
   setHosts(hosts: readonly PluginHostSummary[]): void;
   markRead(keys: readonly string[]): void;
   markUnread(key: string): void;
+  /** Keeps a chat unread at its place `at` while it is only browsed (see browse.ts). */
+  keepUnread(key: string, at: number): void;
   /** Pin or unpin a chat. Pinned chats get their own section (first by default). */
   setPinned(key: string, pinned: boolean): void;
   /** Change view preferences. Applied at once, then saved to every host that runs this plugin. */
@@ -805,6 +807,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     },
     markRead: (keys) => mutate({ keys, apply: (current) => markRead(current, keys, Date.now()) }),
     markUnread: (key) => mutate({ keys: [key], apply: (current) => markUnread(current, key, Date.now()) }),
+    keepUnread: (key, at) => mutate({ keys: [key], apply: (current) => keepUnread(current, key, at) }),
     setPinned: (key, pinned) =>
       mutate({ keys: [key], apply: (current) => (pinned ? pinChat(current, key, Date.now()) : unpinChat(current, key)) }),
     updatePrefs,

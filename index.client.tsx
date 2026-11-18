@@ -8,7 +8,9 @@ import { RECENT_SCREEN_ID, RecentSidebarItem } from "./client/sidebar-item";
 import { RecentSidebarView, SIDEBAR_VIEW_ID } from "./client/sidebar-view";
 import { createStore } from "./client/store";
 import { GO_SCREEN_ID } from "./client/use-recents";
-import { attachPromptJumpKeys } from "./client/web";
+import { attachPromptJumpKeys, onChatInteraction } from "./client/web";
+import { browsedChat, endBrowsing } from "./client/browse";
+import { currentOpenChat } from "./client/open-chat";
 
 export default function contribute(client: PluginClientContext) {
   setStore(
@@ -45,6 +47,13 @@ export default function contribute(client: PluginClientContext) {
     }),
     registerPills(client),
     attachPromptJumpKeys(),
+    // A chat opened from the visit history is marked read once you do something in it (see browse.ts).
+    onChatInteraction(() => {
+      const key = browsedChat();
+      if (!key || key !== currentOpenChat()) return;
+      endBrowsing();
+      getStore().markRead([key]);
+    }),
   ];
 
   return () => {

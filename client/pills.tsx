@@ -14,8 +14,10 @@ import { HostFilter, isDark, ledColor, TriageList } from "./triage-list";
 import { hostColors } from "./format";
 import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
 import { limitsOf, openChat, useRecents } from "./use-recents";
-import { reportOpenChat } from "./open-chat";
-import { watchShown } from "./web";
+import { currentOpenChat, reportOpenChat } from "./open-chat";
+import { onAltKey, watchShown } from "./web";
+import { isLater } from "./overlay";
+import { browsedChat, endBrowsing } from "./browse";
 import { RECENT_SCREEN_ID } from "./sidebar-item";
 import { HistoryButtons } from "./recent-panel";
 import { PILL_IDS, pillsInOrder, type PillId } from "../shared/settings";
@@ -71,12 +73,14 @@ function InboxIcon(props: PluginButtonIconProps) {
   );
 }
 
+/** Clock while the chat is not marked Later, a filled accent clock while it is. */
 function LaterIcon(props: PluginButtonIconProps) {
-  useRecents();
+  const { snapshot } = useRecents();
   const node = useShownChat(props);
+  const marked = props.context === "agent" && isLater(snapshot.overlay, chatKey(props.host.id, props.agentId));
   return (
     <View ref={node}>
-      <Icon name="Clock" size={props.size} color={props.theme.colors.foregroundMuted} />
+      <Icon name={marked ? "AlarmClockCheck" : "Clock"} size={props.size} color={marked ? props.theme.colors.accent : props.theme.colors.foregroundMuted} />
     </View>
   );
 }
@@ -174,7 +178,7 @@ export function registerPills(client: PluginClientContext): () => void {
   const InboxContent = createInboxContent(client);
   // Per chat: its workspace and its pills. Paseo shows a chat's pills in the order they were added, so they
   // are added in the order chosen in the settings, and added again when that order changes.
-  const registered = new Map<string, { workspaceId: string; pills: Map<PillId, PluginButtonRegistration> }>();
+  const registered = new Map<string, { workspaceId: string; pills: Map<PillId, PluginButtonRegistration>; laterLabel: string }>();
   let lastLabel = "Inbox";
   let lastVisible: Record<PillId, boolean> = { inbox: true, later: true, host: false };
   let lastOrder: PillId[] = [...PILL_IDS];
@@ -191,9 +195,26 @@ export function registerPills(client: PluginClientContext): () => void {
     .catch(() => {});
   let release: (() => Promise<void>) | null = null;
 
-  async function later(agentId: string): Promise<void> {
-    if (!pillHostId) return;
-    const key = chatKey(pillHostId, agentId);
+  /** The Later pill's text for a chat of this host: whether that chat is marked Later. */
+  function laterLabel(agentId: string): string {
+    const host = selfId ?? pillHostId;
+    return host && isLater(store.getSnapshot().overlay, chatKey(host, agentId)) ? "Later \u2713" : "Later";
+  }
+
+  /**
+   * Later on a chat, or off again: marks it unread (then opens the next chat when "After Later" says so), or,
+   * when it already is marked Later, marks it read.
+   */
+  function toggleLater(key: string): void {
+    // A chat opened from the visit history is already kept unread; Later makes that stick past the next click.
+    if (key === browsedChat()) {
+      endBrowsing();
+      return;
+    }
+    if (isLater(store.getSnapshot().overlay, key)) {
+      store.markRead([key]);
+      return;
+    }
     store.markUnread(key);
     const snapshot = store.getSnapshot();
     if (snapshot.prefs.laterBehavior !== "jump") return;
@@ -210,6 +231,14 @@ export function registerPills(client: PluginClientContext): () => void {
     if (next) openChat(store, next, { openScreen: (input) => client.openScreen(input) });
   }
 
+  // Alt+L does the same for the chat open on screen (desktop and web).
+  const stopAltL = onAltKey("KeyL", () => {
+    const key = currentOpenChat();
+    if (!key) return false;
+    toggleLater(key);
+    return true;
+  });
+
   function button(pill: PillId, agentId: string): PluginButton {
     switch (pill) {
       case "inbox":
@@ -222,11 +251,11 @@ export function registerPills(client: PluginClientContext): () => void {
         };
       case "later":
         return {
-          title: "Mark this chat unread and open the next one",
+          title: "Later: mark this chat unread, or take the mark off again (Alt+L)",
           icon: LaterIcon,
-          label: "Later",
+          label: laterLabel(agentId),
           visible: lastVisible.later,
-          behavior: { kind: "action", onPress: () => later(agentId) },
+          behavior: { kind: "action", onPress: () => toggleLater(chatKey(selfId ?? pillHostId ?? "", agentId)) },
         };
       case "host":
         return {
@@ -242,7 +271,7 @@ export function registerPills(client: PluginClientContext): () => void {
   function addPills(agentId: string, workspaceId: string) {
     const pills = new Map<PillId, PluginButtonRegistration>();
     for (const pill of lastOrder) pills.set(pill, client.addComposerPill({ id: pill, workspaceId, agentId, button: button(pill, agentId) }));
-    registered.set(agentId, { workspaceId, pills });
+    registered.set(agentId, { workspaceId, pills, laterLabel: laterLabel(agentId) });
   }
 
   function register(agent: { id: string; workspaceId?: string | null }) {
@@ -267,20 +296,29 @@ export function registerPills(client: PluginClientContext): () => void {
     const reorder = order.join() !== lastOrder.join();
     const changed =
       label !== lastLabel || host !== lastHostLabel || PILL_IDS.some((pill) => visible[pill] !== lastVisible[pill]);
-    if (!reorder && !changed) return;
-    lastLabel = label;
-    lastVisible = visible;
-    lastOrder = order;
-    lastHostLabel = host;
+    if (reorder || changed) {
+      lastLabel = label;
+      lastVisible = visible;
+      lastOrder = order;
+      lastHostLabel = host;
+    }
     for (const [agentId, entry] of [...registered]) {
       if (reorder) {
         unregister(agentId);
         addPills(agentId, entry.workspaceId);
         continue;
       }
-      entry.pills.get("inbox")?.update({ label, visible: visible.inbox });
-      entry.pills.get("later")?.update({ visible: visible.later });
-      entry.pills.get("host")?.update({ label: host, visible: visible.host });
+      if (changed) {
+        entry.pills.get("inbox")?.update({ label, visible: visible.inbox });
+        entry.pills.get("later")?.update({ visible: visible.later });
+        entry.pills.get("host")?.update({ label: host, visible: visible.host });
+      }
+      // Each chat's Later pill says whether that chat is marked Later.
+      const later = laterLabel(agentId);
+      if (later !== entry.laterLabel) {
+        entry.laterLabel = later;
+        entry.pills.get("later")?.update({ label: later });
+      }
     }
   }
   const unsubscribe = store.subscribe(refresh);
@@ -338,6 +376,7 @@ export function registerPills(client: PluginClientContext): () => void {
     lifetime.abort();
     pillHostId = null;
     unsubscribe();
+    stopAltL();
     for (const id of [...registered.keys()]) unregister(id);
     void release?.().catch(() => {});
   };

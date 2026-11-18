@@ -64,7 +64,7 @@ export const prefsSettings = defineSettings({
     sidebarHeightPhone: z.number().int().min(15).max(85).default(40),
     sidebarHeightDesktop: z.number().int().min(15).max(85).default(50),
     /** What the Later pill does after marking a chat unread. */
-    laterBehavior: z.enum(["jump", "stay"]).default("jump"),
+    laterBehavior: z.enum(["jump", "stay"]).default("stay"),
     showInboxPill: z.boolean().default(true),
     showLaterPill: z.boolean().default(true),
     /** A pill with the chat's host, in the host's colour. Off by default. */

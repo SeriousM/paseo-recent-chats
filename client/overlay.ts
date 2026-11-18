@@ -15,6 +15,21 @@ export function markUnread(overlay: Overlay, key: string, now: number): Overlay 
   return { ...overlay, [key]: { ...overlay[key], unreadAt: now } };
 }
 
+/** Marked Later and not opened or marked read since. */
+export function isLater(overlay: Overlay, key: string): boolean {
+  const entry = overlay[key];
+  return entry?.unreadAt !== undefined && entry.unreadAt > (entry.dismissedAt ?? 0);
+}
+
+/**
+ * Keeps a chat unread at `at` (its place in Needs you) while it is only being looked at: Paseo clears its own
+ * attention flag as soon as the chat is on screen, which would otherwise take it out of Needs you.
+ */
+export function keepUnread(overlay: Overlay, key: string, at: number): Overlay {
+  if ((overlay[key]?.unreadAt ?? -1) >= at) return overlay;
+  return { ...overlay, [key]: { ...overlay[key], unreadAt: at } };
+}
+
 /** Pin a chat: it is listed in the Pinned section until unpinned. Pinning an already pinned chat keeps its place. */
 export function pinChat(overlay: Overlay, key: string, now: number): Overlay {
   if (overlay[key]?.pinnedAt !== undefined) return overlay;

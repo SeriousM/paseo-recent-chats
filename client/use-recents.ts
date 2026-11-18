@@ -7,6 +7,7 @@ import { followOpenChat, holdOpened, useLinger } from "./linger";
 import { useOpenChat } from "./open-chat";
 import type { Prefs } from "../shared/settings";
 import { recordOpenChat } from "./chat-history";
+import { endBrowsing, startBrowsing } from "./browse";
 
 export const GO_SCREEN_ID = "go";
 
@@ -72,18 +73,25 @@ export function openChat(store: RecentsStore, row: TriageRow, target: OpenTarget
     const status = store.getSnapshot().chats.find((chat) => chat.hostId === row.hostId && chat.agentId === row.agentId)?.status;
     if (status) holdOpened(row.key, row.sortAt, status);
   }
+  endBrowsing();
   store.markRead([row.key]);
 }
 
-/** Opens the chat with `key` from the visit history: like a row when it is listed, else by its key. */
+/**
+ * Opens the chat with `key` from the visit history. Unlike a press on a row it does not mark the chat read: an
+ * unread chat stays unread (and in Needs you) until you type in it or click into its messages, so the history
+ * can be browsed. See browse.ts.
+ */
 export function openChatByKey(store: RecentsStore, rows: readonly TriageRow[], key: string, target: OpenTarget): void {
-  const row = rows.find((candidate) => candidate.key === key);
-  if (row) {
-    openChat(store, row, target);
-    return;
-  }
   const hostId = key.slice(0, key.indexOf(":"));
   const agentId = key.slice(key.indexOf(":") + 1);
   if (target.navigation) target.navigation.openAgent({ agentId, serverId: hostId });
-  else target.openScreen?.({ screenId: GO_SCREEN_ID, params: { agentId, serverId: hostId } });
+  else if (target.openScreen) target.openScreen({ screenId: GO_SCREEN_ID, params: { agentId, serverId: hostId } });
+  else return;
+  const row = rows.find((candidate) => candidate.key === key);
+  // A held chat (opened, grey) is already read; only a chat that still waits for you stays unread.
+  if (row?.bucket === "unread" && row.led !== "idle") {
+    store.keepUnread(key, row.sortAt);
+    startBrowsing(key);
+  } else endBrowsing();
 }
