@@ -34,11 +34,12 @@ const PILL_MAX_PAGES = 25;
 // Host that owns this installation's pills, learned from the first pill icon that renders.
 let pillHostId: string | null = null;
 
+/** "Inbox · 3 waiting · 1 running": the chats that wait for you, then the running ones; just "Inbox" when none. */
 function inboxLabel(result: TriageResult): string {
-  const parts: string[] = [];
-  if (result.counts.unread) parts.push(String(result.counts.unread));
-  if (result.counts.running) parts.push(`${result.counts.running}\u25B6`);
-  return parts.length ? `Inbox ${parts.join(" \u00B7 ")}` : "Inbox";
+  const parts = ["Inbox"];
+  if (result.counts.unread) parts.push(`${result.counts.unread} waiting`);
+  if (result.counts.running) parts.push(`${result.counts.running} running`);
+  return parts.join(" \u00B7 ");
 }
 
 /**
