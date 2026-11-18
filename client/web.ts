@@ -141,11 +141,13 @@ export function onBackForward(handler: (by: -1 | 1) => void): () => void {
   };
   window.addEventListener("mousedown", swallow);
   window.addEventListener("mouseup", press);
-  window.addEventListener("keydown", key);
+  // Capture phase: a chat that opens puts the focus in its composer, whose editor takes Alt+arrows for itself
+  // and stops them before they reach the window; Alt+← got through only because the focus was elsewhere.
+  window.addEventListener("keydown", key, true);
   return () => {
     window.removeEventListener("mousedown", swallow);
     window.removeEventListener("mouseup", press);
-    window.removeEventListener("keydown", key);
+    window.removeEventListener("keydown", key, true);
   };
 }
 
