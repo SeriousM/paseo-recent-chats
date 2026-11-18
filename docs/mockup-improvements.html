@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recent Chats: what the list could do better (annotated mockup)</title>
+<style>
+  :root {
+    --bg: #0f1115; --surface0: #16181d; --surface1: #1c1f25; --surface2: #252931; --border: #2c313a;
+    --fg: #e6e8eb; --muted: #8b929c; --faint: #5b626c; --accent: #4f8cff;
+    --red: #f0524f; --orange: #f5a524; --green: #2fbf71; --blue: #5b9dff; --grey: #6b7280;
+    --note: #ffd166; --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 36px 0 10px; }
+  .lead { color: var(--muted); max-width: 900px; margin: 0 0 8px; }
+  .rule { display: inline-block; background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); color: var(--fg); border-radius: 8px; padding: 6px 10px; font-size: 13px; margin: 6px 0 4px; }
+  .cols { display: grid; grid-template-columns: 360px 360px 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 1150px) { .cols { grid-template-columns: 1fr 1fr; } .notes { grid-column: 1 / -1; } }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .caption { font-size: 12px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); font-weight: 600; margin: 0 0 6px; }
+
+  /* sidebar frame */
+  .sb { background: var(--surface0); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; position: relative; }
+  .sb.phone { width: 360px; }
+  .bar { display: flex; align-items: center; gap: 4px; padding: 8px 8px 6px; position: relative; }
+  .seg { display: flex; background: var(--surface1); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+  .seg span { font-size: 12px; padding: 3px 9px; border-radius: 6px; color: var(--muted); }
+  .seg span.on { background: var(--surface2); color: var(--fg); }
+  .ib { width: 26px; height: 26px; display: grid; place-items: center; color: var(--muted); border-radius: 7px; font-size: 13px; border: 1px solid transparent; }
+  .ib.on { border-color: var(--border); background: var(--surface2); color: var(--fg); }
+  .grow { flex: 1; }
+  .counts { font-weight: 600; font-size: 12px; display: flex; gap: 6px; }
+  .c-red { color: var(--red); } .c-green { color: var(--green); } .c-blue { color: var(--blue); } .c-orange { color: var(--orange); }
+  .scroll { padding: 0 8px 10px; }
+
+  .strip { border: 1px solid color-mix(in srgb, var(--green) 55%, var(--border)); border-radius: 10px; padding: 6px 2px 2px; margin: 2px 0 8px; position: relative; }
+  .strip.red { border-color: color-mix(in srgb, var(--red) 60%, var(--border)); }
+  .lbl { font-size: 10.5px; letter-spacing: .7px; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 0 8px 4px; display: flex; gap: 6px; align-items: center; }
+
+  .row { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 2px 4px 2px 8px; border-radius: 8px; position: relative; font-size: 13px; }
+  .row.cur { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .age { color: var(--muted); font-size: 11px; width: 26px; font-family: var(--mono); }
+  .led { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .led.perm { background: var(--red); } .led.fin { background: var(--green); } .led.run { background: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 25%, transparent); } .led.idle { background: var(--grey); }
+  .proj { color: var(--muted); width: 74px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
+  .title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .title small { display: block; color: var(--muted); font-size: 11px; }
+  .btn { width: 20px; height: 20px; display: grid; place-items: center; color: var(--muted); font-size: 12px; flex: none; }
+  .btn.accent { color: var(--accent); }
+  .ghost { opacity: .22; }
+  .chip { font-size: 11px; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--border); color: var(--fg); background: var(--surface2); flex: none; }
+  .chip.allow { border-color: color-mix(in srgb, var(--green) 55%, var(--border)); color: var(--green); }
+  .chip.deny { color: var(--muted); }
+  .clock { font-family: var(--mono); font-size: 11px; color: var(--blue); flex: none; }
+
+  .heading { display: flex; align-items: center; gap: 6px; padding: 8px 6px 2px; position: relative; }
+  .hpill { font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 6px; background: #1d3550; color: #8cc3ff; }
+  .hpill.purple { background: #34254f; color: #c7a8ff; }
+  .h-sec { font-size: 10.5px; letter-spacing: .7px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .proj-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px 2px 10px; font-size: 12px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
+  .ws-row { display: flex; align-items: center; gap: 6px; padding: 3px 6px 3px 22px; font-size: 13px; }
+  .ws-row .t { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .diff { font-size: 11px; } .diff .a { color: var(--green); } .diff .d { color: var(--red); }
+  .tag { font-size: 11px; color: var(--muted); background: var(--surface2); border-radius: 5px; padding: 0 6px; }
+  .indent { padding-left: 26px; }
+  .info { font-size: 11.5px; color: var(--muted); padding: 4px 10px; display: flex; gap: 6px; align-items: center; }
+  .info a { color: var(--accent); text-decoration: none; }
+  .filters { display: flex; gap: 4px; align-items: center; padding: 2px 6px; font-size: 11.5px; color: var(--muted); }
+  .fchip { border: 1px solid transparent; border-radius: 6px; padding: 1px 6px; }
+  .fchip.on { border-color: var(--border); background: var(--surface2); color: var(--fg); }
+
+  /* annotation pins */
+  .pin { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: var(--note); color: #1a1400; font-weight: 800; font-size: 11.5px; display: grid; place-items: center; box-shadow: 0 0 0 3px rgba(255,209,102,.25); z-index: 5; }
+  .mark { outline: 2px dashed var(--note); outline-offset: 2px; border-radius: 8px; }
+  .new { outline: 2px solid color-mix(in srgb, var(--green) 70%, transparent); outline-offset: 2px; border-radius: 8px; }
+
+  /* notes */
+  .notes { display: grid; gap: 10px; }
+  .note { background: var(--surface0); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: grid; grid-template-columns: 24px 1fr; gap: 10px; }
+  .note .n { width: 22px; height: 22px; border-radius: 50%; background: var(--note); color: #1a1400; font-weight: 800; font-size: 12px; display: grid; place-items: center; }
+  .note h3 { margin: 0 0 3px; font-size: 14px; }
+  .note p { margin: 0; color: var(--muted); font-size: 13px; }
+  .note .why { color: var(--fg); }
+  .badge { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .4px; border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
+  .b-high { background: color-mix(in srgb, var(--green) 25%, transparent); color: var(--green); }
+  .b-mid { background: color-mix(in srgb, var(--blue) 25%, transparent); color: var(--blue); }
+  .b-low { background: var(--surface2); color: var(--muted); }
+  .b-check { background: color-mix(in srgb, var(--orange) 25%, transparent); color: var(--orange); }
+
+  .out { background: var(--surface0); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; color: var(--muted); font-size: 13px; }
+  .out ul { margin: 6px 0 0 18px; padding: 0; }
+
+  /* settings mock */
+  .settings { display: grid; grid-template-columns: 1fr 380px; gap: 18px; background: var(--surface0); border: 1px solid var(--border); border-radius: 14px; padding: 16px; position: relative; }
+  @media (max-width: 900px) { .settings { grid-template-columns: 1fr; } }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .tabs span { padding: 6px 12px; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tabs span.on { color: var(--fg); border-color: var(--accent); }
+  .card { background: var(--surface1); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; }
+  .opt { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); }
+  .opt:first-child { border-top: 0; }
+  .opt .tx { flex: 1; } .opt .tx b { font-weight: 500; display: block; } .opt .tx i { font-style: normal; color: var(--muted); font-size: 12px; }
+  .opt.dim { opacity: .4; }
+  .sw { width: 34px; height: 20px; border-radius: 10px; background: var(--surface2); position: relative; flex: none; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); }
+  .sw.on { background: var(--accent); } .sw.on::after { left: 17px; background: #fff; }
+  .preview { position: sticky; top: 16px; }
+  .pv-switch { display: flex; gap: 4px; margin-bottom: 8px; }
+  .reset { color: var(--red); font-size: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Recent Chats: what the list could do better</h1>
+  <p class="lead">Annotated against the list as it is today (Projects view with Needs you, Paseo 0.16 sidebar view). Ideas are taken from Better Paseo only where they serve this list; their Tasks board, timeline and tool cards stay out.</p>
+  <div class="rule">Baseline: the list stays a list. Sections, rows, the ⋮ menus, pins and read marks keep working as today. Every change below is either a smaller row, a shortcut to something the ⋮ menu already does, or a settings-page cleanup.</div>
+
+  <!-- ===================== DESKTOP ===================== -->
+  <h2>1 · Desktop sidebar</h2>
+  <div class="cols">
+    <div>
+      <p class="caption">Today</p>
+      <div class="sb">
+        <div class="bar mark">
+          <div class="seg"><span class="on">Projects</span><span>Triage</span></div>
+          <span class="ib">▤▾</span><span class="grow"></span>
+          <span class="ib">📁+</span><span class="ib">⌕</span><span class="ib">⚙</span>
+          <span class="counts"><span class="c-green">3</span><span class="c-blue">1</span></span>
+          <span class="ib">←</span><span class="ib">→</span>
+          <span class="pin" style="right:-8px;top:-8px">1</span>
+        </div>
+        <div class="scroll">
+          <div class="strip red">
+            <div class="lbl">Needs you · 3</div>
+            <div class="row mark">
+              <span class="age">2m</span><span class="led perm"></span><span class="proj">Everything</span>
+              <span class="title">run migrations on staging?</span>
+              <span class="btn">✓</span><span class="btn">⋮</span>
+              <span class="pin" style="right:-6px;top:-6px">2</span>
+            </div>
+            <div class="row">
+              <span class="age">1h</span><span class="led fin"></span><span class="proj">Everything</span>
+              <span class="title">this is a continued work…</span>
+              <span class="btn accent">⌖</span><span class="btn">✓</span><span class="btn">⋮</span>
+              <span class="pin" style="right:24px;top:-8px">3</span>
+            </div>
+            <div class="row cur">
+              <span class="age">9m</span><span class="led fin"></span><span class="proj">RecentCha…</span>
+              <span class="title">plugin cont.</span>
+              <span class="btn">✓</span><span class="btn">⋮</span>
+            </div>
+          </div>
+          <div class="filters mark" style="position:relative">
+            <span class="fchip on">≡ Last 14d</span><span class="fchip">📂 Empty</span><span class="fchip">🗄 Stale 30d+</span>
+            <span class="grow"></span><span>⇕ ⇳ ∿</span>
+            <span class="pin" style="right:-8px;top:-8px">4</span>
+          </div>
+          <div class="heading"><span class="ib" style="width:14px">⠿</span><span class="hpill">DESKTOP-U12KP1A</span><span class="grow"></span><span class="btn">⋮</span></div>
+          <div class="proj-row">▾ 📁 Everything <span class="grow"></span><span class="btn">⋮</span></div>
+          <div class="ws-row"><span class="led idle"></span><span class="t">Resume IDP refactor</span><span class="diff"><span class="a">+99792</span> <span class="d">−90997</span></span><span class="btn">⋮</span></div>
+          <div class="row indent" style="position:relative">
+            <span class="age">3m</span><span class="led run"></span>
+            <span class="title">update the docs</span>
+            <span class="btn">⋮</span>
+            <span class="pin" style="right:-6px;top:-6px">5</span>
+          </div>
+          <div class="row indent"><span class="age">2d</span><span class="led idle"></span><span class="title">read the handoff</span><span class="btn">◷</span><span class="btn">⋮</span></div>
+          <div class="info mark" style="position:relative">4 quiet projects: AzDevOps, collector…
+            <span class="pin" style="right:-8px;top:-8px">6</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="caption">Proposed</p>
+      <div class="sb">
+        <div class="bar new">
+          <div class="seg"><span class="on">Projects</span><span>Triage</span></div>
+          <span class="grow"></span>
+          <span class="ib">⌕</span>
+          <span class="counts"><span class="c-red">1</span><span class="c-green">2</span><span class="c-blue">1</span></span>
+          <span class="ib">⋯</span>
+          <span class="ib">←</span><span class="ib">→</span>
+          <span class="pin" style="right:-8px;top:-8px">1</span>
+        </div>
+        <div class="scroll">
+          <div class="strip red">
+            <div class="lbl">Needs you · 3</div>
+            <div class="row new">
+              <span class="age">2m</span><span class="led perm"></span><span class="proj">Everything</span>
+              <span class="title">run migrations on staging?<small>Bash · npm run migrate</small></span>
+              <span class="chip deny">Deny</span><span class="chip allow">Allow</span><span class="btn">⋮</span>
+              <span class="pin" style="right:-6px;top:-6px">2</span>
+            </div>
+            <div class="row">
+              <span class="age">1h</span><span class="led fin"></span><span class="proj">Everything</span>
+              <span class="title">⌖ this is a continued work…</span>
+              <span class="btn">✓</span><span class="btn">⋮</span>
+              <span class="pin" style="right:24px;top:-8px">3</span>
+            </div>
+            <div class="row cur">
+              <span class="age">9m</span><span class="led fin"></span><span class="proj">RecentCha…</span>
+              <span class="title">plugin cont.</span>
+              <span class="btn">✓</span><span class="btn">⋮</span>
+            </div>
+          </div>
+          <div class="filters">
+            <span class="fchip on">≡ Last 14d</span><span class="fchip">📂 Empty</span><span class="fchip">🗄 Stale 30d+</span>
+            <span class="grow"></span><span>⇕ ⇳ ∿</span>
+          </div>
+          <div class="info new" style="position:relative">Last 14d hides 6 workspaces · <a href="#">show them</a>
+            <span class="pin" style="right:-8px;top:-8px">4</span>
+          </div>
+          <div class="heading"><span class="ib" style="width:14px">⠿</span><span class="hpill">DESKTOP-U12KP1A</span><span class="grow"></span><span class="btn">⋮</span></div>
+          <div class="proj-row">▾ 📁 Everything <span class="grow"></span><span class="btn">⋮</span></div>
+          <div class="ws-row"><span class="led run"></span><span class="t">Resume IDP refactor</span><span class="diff"><span class="a">+99792</span> <span class="d">−90997</span></span><span class="btn">⋮</span></div>
+          <div class="row indent new" style="position:relative">
+            <span class="age">3m</span><span class="led run"></span>
+            <span class="title">update the docs</span>
+            <span class="clock">2:41</span><span class="btn">⋮</span>
+            <span class="pin" style="right:-6px;top:-6px">5</span>
+          </div>
+          <div class="row indent"><span class="age">2d</span><span class="led idle"></span><span class="title">read the handoff</span><span class="btn">◷</span><span class="btn">⋮</span></div>
+          <div class="info new" style="position:relative">▸ 4 quiet projects
+            <span class="pin" style="right:-8px;top:-8px">6</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><span class="n">1</span><div>
+        <h3>First row: fewer buttons, one overflow <span class="badge b-mid">medium</span></h3>
+        <p>Today the row holds the view switch, Hosts, Add project, Search, Settings, counts and back/forward. Keep the switch, Search and the counts; move <b>Hosts</b>, <b>Add project</b> and <b>Settings</b> into one <b>⋯</b> menu. Show all three counts (waiting red, finished green, running blue) like the Paseo row does. <span class="why">Same functions, half the width; the phone row then fits without the icon-only switch.</span></p>
+      </div></div>
+      <div class="note"><span class="n">2</span><div>
+        <h3>Answer a permission from the row <span class="badge b-high">high</span><span class="badge b-check">needs API check</span></h3>
+        <p>A Needs you row that waits for permission shows what it asks (tool and command, one muted line) and <b>Deny</b> / <b>Allow</b>. A question keeps <b>Open to answer</b> (the row's own tap). <span class="why">The list's whole job is "what needs me"; this answers the most common case without leaving the list.</span> Only if Paseo's plugin API lets us respond to permissions; otherwise skipped.</p>
+      </div></div>
+      <div class="note"><span class="n">3</span><div>
+        <h3>Pinned chats: pin as a mark, not a button <span class="badge b-mid">medium</span></h3>
+        <p>The unpin button costs a 20 px column on every pinned row. Show the pin as a small mark before the title and keep Unpin in the ⋮ menu. <span class="why">Titles get the room back, rows line up again; nothing is lost (Unpin is one click away).</span></p>
+      </div></div>
+      <div class="note"><span class="n">4</span><div>
+        <h3>Say what a filter hides <span class="badge b-mid">medium</span></h3>
+        <p>When "Last 14d", Hosts or search hides something, one line under the filter row says how much and offers <b>show them</b>. <span class="why">Today a hidden workspace just isn't there, which reads like a bug (the "Every host is switched off" report).</span></p>
+      </div></div>
+      <div class="note"><span class="n">5</span><div>
+        <h3>Running chats tick <span class="badge b-low">low</span></h3>
+        <p>A running chat shows how long its turn has run (2:41), updated every second, instead of a fixed age. The workspace light turns blue while one of its chats runs. <span class="why">Answers "is it stuck?" at a glance; uses data we already have (turn start).</span></p>
+      </div></div>
+      <div class="note"><span class="n">6</span><div>
+        <h3>Quiet projects: a fold, not a sentence <span class="badge b-low">low</span></h3>
+        <p>"4 quiet projects: AzDevOps, collector…" becomes a fold row like the others (▸ 4 quiet projects). <span class="why">Consistent with every other fold; the names are visible once opened.</span></p>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ===================== PHONE ===================== -->
+  <h2>2 · Phone (from your screenshot)</h2>
+  <div class="cols">
+    <div>
+      <p class="caption">Today</p>
+      <div class="sb phone">
+        <div class="scroll" style="padding-top:8px">
+          <div class="strip">
+            <div class="lbl">Needs you · 3</div>
+            <div class="row mark" style="min-height:44px">
+              <span class="age">1h</span><span class="led fin"></span><span class="proj">Everything</span>
+              <span class="title">this is a co…</span>
+              <span class="btn accent">⌖</span><span class="btn" style="width:32px">✓</span><span class="btn" style="width:32px">⋮</span>
+              <span class="pin" style="right:-6px;top:-6px">7</span>
+            </div>
+            <div class="row" style="min-height:44px">
+              <span class="age">12m</span><span class="led fin"></span><span class="proj">RecentCha…</span>
+              <span class="title">a little sidetrack:</span>
+              <span class="btn" style="width:32px">✓</span><span class="btn" style="width:32px">⋮</span>
+            </div>
+          </div>
+          <div class="ws-row"><span class="t">Resume IDP refactor, upda…</span><span class="diff"><span class="a">+99792</span> <span class="d">−90997</span></span><span class="btn">⋮</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p class="caption">Proposed</p>
+      <div class="sb phone">
+        <div class="scroll" style="padding-top:8px">
+          <div class="strip">
+            <div class="lbl">Needs you · 3</div>
+            <div class="row new" style="min-height:44px">
+              <span class="age">1h</span><span class="led fin"></span>
+              <span class="title">⌖ this is a continued work on…<small>Everything</small></span>
+              <span class="btn" style="width:32px">⋮</span>
+              <span class="pin" style="right:-6px;top:-6px">7</span>
+            </div>
+            <div class="row" style="min-height:44px">
+              <span class="age">12m</span><span class="led fin"></span>
+              <span class="title">a little sidetrack: the hosts…<small>RecentChatsPaseoPlugin</small></span>
+              <span class="btn" style="width:32px">⋮</span>
+            </div>
+          </div>
+          <div class="ws-row"><span class="t">Resume IDP refactor, update…</span><span class="diff"><span class="a">+99.8k</span> <span class="d">−91k</span></span><span class="btn">⋮</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><span class="n">7</span><div>
+        <h3>Phone rows: title first, actions in the menu or a swipe <span class="badge b-high">high</span></h3>
+        <p>On a phone the 32 px read and pin buttons leave the title ~12 characters. Put the project under the title (second line), keep only ⋮ on the row, and mark read with a swipe left (Later with a swipe right), the same as Paseo's own lists. Line changes shorten to 99.8k. <span class="why">The title is what you scan for; the row stays one tap to open.</span></p>
+      </div></div>
+      <div class="note"><span class="n">8</span><div>
+        <h3>Touch or mouse, not phone or desktop <span class="badge b-mid">medium</span></h3>
+        <p>Decide button sizes, hover and drag handles by the input (coarse pointer, hover), not by the narrow layout. A touch laptop gets thumb-sized targets; an iPad with a trackpad gets hover. <span class="why">Paseo 0.16.1 fixed exactly this in its own UI; our grip and drag trouble came from guessing by width.</span></p>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ===================== SETTINGS ===================== -->
+  <h2>3 · Settings page</h2>
+  <div class="settings">
+    <div>
+      <div class="tabs"><span class="on">List</span><span>Projects</span><span>Sidebar &amp; pills</span><span>Version &amp; help</span></div>
+      <div class="card">
+        <div class="opt"><div class="tx"><b>Row layout</b><i>Host, light, project, workspace, title, branch, agent, age</i></div><span class="chip">Edit</span></div>
+        <div class="opt"><div class="tx"><b>Full names card</b><i>On hover or long press</i></div><span class="sw on"></span></div>
+        <div class="opt dim"><div class="tx"><b>Card transparency</b><i>Dimmed: the card is off</i></div><span class="chip">20%</span></div>
+      </div>
+      <div class="card">
+        <div class="opt"><div class="tx"><b>Later pill</b><i>Marks the chat unread</i></div><span class="sw"></span></div>
+        <div class="opt dim"><div class="tx"><b>After Later</b><i>Dimmed while the Later pill is off</i></div><span class="chip">Open the next chat</span></div>
+      </div>
+      <span class="reset">Reset this tab… (asks again)</span>
+      <span class="pin" style="left:8px;top:8px">9</span>
+    </div>
+    <div class="preview">
+      <div class="pv-switch"><span class="seg"><span class="on">Desktop</span><span>Phone</span></span></div>
+      <div class="sb" style="width:100%">
+        <div class="scroll" style="padding-top:8px">
+          <div class="lbl">Preview: follows every change</div>
+          <div class="row"><span class="age">2m</span><span class="led perm"></span><span class="proj">Everything</span><span class="title">run migrations on staging?</span><span class="btn">⋮</span></div>
+          <div class="row"><span class="age">9m</span><span class="led fin"></span><span class="proj">RecentCha…</span><span class="title">plugin cont.</span><span class="btn">✓</span><span class="btn">⋮</span></div>
+          <div class="row"><span class="age">3m</span><span class="led run"></span><span class="proj">Everything</span><span class="title">update the docs</span><span class="clock">2:41</span><span class="btn">⋮</span></div>
+        </div>
+      </div>
+      <span class="pin" style="right:-8px;top:24px">10</span>
+    </div>
+  </div>
+  <div class="cols" style="margin-top:12px; grid-template-columns: 1fr 1fr;">
+    <div class="note"><span class="n">9</span><div>
+      <h3>Tabs, dimmed dependents, reset per tab <span class="badge b-high">high</span></h3>
+      <p>The one long page becomes four tabs. An option that depends on a switch is dimmed while that switch is off (After Later, card transparency, phone height). Each tab can be reset, with a second press to confirm. <span class="why">Same settings, findable; nothing new to learn.</span></p>
+    </div></div>
+    <div class="note"><span class="n">10</span><div>
+      <h3>One preview that stays in view <span class="badge b-mid">medium</span></h3>
+      <p>On a wide window the preview sits beside the options and stays put while you scroll; on a narrow one it sits above them. A Desktop / Phone switch draws the same rows at phone width. Today's three separate previews (row layout, Projects, card) merge into it. <span class="why">You see the effect of a change without scrolling back up.</span></p>
+    </div></div>
+  </div>
+
+  <h2>Left out on purpose</h2>
+  <div class="out">
+    These are Better Paseo's core, not a list's job, so they stay out:
+    <ul>
+      <li>A Tasks board with lanes, cards, card density, lane width and a details sidebar.</li>
+      <li>Redrawing the chat timeline, tool icons, reply styles, image viewer, find bar.</li>
+      <li>Automatic chat titles, usage and cost charts, token rings.</li>
+      <li>A second language. Possible later, but not a list improvement.</li>
+    </ul>
+    Smaller things that fit but can wait: keyboard keys (J/K, Enter, /, Esc), rows that slide between sections instead of jumping (off under reduced motion), and a "Known limitations" page listing what Paseo does not let plugins do (pill order, drawer height, switching the sidebar view).
+  </div>
+</div>
+</body>
+</html>

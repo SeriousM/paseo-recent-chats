@@ -114,7 +114,7 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
         active={currentScreen?.screenId === RECENT_SCREEN_ID}
         onPress={() => (rowOnly ? openScreen({ screenId: RECENT_SCREEN_ID }) : store.updatePrefs({ sidebarExpanded: !expanded }))}
         trailing={
-          <HeaderControls theme={theme} compact={layout.compact} target={target}>
+          <HeaderControls theme={theme} target={target}>
             {rowOnly ? null : (
               <Text style={{ color: theme.colors.foregroundMuted, fontSize: fs(10) }}>{expanded ? "\u25BE" : "\u25B8"}</Text>
             )}

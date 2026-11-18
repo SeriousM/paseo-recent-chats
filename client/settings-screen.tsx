@@ -1,12 +1,14 @@
 import type { PluginSurfaceProps } from "@getpaseo/plugin/client";
 import { SettingsCard, SettingsSection, SettingsSelect, SettingsSwitch } from "@getpaseo/plugin/client/ui";
-import { useEffect, useRef, useState } from "react";
-import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import type { RowToken } from "../shared/layout";
 import { pillsInOrder, type PillId, type Prefs } from "../shared/settings";
 import { IconButton, LayoutEditor, LayoutPreview, TooltipPreview } from "./layout-editor";
+import { DEFAULT_PREFS } from "./prefs";
 import { ProjectsPreview } from "./projects-view";
 import { BOTH_VIEWS, presetOptions, SectionEditor } from "./section-editor";
+import { Dimmed, ResetTabButton, Segmented, TabBar } from "./settings-tabs";
 import { Slider } from "./slider";
 import { sameLayout } from "./row-layout";
 import { useRecents } from "./use-recents";
@@ -44,20 +46,76 @@ const VIEW_OPTIONS = [
   { label: "Triage", value: "triage" },
 ] as const;
 
+type TabId = "list" | "projects" | "sidebar" | "version";
+
+const TABS: readonly { id: TabId; label: string }[] = [
+  { id: "list", label: "List" },
+  { id: "projects", label: "Projects" },
+  { id: "sidebar", label: "Sidebar & pills" },
+  { id: "version", label: "Version & help" },
+];
+
 /**
- * Settings, most used first: version and updates, this device's view, the row layout both views share,
- * settings both views use, then each view with its own preview, and the rest.
+ * The prefs each tab's reset puts back to their defaults. Hidden hosts, pins, dragged orders, the
+ * installed version and whether the sidebar list is open are left alone: they are not choices on a tab.
+ */
+const RESET_KEYS: Record<Exclude<TabId, "version">, readonly (keyof Prefs)[]> = {
+  list: [
+    "layout",
+    "maxUnread",
+    "unreadExpiryDays",
+    "inactiveWindowDays",
+    "groupByHost",
+    "groupHeadings",
+    "sectionOrder",
+    "sectionSort",
+    "showTooltip",
+    "tooltipTransparency",
+  ],
+  projects: ["projectsGroupByHost", "chatsPerWorkspace", "staleDays", "projectsShow"],
+  sidebar: ["sidebarHeightPhone", "sidebarHeightDesktop", "showInboxPill", "showLaterPill", "showHostPill", "pillOrder", "laterBehavior"],
+};
+
+/** Window width from which the List and Projects tabs put their preview beside the options. */
+const TWO_COLUMNS_FROM = 900;
+/** Width the preview is drawn at when it shows a phone. */
+const PHONE_PREVIEW_WIDTH = 360;
+
+type PreviewDevice = "desktop" | "phone";
+
+// Kept outside the component so the chosen tab and preview device survive the screen being remounted.
+let lastTab: TabId = "list";
+let lastPreviewDevice: PreviewDevice | null = null;
+
+/**
+ * Settings in four tabs: the list rows and both views, the Projects view, the sidebar and composer
+ * pills, and version and help. The List and Projects tabs keep one preview in view: beside the options
+ * on wide windows, above them on narrow ones.
  */
 export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
   const { store, snapshot } = useRecents();
   const { prefs, hosts } = snapshot;
   const mode = useViewMode();
   const compact = screen.compact;
+  const { width } = useWindowDimensions();
+  const wide = !compact && width >= TWO_COLUMNS_FROM;
   const padding = compact ? 12 : 20;
   const change = (patch: Partial<Prefs>) => store.updatePrefs(patch);
   const muted = { color: theme.colors.foregroundMuted, fontSize: 12 };
 
-  // The row layout is edited as a draft: both previews follow every change, but nothing is saved
+  const [tab, setTabState] = useState<TabId>(lastTab);
+  const setTab = (next: TabId) => {
+    lastTab = next;
+    setTabState(next);
+  };
+  const [device, setDeviceState] = useState<PreviewDevice>(lastPreviewDevice ?? (compact ? "phone" : "desktop"));
+  const setDevice = (next: PreviewDevice) => {
+    lastPreviewDevice = next;
+    setDeviceState(next);
+  };
+  const previewCompact = device === "phone";
+
+  // The row layout is edited as a draft: the previews follow every change, but nothing is saved
   // until Save is pressed. A layout saved elsewhere replaces the draft only while it has no edits.
   const [draft, setDraft] = useState<RowToken[]>(() => [...prefs.layout]);
   const savedLayout = useRef(prefs.layout);
@@ -119,18 +177,283 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
       onValueChange={(next) => change({ [setting.key]: Number(next) })}
     />
   );
+  const resetButton = (keys: readonly (keyof Prefs)[], after?: () => void) => (
+    <ResetTabButton
+      theme={theme}
+      compact={compact}
+      onReset={() => {
+        // Copied so the stored prefs never share arrays or objects with DEFAULT_PREFS.
+        change(Object.fromEntries(keys.map((key) => [key, JSON.parse(JSON.stringify(DEFAULT_PREFS[key]))])) as Partial<Prefs>);
+        after?.();
+      }}
+    />
+  );
 
-  return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.surface0 }} contentContainerStyle={{ padding, gap: 16 }}>
-      {outdatedNote ? <Text style={muted}>{outdatedNote}</Text> : null}
-      {snapshot.errors
-        .filter((error) => error.startsWith("Settings:"))
-        .map((error) => (
-          <Text key={error} style={{ color: theme.colors.statusDanger, fontSize: 12 }}>
-            {error}
+  const listOptions = (
+    <>
+      <SettingsSection title="Row layout">
+        <Text style={muted}>One layout for the chat rows of both views; the preview follows every edit.</Text>
+        <SettingsCard>
+          <LayoutEditor theme={theme} compact={compact} layout={draft} onChange={setDraft} />
+        </SettingsCard>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Save row layout"
+            accessibilityState={{ disabled: !dirty }}
+            disabled={!dirty}
+            onPress={() => change({ layout: draft })}
+            style={button(true, dirty)}
+          >
+            <Text style={{ color: theme.colors.accentForeground, fontWeight: "600" }}>Save layout</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Discard layout changes"
+            accessibilityState={{ disabled: !dirty }}
+            disabled={!dirty}
+            onPress={() => setDraft([...prefs.layout])}
+            style={button(false, dirty)}
+          >
+            <Text style={{ color: theme.colors.foreground }}>Discard</Text>
+          </Pressable>
+          <Text style={{ color: dirty ? theme.colors.statusWarning : theme.colors.foregroundMuted, fontSize: 12 }}>
+            {dirty ? "Unsaved changes. The lists keep the saved layout until you save." : "Saved."}
           </Text>
-        ))}
+        </View>
+      </SettingsSection>
 
+      <SettingsSection title="Both views">
+        <SettingsCard>{BOTH_VIEWS.map(numberSelect)}</SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title="Triage view">
+        <SettingsCard>
+          <SettingsSwitch
+            label="Group rows by host"
+            hint="One heading per host. Chats are limited per host, and the host tag is left out of the rows. The preview shows it."
+            value={prefs.groupByHost}
+            onValueChange={(next) => change({ groupByHost: next })}
+          />
+          <SettingsSwitch
+            label="Section headings"
+            hint="Pinned, Needs you, Running, Inactive."
+            value={prefs.groupHeadings}
+            onValueChange={(next) => change({ groupHeadings: next })}
+          />
+        </SettingsCard>
+        <SettingsCard>
+          <SectionEditor theme={theme} compact={compact} prefs={prefs} onChange={change} />
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title="Full names card">
+        <SettingsCard>
+          <SettingsSwitch
+            label="Show full names on hover"
+            hint="A card with the untruncated names after the pointer rests on a row (long press on touch)."
+            value={prefs.showTooltip}
+            onValueChange={(next) => change({ showTooltip: next })}
+          />
+          <Dimmed off={!prefs.showTooltip}>
+            <View style={{ padding: 12, gap: 8 }}>
+              <Text style={{ color: theme.colors.foreground, fontSize: 14 }}>Card transparency</Text>
+              <Slider
+                theme={theme}
+                compact={compact}
+                label="card transparency"
+                value={prefs.tooltipTransparency}
+                min={0}
+                max={90}
+                step={5}
+                display={`${prefs.tooltipTransparency}%`}
+                onChange={(next) => change({ tooltipTransparency: next })}
+              />
+            </View>
+          </Dimmed>
+        </SettingsCard>
+      </SettingsSection>
+
+      {resetButton(RESET_KEYS.list, () => setDraft([...DEFAULT_PREFS.layout]))}
+    </>
+  );
+
+  const projectsOptions = (
+    <>
+      <SettingsSection title="This device">
+        <SettingsCard>
+          <SettingsSelect
+            label="View"
+            hint="Which list the sidebar shows on this device. Also switched in the sidebar's first row. Not synced."
+            value={mode.view ?? "auto"}
+            options={VIEW_OPTIONS}
+            onValueChange={(next) => updateViewMode({ view: next === "auto" ? null : next })}
+          />
+          <SettingsSwitch
+            label={`Projects: only the last ${prefs.inactiveWindowDays} days`}
+            hint="Hides workspaces with nothing newer than the inactive window (List tab). Pinned ones stay. Same as the filter above the tree. Not synced."
+            value={mode.activeOnly}
+            onValueChange={(next) => updateViewMode({ activeOnly: next })}
+          />
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title="Projects view">
+        <SettingsCard>
+          <SettingsSwitch
+            label="Group by host"
+            hint="A heading per host above its projects. Off: one list of projects, each with its host's tag. Also in the Hosts dropdown."
+            value={prefs.projectsGroupByHost}
+            onValueChange={(next) => change({ projectsGroupByHost: next })}
+          />
+          {numberSelect({
+            key: "chatsPerWorkspace",
+            label: "Chats per workspace",
+            hint: "The rest fold into \u201C+N older\u201D. Chats that need you, run or are pinned always show.",
+            presets: [1, 2, 3, 4, 5, 8, 10],
+          })}
+          {numberSelect({
+            key: "staleDays",
+            label: "Stale after",
+            hint: "The \u201CStale\u201D cleanup filter above the tree lists chats with nothing newer than this, to archive them.",
+            presets: [14, 30, 60, 90, 180, 365],
+            unit: " days",
+          })}
+          {PROJECT_SWITCHES.map(([key, label, hint]) => {
+            const off = (key === "mainBranch" && !prefs.projectsShow.branch) || (key === "hostTag" && prefs.projectsGroupByHost);
+            return (
+              <Dimmed key={key} off={off}>
+                <SettingsSwitch
+                  label={label}
+                  hint={hint}
+                  value={prefs.projectsShow[key]}
+                  disabled={off}
+                  onValueChange={(next) => change({ projectsShow: { ...prefs.projectsShow, [key]: next } })}
+                />
+              </Dimmed>
+            );
+          })}
+        </SettingsCard>
+      </SettingsSection>
+
+      {resetButton(RESET_KEYS.projects)}
+    </>
+  );
+
+  const sidebarOptions = (
+    <>
+      <SettingsSection title="Hosts">
+        <SettingsCard>
+          {hosts.length < 2 ? (
+            <View style={{ padding: 12 }}>
+              <Text style={muted}>
+                Only one host is connected. Connect another host to choose which hosts are listed. Hosts that are not connected are not shown.
+              </Text>
+            </View>
+          ) : (
+            hosts.map((entry) => (
+              <SettingsSwitch
+                key={entry.id}
+                label={`List chats of ${entry.label}`}
+                hint="Connected. Both views; also in the Hosts dropdown."
+                value={!entry.hidden}
+                onValueChange={() => store.toggleHost(entry.id)}
+              />
+            ))
+          )}
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title="Sidebar list">
+        <SettingsCard>
+          <SettingsSwitch
+            label="Sidebar list expanded"
+            hint="Also changes when you open or close the list in the sidebar."
+            value={prefs.sidebarExpanded}
+            onValueChange={(next) => change({ sidebarExpanded: next })}
+          />
+          {PHONE_ROW_ONLY ? (
+            <Text style={[muted, { padding: 12 }]}>
+              On phones the sidebar shows only the Recent Chats row, which opens the full list: Paseo gives the rows above its own
+              list too little room. For the list in the drawer, choose Recent Chats under Paseo Settings, Sidebar, Sidebar view.
+            </Text>
+          ) : null}
+          {(PHONE_ROW_ONLY ? (["sidebarHeightDesktop"] as const) : (["sidebarHeightPhone", "sidebarHeightDesktop"] as const)).map((key) => (
+              <View key={key} style={{ padding: 12, gap: 8 }}>
+                <Text style={{ color: theme.colors.foreground, fontSize: 14 }}>
+                  {key === "sidebarHeightPhone" ? "Height on phones" : "Height on wide screens"}
+                </Text>
+                <Text style={muted}>Share of the window height the list takes, even when fewer chats would fit. The grip under the list sets it too.</Text>
+                <Slider
+                  theme={theme}
+                  compact={compact}
+                  label={key === "sidebarHeightPhone" ? "phone sidebar list height" : "wide sidebar list height"}
+                  value={prefs[key]}
+                  min={15}
+                  max={85}
+                  step={5}
+                  display={`${prefs[key]}%`}
+                  onChange={(next) => change({ [key]: next })}
+                />
+              </View>
+          ))}
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title="Composer pills">
+        <SettingsCard>
+          <Text style={[muted, { paddingHorizontal: 12, paddingTop: 12 }]}>
+            Recent Chats' pills next to the composer, in this order; the arrows move one. Where they sit among the pills of Paseo
+            and other plugins is up to Paseo.
+          </Text>
+          {pillsInOrder(prefs.pillOrder).map((pill, index, order) => {
+            const move = (by: number) => {
+              const next = [...order];
+              next.splice(index, 1);
+              next.splice(index + by, 0, pill);
+              change({ pillOrder: next });
+            };
+            const { label, hint, key } = PILL_SETTINGS[pill];
+            return (
+              <View key={pill} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 8 }}>
+                <IconButton theme={theme} compact={compact} label={`Move ${label} up`} icon="ChevronUp" disabled={index === 0} onPress={() => move(-1)} />
+                <IconButton
+                  theme={theme}
+                  compact={compact}
+                  label={`Move ${label} down`}
+                  icon="ChevronDown"
+                  disabled={index === order.length - 1}
+                  onPress={() => move(1)}
+                />
+                <View style={{ flex: 1 }}>
+                  <SettingsSwitch label={label} hint={hint} value={prefs[key]} onValueChange={(next) => change({ [key]: next })} />
+                </View>
+              </View>
+            );
+          })}
+          <Dimmed off={!prefs.showLaterPill}>
+            <SettingsSelect
+              label="After Later"
+              hint="Open the next chat, or stay on this one."
+              value={prefs.laterBehavior}
+              disabled={!prefs.showLaterPill}
+              options={[
+                { label: "Open the next chat", value: "jump" },
+                { label: "Stay on this chat", value: "stay" },
+              ]}
+              onValueChange={(next) => change({ laterBehavior: next })}
+            />
+          </Dimmed>
+        </SettingsCard>
+      </SettingsSection>
+
+      {resetButton(RESET_KEYS.sidebar)}
+    </>
+  );
+
+  const versionOptions = (
+    <>
+      {outdatedNote ? <Text style={muted}>{outdatedNote}</Text> : null}
       <SettingsSection title="Version">
         <SettingsCard>
           <View style={{ padding: 12, gap: 8 }}>
@@ -175,245 +498,6 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
         </SettingsCard>
       </SettingsSection>
 
-      <SettingsSection title="This device">
-        <SettingsCard>
-          <SettingsSelect
-            label="View"
-            hint="Which list the sidebar shows on this device. Also switched in the sidebar's first row. Not synced."
-            value={mode.view ?? "auto"}
-            options={VIEW_OPTIONS}
-            onValueChange={(next) => updateViewMode({ view: next === "auto" ? null : next })}
-          />
-          <SettingsSwitch
-            label={`Projects: only the last ${prefs.inactiveWindowDays} days`}
-            hint="Hides workspaces with nothing newer than the inactive window (below). Pinned ones stay. Same as the filter above the tree. Not synced."
-            value={mode.activeOnly}
-            onValueChange={(next) => updateViewMode({ activeOnly: next })}
-          />
-        </SettingsCard>
-      </SettingsSection>
-
-      <SettingsSection title="Row layout">
-        <Text style={muted}>One layout for the chat rows of both views; the previews below follow every edit.</Text>
-        <LayoutPreview theme={theme} compact={compact} layout={draft} groupByHost={prefs.groupByHost} />
-        <SettingsCard>
-          <LayoutEditor theme={theme} compact={compact} layout={draft} onChange={setDraft} />
-        </SettingsCard>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Save row layout"
-            accessibilityState={{ disabled: !dirty }}
-            disabled={!dirty}
-            onPress={() => change({ layout: draft })}
-            style={button(true, dirty)}
-          >
-            <Text style={{ color: theme.colors.accentForeground, fontWeight: "600" }}>Save layout</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Discard layout changes"
-            accessibilityState={{ disabled: !dirty }}
-            disabled={!dirty}
-            onPress={() => setDraft([...prefs.layout])}
-            style={button(false, dirty)}
-          >
-            <Text style={{ color: theme.colors.foreground }}>Discard</Text>
-          </Pressable>
-          <Text style={{ color: dirty ? theme.colors.statusWarning : theme.colors.foregroundMuted, fontSize: 12 }}>
-            {dirty ? "Unsaved changes. The lists keep the saved layout until you save." : "Saved."}
-          </Text>
-        </View>
-      </SettingsSection>
-
-      <SettingsSection title="Both views">
-        <SettingsCard>{BOTH_VIEWS.map(numberSelect)}</SettingsCard>
-      </SettingsSection>
-
-      <SettingsSection title="Projects view">
-        <ProjectsPreview theme={theme} compact={compact} prefs={prefs} layout={draft} />
-        <SettingsCard>
-          <SettingsSwitch
-            label="Group by host"
-            hint="A heading per host above its projects. Off: one list of projects, each with its host's tag. Also in the Hosts dropdown."
-            value={prefs.projectsGroupByHost}
-            onValueChange={(next) => change({ projectsGroupByHost: next })}
-          />
-          {numberSelect({
-            key: "chatsPerWorkspace",
-            label: "Chats per workspace",
-            hint: "The rest fold into \u201C+N older\u201D. Chats that need you, run or are pinned always show.",
-            presets: [1, 2, 3, 4, 5, 8, 10],
-          })}
-          {numberSelect({
-            key: "staleDays",
-            label: "Stale after",
-            hint: "The \u201CStale\u201D cleanup filter above the tree lists chats with nothing newer than this, to archive them.",
-            presets: [14, 30, 60, 90, 180, 365],
-            unit: " days",
-          })}
-          {PROJECT_SWITCHES.map(([key, label, hint]) => (
-            <SettingsSwitch
-              key={key}
-              label={label}
-              hint={hint}
-              value={prefs.projectsShow[key]}
-              disabled={key === "mainBranch" && !prefs.projectsShow.branch}
-              onValueChange={(next) => change({ projectsShow: { ...prefs.projectsShow, [key]: next } })}
-            />
-          ))}
-        </SettingsCard>
-      </SettingsSection>
-
-      <SettingsSection title="Triage view">
-        <SettingsCard>
-          <SettingsSwitch
-            label="Group rows by host"
-            hint="One heading per host. Chats are limited per host, and the host tag is left out of the rows. The row layout preview shows it."
-            value={prefs.groupByHost}
-            onValueChange={(next) => change({ groupByHost: next })}
-          />
-          <SettingsSwitch
-            label="Section headings"
-            hint="Pinned, Needs you, Running, Inactive."
-            value={prefs.groupHeadings}
-            onValueChange={(next) => change({ groupHeadings: next })}
-          />
-        </SettingsCard>
-        <SettingsCard>
-          <SectionEditor theme={theme} compact={compact} prefs={prefs} onChange={change} />
-        </SettingsCard>
-      </SettingsSection>
-
-      <SettingsSection title="Hosts">
-        <SettingsCard>
-          {hosts.length < 2 ? (
-            <View style={{ padding: 12 }}>
-              <Text style={muted}>
-                Only one host is connected. Connect another host to choose which hosts are listed. Hosts that are not connected are not shown.
-              </Text>
-            </View>
-          ) : (
-            hosts.map((entry) => (
-              <SettingsSwitch
-                key={entry.id}
-                label={`List chats of ${entry.label}`}
-                hint="Connected. Both views; also in the Hosts dropdown."
-                value={!entry.hidden}
-                onValueChange={() => store.toggleHost(entry.id)}
-              />
-            ))
-          )}
-        </SettingsCard>
-        <Text style={muted}>{where}</Text>
-      </SettingsSection>
-
-      <SettingsSection title="Sidebar list">
-        <SettingsCard>
-          <SettingsSwitch
-            label="Sidebar list expanded"
-            hint="Also changes when you open or close the list in the sidebar."
-            value={prefs.sidebarExpanded}
-            onValueChange={(next) => change({ sidebarExpanded: next })}
-          />
-          {PHONE_ROW_ONLY ? (
-            <Text style={[muted, { padding: 12 }]}>
-              On phones the sidebar shows only the Recent Chats row, which opens the full list: Paseo gives the rows above its own
-              list too little room. For the list in the drawer, choose Recent Chats under Paseo Settings, Sidebar, Sidebar view.
-            </Text>
-          ) : null}
-          {(PHONE_ROW_ONLY ? (["sidebarHeightDesktop"] as const) : (["sidebarHeightPhone", "sidebarHeightDesktop"] as const)).map((key) => (
-            <View key={key} style={{ padding: 12, gap: 8 }}>
-              <Text style={{ color: theme.colors.foreground, fontSize: 14 }}>
-                {key === "sidebarHeightPhone" ? "Height on phones" : "Height on wide screens"}
-              </Text>
-              <Text style={muted}>Share of the window height the list takes, even when fewer chats would fit. The grip under the list sets it too.</Text>
-              <Slider
-                theme={theme}
-                compact={compact}
-                label={key === "sidebarHeightPhone" ? "phone sidebar list height" : "wide sidebar list height"}
-                value={prefs[key]}
-                min={15}
-                max={85}
-                step={5}
-                display={`${prefs[key]}%`}
-                onChange={(next) => change({ [key]: next })}
-              />
-            </View>
-          ))}
-        </SettingsCard>
-      </SettingsSection>
-
-      <SettingsSection title="Full names card">
-        <SettingsCard>
-          <SettingsSwitch
-            label="Show full names on hover"
-            hint="A card with the untruncated names after the pointer rests on a row (long press on touch)."
-            value={prefs.showTooltip}
-            onValueChange={(next) => change({ showTooltip: next })}
-          />
-          <View style={{ padding: 12, gap: 8, opacity: prefs.showTooltip ? 1 : 0.5 }}>
-            <Text style={{ color: theme.colors.foreground, fontSize: 14 }}>Card transparency</Text>
-            <Slider
-              theme={theme}
-              compact={compact}
-              label="card transparency"
-              value={prefs.tooltipTransparency}
-              min={0}
-              max={90}
-              step={5}
-              display={`${prefs.tooltipTransparency}%`}
-              onChange={(next) => change({ tooltipTransparency: next })}
-            />
-            <TooltipPreview theme={theme} transparency={prefs.tooltipTransparency} />
-          </View>
-        </SettingsCard>
-      </SettingsSection>
-
-      <SettingsSection title="Composer pills">
-        <SettingsCard>
-          <Text style={[muted, { paddingHorizontal: 12, paddingTop: 12 }]}>
-            Recent Chats' pills next to the composer, in this order; the arrows move one. Where they sit among the pills of Paseo
-            and other plugins is up to Paseo.
-          </Text>
-          {pillsInOrder(prefs.pillOrder).map((pill, index, order) => {
-            const move = (by: number) => {
-              const next = [...order];
-              next.splice(index, 1);
-              next.splice(index + by, 0, pill);
-              change({ pillOrder: next });
-            };
-            const { label, hint, key } = PILL_SETTINGS[pill];
-            return (
-              <View key={pill} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 8 }}>
-                <IconButton theme={theme} compact={compact} label={`Move ${label} up`} icon="ChevronUp" disabled={index === 0} onPress={() => move(-1)} />
-                <IconButton
-                  theme={theme}
-                  compact={compact}
-                  label={`Move ${label} down`}
-                  icon="ChevronDown"
-                  disabled={index === order.length - 1}
-                  onPress={() => move(1)}
-                />
-                <View style={{ flex: 1 }}>
-                  <SettingsSwitch label={label} hint={hint} value={prefs[key]} onValueChange={(next) => change({ [key]: next })} />
-                </View>
-              </View>
-            );
-          })}
-          <SettingsSelect
-            label="After Later"
-            hint="Open the next chat, or stay on this one."
-            value={prefs.laterBehavior}
-            options={[
-              { label: "Open the next chat", value: "jump" },
-              { label: "Stay on this chat", value: "stay" },
-            ]}
-            onValueChange={(next) => change({ laterBehavior: next })}
-          />
-        </SettingsCard>
-      </SettingsSection>
-
       <SettingsSection title="Diagnostics">
         <SettingsCard>
           <View style={{ padding: 12, gap: 8 }}>
@@ -449,6 +533,77 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
           </View>
         </SettingsCard>
       </SettingsSection>
-    </ScrollView>
+
+      <SettingsSection title="Where settings are kept">
+        <Text style={muted}>{where}</Text>
+      </SettingsSection>
+    </>
+  );
+
+  const previewContent =
+    tab === "list" ? (
+      <>
+        <LayoutPreview theme={theme} compact={previewCompact} layout={draft} groupByHost={prefs.groupByHost} />
+        {prefs.showTooltip ? <TooltipPreview theme={theme} transparency={prefs.tooltipTransparency} /> : null}
+      </>
+    ) : tab === "projects" ? (
+      <ProjectsPreview theme={theme} compact={previewCompact} prefs={prefs} layout={draft} />
+    ) : null;
+  const preview = previewContent ? (
+    <View style={{ gap: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <Segmented
+          theme={theme}
+          compact={compact}
+          label="Preview size"
+          options={[
+            { id: "desktop", label: "Desktop" },
+            { id: "phone", label: "Phone" },
+          ]}
+          value={device}
+          onChange={setDevice}
+        />
+        <Text style={muted}>Preview: follows every change.</Text>
+      </View>
+      <View style={{ gap: 8, width: "100%", maxWidth: previewCompact ? PHONE_PREVIEW_WIDTH : undefined }}>{previewContent}</View>
+    </View>
+  ) : null;
+
+  const options: Record<TabId, ReactNode> = {
+    list: listOptions,
+    projects: projectsOptions,
+    sidebar: sidebarOptions,
+    version: versionOptions,
+  };
+  const scrollGap = { padding, gap: 16 };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.colors.surface0 }}>
+      <View style={{ paddingHorizontal: padding, paddingTop: padding, gap: 8 }}>
+        {snapshot.errors
+          .filter((error) => error.startsWith("Settings:"))
+          .map((error) => (
+            <Text key={error} style={{ color: theme.colors.statusDanger, fontSize: 12 }}>
+              {error}
+            </Text>
+          ))}
+        <TabBar theme={theme} compact={compact} tabs={TABS} value={tab} onChange={setTab} />
+      </View>
+      {wide && preview ? (
+        <View style={{ flex: 1, flexDirection: "row" }}>
+          <ScrollView key={tab} style={{ flex: 1 }} contentContainerStyle={scrollGap}>
+            {options[tab]}
+          </ScrollView>
+          <ScrollView style={{ flexGrow: 0, flexShrink: 0, width: Math.min(480, Math.round(width * 0.42)) }} contentContainerStyle={scrollGap}>
+            {preview}
+          </ScrollView>
+        </View>
+      ) : (
+        <ScrollView key={tab} style={{ flex: 1 }} contentContainerStyle={scrollGap}>
+          {preview}
+          {options[tab]}
+        </ScrollView>
+      )}
+    </View>
   );
 }

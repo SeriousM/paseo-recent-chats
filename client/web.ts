@@ -109,6 +109,33 @@ function isDomTarget(node: unknown): node is DomTarget {
 }
 
 /**
+ * The mouse's back (button 3) and forward (button 4) buttons anywhere in the window. Several lists can be on
+ * screen, and every host's copy of the plugin mounts its own, so the first listener that sees a press marks
+ * the event and the others leave it. The browser's own back navigation on those buttons is prevented.
+ * Returns a cleanup; a no-op off the web.
+ */
+export function onMouseBackForward(handler: (by: -1 | 1) => void): () => void {
+  if (Platform.OS !== "web" || typeof window === "undefined" || !isDomTarget(window)) return () => {};
+  const swallow = (event: DomPointerEvent) => {
+    if (event.button === 3 || event.button === 4) event.preventDefault();
+  };
+  const press = (event: DomPointerEvent) => {
+    if (event.button !== 3 && event.button !== 4) return;
+    event.preventDefault();
+    const marked = event as DomPointerEvent & { __recentChatsHistory?: boolean };
+    if (marked.__recentChatsHistory) return;
+    marked.__recentChatsHistory = true;
+    handler(event.button === 3 ? -1 : 1);
+  };
+  window.addEventListener("mousedown", swallow);
+  window.addEventListener("mouseup", press);
+  return () => {
+    window.removeEventListener("mousedown", swallow);
+    window.removeEventListener("mouseup", press);
+  };
+}
+
+/**
  * Vertical mouse/pen/touch drag on a web element. The app's sidebar sorts its items with pointer-event
  * drag and drop, which takes the mouse before React Native's responder sees it, so the grip handles
  * pointer events itself and keeps them from reaching the sidebar. With `touchHoldMs`, a finger has to rest

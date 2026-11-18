@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentLabel, formatAge } from "../client/format";
+import { agentLabel, formatAge, shortCount } from "../client/format";
 import {
   columnChars,
   linesOf,
@@ -8,6 +8,7 @@ import {
   placeToken,
   placeTokenOnNewLine,
   ownLine,
+  phoneLines,
   resetLayout,
   setEnabled,
   setMaxChars,
@@ -324,5 +325,18 @@ describe("age", () => {
 
   it("is the age of the time the row sorts on", () => {
     expect(tokenValue(row({ sortAt: Date.now() - 90 * 60_000 }), "age")).toBe("1h");
+  });
+});
+
+describe("phone rows", () => {
+  it("moves project and workspace to the start of the second line, keeping their order", () => {
+    const token = (id: RowToken["id"]) => ({ id, enabled: true }) as RowToken;
+    const lines = [[token("led"), token("project"), token("workspace"), token("title")], [token("branch")]];
+    expect(phoneLines(lines).map((line) => line.map((t) => t.id))).toEqual([["led", "title"], ["project", "workspace", "branch"]]);
+    expect(phoneLines([[token("project"), token("title")]]).map((line) => line.map((t) => t.id))).toEqual([["title"], ["project"]]);
+  });
+
+  it("shortens big line counts", () => {
+    expect([9999, 10_000, 99_792, 1_234_567].map(shortCount)).toEqual(["9999", "10k", "99.8k", "1.2M"]);
   });
 });

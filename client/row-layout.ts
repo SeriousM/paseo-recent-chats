@@ -59,6 +59,21 @@ export function visibleLines(layout: readonly RowToken[]): RowToken[][] {
     .filter((line) => line.length > 0);
 }
 
+/** Where a phone moves names out of the first line, so the title gets the width. */
+const PHONE_SECOND_LINE: readonly RowTokenId[] = ["project", "workspace"];
+
+/**
+ * Visible lines as a phone draws them: project and workspace leave the first line for the start of the second
+ * (made when there is none), keeping their order, so the title has the first line's width.
+ */
+export function phoneLines(lines: readonly (readonly RowToken[])[]): RowToken[][] {
+  const [first = [], ...rest] = lines;
+  const moved = first.filter((token) => PHONE_SECOND_LINE.includes(token.id));
+  if (moved.length === 0) return lines.map((line) => [...line]);
+  const [second = [], ...others] = rest;
+  return [first.filter((token) => !moved.includes(token)), [...moved, ...second], ...others.map((line) => [...line])];
+}
+
 function replace(layout: readonly RowToken[], id: RowTokenId, change: Partial<RowToken>): RowToken[] {
   return layout.map((token) => (token.id === id ? { ...token, ...change } : token));
 }

@@ -9,6 +9,7 @@ import { PHONE_ROW_ONLY } from "./sidebar-item";
 import { SettingsCog, TriageList } from "./triage-list";
 import { openChat, useRecents } from "./use-recents";
 import { useFontScale } from "./font-scale";
+import { useTouchInput } from "./input";
 
 /**
  * Phones on Paseo 0.16: the sidebar item is only a row that opens this screen, so the screen is the whole
@@ -50,6 +51,7 @@ export function RecentScreen(props: PluginScreenProps) {
 function TriageScreen({ theme, layout, navigation, params }: PluginScreenProps) {
   const { store, snapshot, result } = useRecents();
   const [query, setQuery] = useState(params.q ?? "");
+  const touch = useTouchInput();
   // Reopened with another query (the sidebar's "more matches" link) while this screen is already showing.
   useEffect(() => setQuery(params.q ?? ""), [params.q]);
   const searching = query.trim().length > 0;
@@ -71,7 +73,7 @@ function TriageScreen({ theme, layout, navigation, params }: PluginScreenProps) 
           <View style={{ flex: 1 }}>
             <SearchBox
               theme={theme}
-              compact={layout.compact}
+              compact={touch}
               value={query}
               onChange={setQuery}
               placeholder="Search title, project, workspace, branch, agent or host"
@@ -85,7 +87,7 @@ function TriageScreen({ theme, layout, navigation, params }: PluginScreenProps) 
               <Text style={styles.action}>Mark all read</Text>
             </Pressable>
           ) : null}
-          <SettingsCog theme={theme} compact={layout.compact} />
+          <SettingsCog theme={theme} compact={touch} />
         </View>
         <Text style={styles.summary}>
           {searching
@@ -94,7 +96,8 @@ function TriageScreen({ theme, layout, navigation, params }: PluginScreenProps) 
         </Text>
         <TriageList
           theme={theme}
-          compact={layout.compact}
+          compact={touch}
+          narrow={layout.compact}
           result={result}
           rows={rows}
           snapshot={snapshot}

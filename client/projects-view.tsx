@@ -28,7 +28,7 @@ import { measureIn, type Box } from "./measure";
 import { columnChars, visibleLines } from "./row-layout";
 import type { StoreSnapshot, WorkspaceInfo } from "./store";
 import { LED_RANK, type Led, type TriageRow } from "./triage";
-import { hostColors } from "./format";
+import { hostColors, shortCount } from "./format";
 import { CardLayer, HostHeading, isDark, ledColor, TipButton, TriageRowView, useMenuOpener, type RowViewProps } from "./triage-list";
 import { scoreRow } from "./fuzzy";
 import { filterTree } from "./tree-search";
@@ -116,6 +116,7 @@ const KIND_LABEL: Partial<Record<WorkspaceInfo["kind"], string>> = {
 export function ViewModeBar({
   theme,
   compact,
+  narrow,
   showHosts,
   hostsOpen,
   onHosts,
@@ -126,7 +127,10 @@ export function ViewModeBar({
   extra,
 }: {
   theme: PluginTheme;
+  /** Touch-sized targets. */
   compact: boolean;
+  /** Paseo's narrow (phone) layout: one toggle button instead of the two-part switch. */
+  narrow: boolean;
   /** Two or more hosts are connected. */
   showHosts: boolean;
   hostsOpen: boolean;
@@ -141,7 +145,7 @@ export function ViewModeBar({
 }) {
   const mode = useViewMode();
   const fs = useFontScale();
-  const view = resolvedView(mode, compact);
+  const view = resolvedView(mode, narrow);
   const size = compact ? 36 : 26;
   const toggle = (on: boolean) => ({
     minHeight: size,
@@ -159,7 +163,7 @@ export function ViewModeBar({
   const tone = (on: boolean) => (on ? theme.colors.foreground : theme.colors.foregroundMuted);
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4 }}>
-      {compact ? (
+      {narrow ? (
         // Phones: one button that switches between the two views, to keep the row short.
         <Pressable
           accessibilityRole="switch"
@@ -328,6 +332,13 @@ export function ProjectsView({
   const pinned = useMemo(() => filterTree(pinnedTree(full, pinnedProjects), query), [full, pinnedProjects, query]);
   // Searching looks through everything, also what "active only" and "+N older" hide.
   const shownTree = useMemo(() => (searching ? filterTree(cleanup ? tree : full, query) : tree), [searching, cleanup, full, tree, query]);
+  // Workspaces "Last N days" keeps out of the tree (also those folded away as quiet projects), said under the filters.
+  const hiddenByWindow = useMemo(() => {
+    if (cleanup || !mode.activeOnly) return 0;
+    const count = (hosts: readonly TreeHost[], withQuiet: boolean) =>
+      hosts.reduce((sum, host) => sum + [...host.projects, ...(withQuiet ? host.quiet : [])].reduce((n, project) => n + project.workspaces.length, 0), 0);
+    return Math.max(0, count(full, true) - count(tree, false));
+  }, [cleanup, mode.activeOnly, full, tree]);
 
   // Chats that wait for you or finished unseen, plus an opened one held in place (grey).
   const urgent = useMemo(
@@ -561,6 +572,14 @@ export function ProjectsView({
               {foldButtons(full, "")}
             </View>
           )}
+          {hiddenByWindow > 0 && !searching ? (
+            <Text style={{ fontSize: fs(11.5), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: 2 }}>
+              {`Last ${prefs.inactiveWindowDays}d hides ${hiddenByWindow} workspace${hiddenByWindow === 1 ? "" : "s"} \u00B7 `}
+              <Text accessibilityRole="button" onPress={() => updateViewMode({ activeOnly: false })} style={{ color: theme.colors.accent }}>
+                show them
+              </Text>
+            </Text>
+          ) : null}
           {staleOnly && !searching ? (
             <Text style={{ fontSize: fs(11.5), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: 4 }}>
               {staleRows.length === 0
@@ -734,6 +753,26 @@ function mergeHosts(hosts: readonly TreeHost[], order: readonly string[]): { pro
   };
 }
 
+/** The fold that holds projects with nothing in the "Last N days" window, drawn like a project row. */
+function QuietFold({ theme, compact, count, open, onToggle }: { theme: PluginTheme; compact: boolean; count: number; open: boolean; onToggle(): void }) {
+  const fs = useFontScale();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${open ? "Hide" : "Show"} ${count} quiet project${count === 1 ? "" : "s"}`}
+      accessibilityState={{ expanded: open }}
+      onPress={onToggle}
+      style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 10, paddingRight: 10, paddingVertical: compact ? 10 : 4, marginTop: 4, opacity: pressed ? 0.6 : 1 })}
+    >
+      <Icon name={open ? "ChevronDown" : "ChevronRight"} size={12} color={theme.colors.foregroundMuted} />
+      <Icon name="FolderClosed" size={13} color={theme.colors.foregroundMuted} />
+      <Text style={{ fontSize: fs(12), fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: theme.colors.foregroundMuted }}>
+        {`${count} quiet project${count === 1 ? "" : "s"}`}
+      </Text>
+    </Pressable>
+  );
+}
+
 function FlatProjects({
   merged,
   prefix,
@@ -754,9 +793,6 @@ function FlatProjects({
 }) {
   const quietKey = `${prefix}quiet:all`;
   const quietOpen = toggled.has(quietKey);
-  const names = merged.quiet.map((project) => project.name);
-  const fs = useFontScale();
-  const muted = { fontSize: fs(12), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: compact ? 10 : 4 };
   return (
     <View>
       {sortable ? (
@@ -764,15 +800,7 @@ function FlatProjects({
       ) : (
         merged.projects.map((project) => renderProject(project))
       )}
-      {merged.quiet.length > 0 ? (
-        <Pressable accessibilityRole="button" accessibilityState={{ expanded: quietOpen }} onPress={() => toggleNode(quietKey)}>
-          <Text numberOfLines={1} style={muted}>
-            {quietOpen
-              ? "Hide quiet projects"
-              : `${names.length} quiet project${names.length > 1 ? "s" : ""}: ${names.slice(0, 3).join(", ")}${names.length > 3 ? " \u2026" : ""}`}
-          </Text>
-        </Pressable>
-      ) : null}
+      {merged.quiet.length > 0 ? <QuietFold theme={theme} compact={compact} count={merged.quiet.length} open={quietOpen} onToggle={() => toggleNode(quietKey)} /> : null}
       {quietOpen ? merged.quiet.map((project) => renderProject(project)) : null}
     </View>
   );
@@ -823,7 +851,6 @@ function HostNode({
   const quietKey = `${prefix}quiet:${host.hostId}`;
   const folded = toggled.has(foldKey);
   const quietOpen = toggled.has(quietKey);
-  const names = host.quiet.map((project) => project.name);
   const menu = useRowMenu(theme, compact, host.label, () => {
     const store = getStore();
     const chats = [...host.projects, ...host.quiet].flatMap((project) =>
@@ -880,15 +907,7 @@ function HostNode({
             host.projects.map((project) => renderProject(project))
           )}
           {host.projects.length === 0 && host.quiet.length === 0 ? <Text style={muted}>No chats.</Text> : null}
-          {host.quiet.length > 0 ? (
-            <Pressable accessibilityRole="button" accessibilityState={{ expanded: quietOpen }} onPress={() => toggleNode(quietKey)}>
-              <Text numberOfLines={1} style={muted}>
-                {quietOpen
-                  ? "Hide quiet projects"
-                  : `${names.length} quiet project${names.length > 1 ? "s" : ""}: ${names.slice(0, 3).join(", ")}${names.length > 3 ? " \u2026" : ""}`}
-              </Text>
-            </Pressable>
-          ) : null}
+          {host.quiet.length > 0 ? <QuietFold theme={theme} compact={compact} count={host.quiet.length} open={quietOpen} onToggle={() => toggleNode(quietKey)} /> : null}
           {quietOpen ? host.quiet.map((project) => renderProject(project)) : null}
         </View>
       )}
@@ -1397,8 +1416,8 @@ function WorkspaceNode({
           </Text>
           {show.diff && info?.diff && (info.diff.additions || info.diff.deletions) ? (
             <Text style={small}>
-              <Text style={{ color: theme.colors.statusSuccess }}>{`+${info.diff.additions}`}</Text>{" "}
-              <Text style={{ color: theme.colors.statusDanger }}>{`\u2212${info.diff.deletions}`}</Text>
+              <Text style={{ color: theme.colors.statusSuccess }}>{`+${shortCount(info.diff.additions)}`}</Text>{" "}
+              <Text style={{ color: theme.colors.statusDanger }}>{`\u2212${shortCount(info.diff.deletions)}`}</Text>
             </Text>
           ) : null}
           {kind ? (

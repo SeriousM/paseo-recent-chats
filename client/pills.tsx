@@ -19,6 +19,7 @@ import { watchShown } from "./web";
 import { RECENT_SCREEN_ID } from "./sidebar-item";
 import { HistoryButtons } from "./recent-panel";
 import { PILL_IDS, pillsInOrder, type PillId } from "../shared/settings";
+import { useTouchInput } from "./input";
 
 const PILL_PAGE_SIZE = 200;
 const PILL_MAX_PAGES = 25;
@@ -93,6 +94,7 @@ function createInboxContent(client: PluginClientContext) {
     const { store, snapshot, result } = useRecents();
     const target = { openScreen: (input: { screenId: string; params?: Record<string, string> }) => client.openScreen(input) };
     const [hostsOpen, setHostsOpen] = useState(false);
+    const touch = useTouchInput();
     const manyHosts = snapshot.hosts.length >= 2;
     const tone = hostsOpen ? theme.colors.foreground : theme.colors.foregroundMuted;
     return (
@@ -110,7 +112,7 @@ function createInboxContent(client: PluginClientContext) {
                 alignItems: "center",
                 gap: 4,
                 paddingHorizontal: 6,
-                minHeight: layout.compact ? 36 : 24,
+                minHeight: touch ? 36 : 24,
                 borderRadius: 7,
                 borderWidth: 1,
                 borderColor: hostsOpen ? theme.colors.border : "transparent",
@@ -122,12 +124,12 @@ function createInboxContent(client: PluginClientContext) {
             </Pressable>
           ) : null}
           <View style={{ flex: 1 }} />
-          <HistoryButtons theme={theme} compact={layout.compact} target={target} onNavigate={close} />
+          <HistoryButtons theme={theme} target={target} onNavigate={close} />
         </View>
         {manyHosts && hostsOpen ? (
           <HostFilter
             theme={theme}
-            compact={layout.compact}
+            compact={touch}
             hosts={snapshot.hosts}
             hostColors={snapshot.hostColors}
             onToggle={store.toggleHost}
@@ -138,7 +140,8 @@ function createInboxContent(client: PluginClientContext) {
         <TriageList
           hideHostFilter
           theme={theme}
-          compact={layout.compact}
+          compact={touch}
+          narrow={layout.compact}
           result={result}
           snapshot={snapshot}
           onToggleHost={store.toggleHost}

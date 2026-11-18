@@ -16,7 +16,8 @@ import type { TriageRow } from "./triage";
 import { CardLayer, HostFilter, ledColor, TriageList, type TriageListProps } from "./triage-list";
 import { openChat, openChatByKey, useRecents, type OpenTarget } from "./use-recents";
 import { resolvedView, updateViewMode, useViewMode } from "./view-mode";
-import { attachWheelScroll, excludeFromWindowDrag } from "./web";
+import { attachWheelScroll, excludeFromWindowDrag, onMouseBackForward } from "./web";
+import { useTouchInput } from "./input";
 
 // The search box stays open (or closed) until the search button is pressed again, also across remounts.
 let searchOpen = false;
@@ -24,24 +25,26 @@ let searchOpen = false;
 /** Back and forward through the chats you had open. `onNavigate` runs before a chat opens (a popup closes). */
 export function HistoryButtons({
   theme,
-  compact,
   target,
   onNavigate,
 }: {
   theme: PluginTheme;
-  compact: boolean;
   target: OpenTarget;
   onNavigate?: () => void;
 }) {
   const { store, result } = useRecents();
   const history = useChatHistory();
-  const size = compact ? 36 : 24;
+  const size = useTouchInput() ? 36 : 24;
   const go = (by: -1 | 1) => {
     const key = moveInHistory(by);
     if (!key) return;
     onNavigate?.();
     openChatByKey(store, result.all, key, target);
   };
+  // The mouse's back and forward buttons step the same way, while these buttons are on screen.
+  const latestGo = useRef(go);
+  latestGo.current = go;
+  useEffect(() => onMouseBackForward((by) => latestGo.current(by)), []);
   const button = (by: -1 | 1, enabled: boolean) => (
     <Pressable
       accessibilityRole="button"
@@ -66,12 +69,10 @@ export function HistoryButtons({
 /** Back and forward through visited chats, the unread and running counts, and the settings cog. */
 export function HeaderControls({
   theme,
-  compact,
   target,
   children,
 }: {
   theme: PluginTheme;
-  compact: boolean;
   target: OpenTarget;
   /** Placed between the counts and the cog (the sidebar item's open/closed caret). */
   children?: React.ReactNode;
@@ -79,7 +80,6 @@ export function HeaderControls({
   const { result } = useRecents();
   const { unread, running } = result.counts;
   const fs = useFontScale();
-  const size = compact ? 36 : 24;
   return (
     <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
       {unread > 0 ? (
@@ -87,7 +87,7 @@ export function HeaderControls({
       ) : null}
       {running > 0 ? <Text style={{ color: ledColor(theme, "running"), fontWeight: "600", fontSize: fs(12) }}>{running}</Text> : null}
       {children}
-      <HistoryButtons theme={theme} compact={compact} target={target} />
+      <HistoryButtons theme={theme} target={target} />
     </View>
   );
 }
@@ -101,6 +101,7 @@ export function RecentPanel({
   headerExtra,
 }: {
   theme: PluginTheme;
+  /** Paseo's narrow (phone) layout: the default view and the phone row form follow it. Sizes follow the input. */
   compact: boolean;
   /** How a chat is opened from this surface. */
   target: OpenTarget;
@@ -112,6 +113,9 @@ export function RecentPanel({
   headerExtra?: React.ReactNode;
 }) {
   const { store, snapshot, result } = useRecents();
+  const touch = useTouchInput();
+  const fs = useFontScale();
+  const hiddenHosts = snapshot.hosts.filter((host) => host.hidden);
   const [query, setQuery] = useState("");
   const [showSearch, setShowSearch] = useState(searchOpen);
   const [hostsOpen, setHostsOpen] = useState(false);
@@ -147,7 +151,8 @@ export function RecentPanel({
   };
   const listProps: TriageListProps = {
     theme,
-    compact,
+    compact: touch,
+    narrow: compact,
     result,
     rows,
     snapshot,
@@ -173,7 +178,8 @@ export function RecentPanel({
     <View ref={area} style={listHeight === undefined ? { flex: 1, minHeight: 0 } : null}>
       <ViewModeBar
         theme={theme}
-        compact={compact}
+        compact={touch}
+        narrow={compact}
         showHosts={snapshot.hosts.length >= 2}
         hostsOpen={hostsOpen}
         onHosts={() => setHostsOpen(!hostsOpen)}
@@ -183,11 +189,20 @@ export function RecentPanel({
         addingProject={adding}
         extra={headerExtra}
       />
-      {adding && projects ? <AddProject theme={theme} compact={compact} onDone={() => setAdding(false)} /> : null}
+      {adding && projects ? <AddProject theme={theme} compact={touch} onDone={() => setAdding(false)} /> : null}
+      {/* Hosts switched off in the filter: said here, so a missing host's chats do not look lost. */}
+      {hiddenHosts.length > 0 && !hostsOpen ? (
+        <Text style={{ fontSize: fs(11.5), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingBottom: 4 }}>
+          {`${hiddenHosts.map((host) => host.label).join(", ")} switched off \u00B7 `}
+          <Text accessibilityRole="button" onPress={() => store.updatePrefs({ hiddenHosts: [] })} style={{ color: theme.colors.accent }}>
+            show all hosts
+          </Text>
+        </Text>
+      ) : null}
       {hostsOpen && snapshot.hosts.length >= 2 ? (
         <HostFilter
           theme={theme}
-          compact={compact}
+          compact={touch}
           hosts={snapshot.hosts}
           hostColors={snapshot.hostColors}
           onToggle={store.toggleHost}
@@ -203,7 +218,7 @@ export function RecentPanel({
         <View style={{ paddingHorizontal: 8, paddingBottom: 4 }}>
           <SearchBox
             theme={theme}
-            compact={compact}
+            compact={touch}
             value={query}
             onChange={setQuery}
             placeholder={projects ? "Filter projects, workspaces, chats" : "Filter chats"}
@@ -224,7 +239,8 @@ export function RecentPanel({
             rows={result.all}
             rowShared={{
               theme,
-              compact,
+              compact: touch,
+              narrow: compact,
               fullNames: snapshot.prefs.showTooltip,
               cardTransparency: snapshot.prefs.tooltipTransparency,
               onOpen: open,

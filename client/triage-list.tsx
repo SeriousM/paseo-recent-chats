@@ -1,9 +1,9 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/ui";
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
-import { Animated, Easing, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
+import { Animated, Easing, PanResponder, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
 import { chatTitle, hostColors, withAlpha } from "./format";
-import { columnChars, tokenMono, tokenText, tokenValue, visibleLines } from "./row-layout";
+import { columnChars, phoneLines, tokenMono, tokenText, tokenValue, visibleLines } from "./row-layout";
 import { openPluginSettings } from "./runtime";
 import type { Bucket, Led, TriageResult, TriageRow } from "./triage";
 import type { RowToken, RowTokenId } from "../shared/layout";
@@ -22,6 +22,9 @@ import { usePaseoNavigation } from "./navigation";
 
 /** Hover this long on a row before its full-names card shows. */
 const CARD_DELAY_MS = 450;
+/** A phone swipe this far marks read (left) or Later (right); the row slides at most SWIPE_MAX. */
+const SWIPE_DONE = 72;
+const SWIPE_MAX = 120;
 
 const HEADINGS: Record<Section, string> = {
   pinned: "Pinned",
@@ -459,6 +462,8 @@ export interface RowViewProps {
   onRename?: (key: string, title: string) => Promise<void>;
   /** A row inside the Projects tree, under its workspace: its menu leaves out what the workspace row offers. */
   inTree?: boolean;
+  /** Paseo's narrow (phone) layout: names on the second line, swipes instead of the read, Later and pin buttons. */
+  narrow?: boolean;
 }
 
 /** A chat's row, followed by its sub-agents that ask you something, each indented under it. */
@@ -486,7 +491,7 @@ function ChatRow({
   compact,
   showHost,
   hostColor,
-  lines,
+  lines: layoutLines,
   columns,
   current,
   fullNames = true,
@@ -498,11 +503,39 @@ function ChatRow({
   onRename: renameChat,
   nested = false,
   inTree = false,
+  narrow = false,
 }: RowViewProps & {
   /** A sub-agent listed under its parent: no pin, read or Later buttons, no renaming. */
   nested?: boolean;
 }) {
   const onRename = nested ? undefined : renameChat;
+  const lines = useMemo(() => (narrow ? phoneLines(layoutLines) : layoutLines), [narrow, layoutLines]);
+  // Phones swipe instead of pressing small buttons: left marks a waiting chat read, right sends an
+  // inactive one to Later. The ⋮ menu offers both too.
+  const swipeLeft = row.bucket === "unread" ? () => onMarkRead([row.key]) : null;
+  const swipeRight = row.bucket === "inactive" ? () => onMarkUnread(row.key) : null;
+  const swipeActions = useRef({ left: swipeLeft, right: swipeRight });
+  swipeActions.current = { left: swipeLeft, right: swipeRight };
+  const [swipe, setSwipe] = useState(0);
+  const swiper = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 2,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderMove: (_event, gesture) => {
+          const { left, right } = swipeActions.current;
+          setSwipe(Math.max(left ? -SWIPE_MAX : 0, Math.min(right ? SWIPE_MAX : 0, gesture.dx)));
+        },
+        onPanResponderRelease: (_event, gesture) => {
+          const { left, right } = swipeActions.current;
+          if (gesture.dx <= -SWIPE_DONE) left?.();
+          else if (gesture.dx >= SWIPE_DONE) right?.();
+          setSwipe(0);
+        },
+        onPanResponderTerminate: () => setSwipe(0),
+      }),
+    [],
+  );
   const hostTint = hostColors(hostColor, isDark(theme.colors.surface0));
   const title = chatTitle(row.title, row.provider, row.agentId);
   const fs = useFontScale();
@@ -718,7 +751,7 @@ function ChatRow({
   const hasContent = (line: readonly RowToken[]) =>
     line.some((token) => token.id === "led" || (token.id === "host" ? showHost : tokenValue(row, token.id).length > 0));
 
-  return (
+  const pressable = (
     <Pressable
       ref={rowNode}
       accessibilityRole="button"
@@ -764,7 +797,7 @@ function ChatRow({
         )}
       </View>
       )}
-      {editing || nested ? null : (
+      {editing || nested || narrow ? null : (
         <>
       {row.pinned ? (
         <Pressable
@@ -801,6 +834,7 @@ function ChatRow({
       ) : null}
         </>
       )}
+      {narrow && row.pinned && !nested ? <Icon name="Pin" size={12} color={theme.colors.accent} /> : null}
       {openMenu && !editing ? (
         <MenuButton
           theme={theme}
@@ -814,6 +848,35 @@ function ChatRow({
       ) : null}
       {cardShown && !layer ? <FullNamesCard row={row} theme={theme} showHost={showHost} transparency={cardTransparency} /> : null}
     </Pressable>
+  );
+  if (!narrow || nested || editing || (!swipeLeft && !swipeRight)) return pressable;
+  // What the swipe does shows behind the row as it slides.
+  const hint = swipe < 0 ? swipeLeft && { icon: "Check", label: "Read", color: ledColor(theme, "finished"), end: true } : swipe > 0 ? swipeRight && { icon: "Clock", label: "Later", color: theme.colors.foregroundMuted, end: false } : null;
+  return (
+    <View {...swiper.panHandlers} style={{ position: "relative", overflow: "hidden", borderRadius: 8 }}>
+      {hint ? (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: hint.end ? "flex-end" : "flex-start",
+            gap: 6,
+            paddingHorizontal: 16,
+            backgroundColor: theme.colors.surface2,
+            opacity: Math.min(1, Math.abs(swipe) / SWIPE_DONE),
+          }}
+        >
+          <Icon name={hint.icon} size={14} color={hint.color} />
+          <Text style={{ fontSize: smallFont, color: hint.color }}>{hint.label}</Text>
+        </View>
+      ) : null}
+      <View style={{ transform: [{ translateX: swipe }], backgroundColor: theme.colors.surface0 }}>{pressable}</View>
+    </View>
   );
 }
 
@@ -1017,7 +1080,10 @@ function CollapseChevron({ theme, collapsed }: { theme: PluginTheme; collapsed: 
 
 export interface TriageListProps {
   theme: PluginTheme;
+  /** Touch-sized targets. */
   compact: boolean;
+  /** Paseo's narrow (phone) layout, see RowViewProps.narrow. */
+  narrow?: boolean;
   result: TriageResult;
   rows?: readonly TriageRow[];
   snapshot: StoreSnapshot;
@@ -1054,6 +1120,7 @@ export interface TriageListProps {
 export function TriageList({
   theme,
   compact,
+  narrow = false,
   result,
   rows,
   snapshot,
@@ -1291,6 +1358,7 @@ export function TriageList({
                 row={row}
                 theme={theme}
                 compact={compact}
+                narrow={narrow}
                 showHost={showHost}
                 hostColor={hostColorNames[row.hostId]}
                 lines={lines}

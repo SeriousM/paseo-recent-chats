@@ -70,7 +70,7 @@ export function RecentSidebarView({
           compact={layout.compact}
           target={target}
           onShowAll={(q) => openScreen({ screenId: "recent", params: q ? { q } : {} })}
-          headerExtra={<HeaderControls theme={theme} compact={layout.compact} target={target} />}
+          headerExtra={<HeaderControls theme={theme} target={target} />}
         />
       </View>
     </NavigationContext.Provider>

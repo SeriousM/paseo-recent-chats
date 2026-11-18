@@ -91,3 +91,10 @@ export function formatAge(ms: number): string {
   if (days < 365) return `${Math.floor(days / 7)}w`;
   return `${Math.floor(days / 365)}y`;
 }
+
+/** Line counts from 10,000 up as 99.8k or 1.2M, so big diffs do not crowd the workspace name. */
+export function shortCount(count: number): string {
+  if (count < 10_000) return String(count);
+  if (count < 1_000_000) return `${Math.round(count / 100) / 10}k`.replace(/\.0k$/, "k");
+  return `${Math.round(count / 100_000) / 10}M`.replace(/\.0M$/, "M");
+}
