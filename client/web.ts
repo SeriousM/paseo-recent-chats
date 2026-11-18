@@ -159,6 +159,7 @@ interface DomKeyEvent {
   shiftKey: boolean;
   target: unknown;
   preventDefault(): void;
+  stopPropagation(): void;
 }
 
 /** Where Alt+arrow already means something: a terminal (xterm types into a helper text area), and on a Mac every text field. */
@@ -305,16 +306,24 @@ export function onDismiss(node: unknown, handler: () => void): () => void {
   };
 }
 
-interface DomKeyEvent {
-  key: string;
-  target: unknown;
-  preventDefault(): void;
-  stopPropagation(): void;
+interface DomElement {
+  querySelector(selector: string): DomElement | null;
+  querySelectorAll(selector: string): ArrayLike<DomElement>;
+  contains(other: unknown): boolean;
+  click(): void;
+  parentElement: DomElement | null;
+  firstElementChild: DomElement | null;
+  offsetParent: unknown;
+  offsetWidth: number;
+  scrollTop: number;
+  scrollHeight: number;
 }
 
 declare const document: {
   addEventListener(type: "keydown", listener: (event: DomKeyEvent) => void, capture: boolean): void;
   removeEventListener(type: "keydown", listener: (event: DomKeyEvent) => void, capture: boolean): void;
+  querySelectorAll(selector: string): ArrayLike<DomElement>;
+  activeElement: unknown;
 };
 
 /**
@@ -393,4 +402,74 @@ export function readUserAgent(): string | null {
 export function clipboardWriter(): ((text: string) => Promise<void>) | null {
   const clipboard = typeof navigator === "undefined" ? undefined : navigator?.clipboard;
   return clipboard ? (text) => clipboard.writeText(text) : null;
+}
+
+/** Paseo draws a short tick per prompt of the chat on screen (its chat outline); the active one is wider. */
+const OUTLINE_RAIL = '[data-testid="chat-outline-rail"]';
+const OUTLINE_TICK = '[data-testid^="chat-outline-tick-"]';
+/** The nearest ancestor of `node` that also holds the chat's scroll area: the chat pane the rail belongs to. */
+function chatPaneOf(node: DomElement): DomElement | null {
+  for (let at = node.parentElement; at; at = at.parentElement) {
+    if (at.querySelector('[data-testid="agent-chat-scroll"]')) return at;
+  }
+  return null;
+}
+
+/** Scrolls a chat pane to its newest message: Paseo's own button when it shows, else the scroll area itself. */
+function scrollPaneToBottom(pane: DomElement): void {
+  const button = pane.querySelector('[data-testid="scroll-to-bottom-button"]');
+  if (button && button.offsetParent !== null) {
+    button.click();
+    return;
+  }
+  const scroll = pane.querySelector('[data-testid="agent-chat-scroll"]');
+  if (scroll) scroll.scrollTop = scroll.scrollHeight;
+}
+
+/**
+ * Alt+↑ / Alt+↓ jump to the previous or next of your own messages in the chat on screen, like a press on
+ * Paseo's chat outline (the ticks at the right edge). Past the newest message Alt+↓ scrolls to the bottom.
+ * Plugins get no API for the chat, so this works on what Paseo draws (its test ids): web and desktop only,
+ * and it does nothing once Paseo changes that. Left alone in terminals and code editors, where Alt+↑/↓ moves
+ * lines, and on a Mac in text fields. The chat pane holding the focus wins; else the first one on screen.
+ * Every host's copy registers it; the first listener marks the event. Returns a cleanup.
+ */
+export function attachPromptJumpKeys(): () => void {
+  if (Platform.OS !== "web" || typeof document === "undefined" || typeof document.querySelectorAll !== "function") return () => {};
+  const key = (event: DomKeyEvent) => {
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    const target = event.target as { closest?(selector: string): unknown } | null;
+    if (movesByWord(event.target) || target?.closest?.(".cm-editor")) return;
+    const marked = event as DomKeyEvent & { __recentChatsPrompt?: boolean };
+    if (marked.__recentChatsPrompt) return;
+    const rails = Array.from(document.querySelectorAll(OUTLINE_RAIL)).filter((rail) => rail.offsetParent !== null);
+    const panes = rails.map((rail) => ({ rail, pane: chatPaneOf(rail) }));
+    const chosen = panes.find(({ pane }) => pane?.contains(document.activeElement)) ?? panes[0];
+    const fallbackPane = Array.from(document.querySelectorAll('[data-testid="agent-chat-scroll"]')).find((el) => el.offsetParent !== null);
+    if (!chosen && !fallbackPane) return;
+    marked.__recentChatsPrompt = true;
+    event.preventDefault();
+    event.stopPropagation();
+    const down = event.key === "ArrowDown";
+    if (!chosen) {
+      // Fewer than two prompts, or the pane is too narrow for the outline: only "to the bottom" is left.
+      if (down && fallbackPane?.parentElement) scrollPaneToBottom(fallbackPane.parentElement);
+      return;
+    }
+    const ticks = Array.from(chosen.rail.querySelectorAll(OUTLINE_TICK));
+    // An inactive tick's pill is 10 px wide and the active one's 18, so the widest pill marks the active prompt.
+    const widths = ticks.map((tick) => tick.firstElementChild?.offsetWidth ?? 0);
+    const widest = Math.max(...widths);
+    const active = widest > Math.min(...widths) ? widths.indexOf(widest) : -1;
+    const current = active < 0 ? ticks.length - 1 : active;
+    const next = current + (down ? 1 : -1);
+    if (next >= ticks.length) {
+      if (chosen.pane) scrollPaneToBottom(chosen.pane);
+      return;
+    }
+    ticks[Math.max(0, next)]?.click();
+  };
+  document.addEventListener("keydown", key, true);
+  return () => document.removeEventListener("keydown", key, true);
 }

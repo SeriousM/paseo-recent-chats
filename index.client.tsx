@@ -8,6 +8,7 @@ import { RECENT_SCREEN_ID, RecentSidebarItem } from "./client/sidebar-item";
 import { RecentSidebarView, SIDEBAR_VIEW_ID } from "./client/sidebar-view";
 import { createStore } from "./client/store";
 import { GO_SCREEN_ID } from "./client/use-recents";
+import { attachPromptJumpKeys } from "./client/web";
 
 export default function contribute(client: PluginClientContext) {
   setStore(
@@ -43,6 +44,7 @@ export default function contribute(client: PluginClientContext) {
       onSelect: ({ openScreen }) => openScreen({ screenId: RECENT_SCREEN_ID }),
     }),
     registerPills(client),
+    attachPromptJumpKeys(),
   ];
 
   return () => {
