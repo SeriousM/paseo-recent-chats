@@ -593,6 +593,11 @@ function ChatRow({
   useEffect(() => cancelHover, []);
   const [editing, setEditing] = useState(false);
   const rowNode = useRef<View>(null);
+  // The row chosen with the arrow keys is scrolled into view, so the choice stays visible (web and desktop).
+  useEffect(() => {
+    if (!selected) return;
+    (rowNode.current as unknown as { scrollIntoView?(options: object): void } | null)?.scrollIntoView?.({ block: "nearest" });
+  }, [selected]);
   const layer = useContext(CardLayerContext);
   const cardShown = showFull && fullNames === true && !editing;
   // In a card layer the card is drawn on top of the whole list; without one (settings preview) under the row.
