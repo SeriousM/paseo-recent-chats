@@ -78,19 +78,17 @@ function InboxIcon(props: PluginButtonIconProps) {
 }
 
 /**
- * First whether the chat is pinned (an accent pin, or a faint one), then what a press does: a clock for
- * "Later", a check for "Read" once the chat is unread.
+ * The pin state of the chat: an accent pin while it is pinned, a struck-through grey pin while it is not. Paseo
+ * gives a pill's icon room for one icon only, so what a press does is in the label ("Later" or "Read").
  */
 function LaterIcon(props: PluginButtonIconProps) {
   const { snapshot } = useRecents();
   const node = useShownChat(props);
   const key = props.context === "agent" ? chatKey(props.host.id, props.agentId) : null;
-  const marked = key !== null && isLater(snapshot.overlay, key);
   const pinned = key !== null && snapshot.overlay[key]?.pinnedAt !== undefined;
   return (
-    <View ref={node} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-      <Icon name="Pin" size={props.size} color={pinned ? props.theme.colors.accent : props.theme.colors.border} />
-      <Icon name={marked ? "Check" : "Clock"} size={props.size} color={props.theme.colors.foregroundMuted} />
+    <View ref={node}>
+      <Icon name={pinned ? "Pin" : "PinOff"} size={props.size} color={pinned ? props.theme.colors.accent : props.theme.colors.foregroundMuted} />
     </View>
   );
 }
