@@ -683,14 +683,20 @@ export function hideStrayPopup(node: unknown, onStray: (stray: boolean) => void)
  * them and can create a new folder. Plugins get no call for it, so the shortcut is sent to the window. Returns
  * whether it could be sent (web and desktop only).
  */
-export function openPaseoProjectPicker(): boolean {
+export const openPaseoProjectPicker = (): boolean => sendPaseoShortcut("o", "KeyO", false);
+
+/**
+ * Sends one of Paseo's own shortcuts to the window, Ctrl (Cmd on a Mac) plus the key, with Shift when asked,
+ * for actions plugins get no call for. Returns whether it could be sent (web and desktop only).
+ */
+export function sendPaseoShortcut(key: string, code: string, shift: boolean): boolean {
   if (Platform.OS !== "web" || typeof document === "undefined") return false;
   const KeyboardEventCtor = (globalThis as unknown as { KeyboardEvent?: new (type: string, init: object) => object }).KeyboardEvent;
   const target = globalThis as unknown as { dispatchEvent?(event: object): boolean };
   if (!KeyboardEventCtor || typeof target.dispatchEvent !== "function") return false;
   const mac = /Mac/.test(readUserAgent() ?? "");
   target.dispatchEvent(
-    new KeyboardEventCtor("keydown", { key: "o", code: "KeyO", ctrlKey: !mac, metaKey: mac, bubbles: true, cancelable: true }),
+    new KeyboardEventCtor("keydown", { key, code, ctrlKey: !mac, metaKey: mac, shiftKey: shift, bubbles: true, cancelable: true }),
   );
   return true;
 }

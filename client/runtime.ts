@@ -1,6 +1,6 @@
 // The one store of this plugin installation, created by the client entry and read by every surface,
 // plus the entry's navigation actions for surfaces that are not handed them as props.
-import type { ProjectRef } from "@getpaseo/plugin/client";
+import type { ProjectRef, TerminalRef } from "@getpaseo/plugin/client";
 import type { RecentsStore } from "./store";
 
 export const SETTINGS_SCREEN_ID = "recent-chats";
@@ -34,3 +34,21 @@ export function setProjectOpener(opener: ((ref: ProjectRef) => void) | null): vo
 }
 
 export const getProjectOpener = (): ((ref: ProjectRef) => void) | null => projectOpener;
+
+/** Opens a terminal tab by Paseo's reference to it (Paseo 0.16 and later). */
+let terminalOpener: ((ref: TerminalRef) => void) | null = null;
+
+export function setTerminalOpener(opener: ((ref: TerminalRef) => void) | null): void {
+  terminalOpener = opener;
+}
+
+export const getTerminalOpener = (): ((ref: TerminalRef) => void) | null => terminalOpener;
+
+/** Creates a terminal in a workspace and resolves to its id. */
+let terminalCreator: ((hostId: string, workspaceId: string) => Promise<string>) | null = null;
+
+export function setTerminalCreator(creator: ((hostId: string, workspaceId: string) => Promise<string>) | null): void {
+  terminalCreator = creator;
+}
+
+export const getTerminalCreator = (): ((hostId: string, workspaceId: string) => Promise<string>) | null => terminalCreator;

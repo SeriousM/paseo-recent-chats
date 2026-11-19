@@ -12,7 +12,7 @@ import { reportOpenChat } from "./open-chat";
 import { HeaderControls, RecentPanel } from "./recent-panel";
 import { markSidebarViewShown } from "./sidebar-view-state";
 import type { OpenTarget } from "./use-recents";
-import { NavigationContext, publishDirectOpener, type PaseoNavigation } from "./navigation";
+import { NavigationContext, publishDirectOpener, useWorkspaceCreators, type PaseoNavigation } from "./navigation";
 
 export const SIDEBAR_VIEW_ID = "recent-chats";
 
@@ -49,20 +49,22 @@ export function RecentSidebarView({
   // Workspaces and projects open through Paseo too, by their references (the ⋮ menus).
   const workspaceRefs = pluginClient.useWorkspaces();
   const projectRefs = pluginClient.useProjects();
-  const paseoNavigation = useMemo<PaseoNavigation>(() => {
+  const baseNavigation = useMemo(() => {
     const workspaces = new Map<string, WorkspaceRef>(workspaceRefs.map((ref) => [`${ref.hostId}:${ref.id}`, ref]));
     const projects = new Map<string, ProjectRef>(projectRefs.map((ref) => [`${ref.hostId}:${ref.id}`, ref]));
     return {
-      openWorkspace(hostId, workspaceId) {
+      openWorkspace(hostId: string, workspaceId: string) {
         const ref = workspaces.get(`${hostId}:${workspaceId}`);
         if (ref) navigation.openWorkspace(ref);
       },
-      newWorkspace(hostId, projectId) {
+      newWorkspace(hostId: string, projectId: string) {
         const ref = projects.get(`${hostId}:${projectId}`);
         if (ref) navigation.openProject(ref);
       },
     };
   }, [workspaceRefs, projectRefs, navigation]);
+  const creators = useWorkspaceCreators(baseNavigation.openWorkspace);
+  const paseoNavigation: PaseoNavigation = { ...baseNavigation, ...creators };
   return (
     <NavigationContext.Provider value={paseoNavigation}>
       <View style={{ flex: 1, minHeight: 0 }}>

@@ -2,7 +2,7 @@ import type { PluginScreenProps } from "@getpaseo/plugin/client";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useEffect, useMemo, useState } from "react";
 import { searchRows } from "./fuzzy";
-import { NavigationContext, useNewWorkspace, type PaseoNavigation } from "./navigation";
+import { NavigationContext, useNewWorkspace, useWorkspaceCreators, type PaseoNavigation } from "./navigation";
 import { RecentPanel } from "./recent-panel";
 import { SearchBox } from "./search-box";
 import { PHONE_ROW_ONLY } from "./sidebar-item";
@@ -18,11 +18,10 @@ import { useTouchInput } from "./input";
 function PhoneScreen({ theme, layout, navigation }: PluginScreenProps) {
   const fs = useFontScale();
   const newWorkspace = useNewWorkspace();
-  const paseoNavigation = useMemo<PaseoNavigation | null>(() => {
-    const openWorkspace = navigation?.openWorkspace;
-    if (!openWorkspace) return null;
-    return { openWorkspace: (hostId, workspaceId) => openWorkspace({ workspaceId, serverId: hostId }), newWorkspace };
-  }, [navigation, newWorkspace]);
+  const goTo = navigation?.openWorkspace;
+  const openWorkspace = (hostId: string, workspaceId: string) => goTo?.({ workspaceId, serverId: hostId });
+  const creators = useWorkspaceCreators(openWorkspace);
+  const paseoNavigation: PaseoNavigation | null = goTo ? { openWorkspace, newWorkspace, ...creators } : null;
   return (
     <View style={{ flex: 1, minHeight: 0, backgroundColor: theme.colors.surface0 }}>
       <NavigationContext.Provider value={paseoNavigation}>

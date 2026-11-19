@@ -1,8 +1,8 @@
-import type { PluginClientContext } from "@getpaseo/plugin/client";
+import { getPaseoClient, type PluginClientContext } from "@getpaseo/plugin/client";
 import { GoScreen } from "./client/go-screen";
 import { registerPills } from "./client/pills";
 import { RecentScreen } from "./client/recent-screen";
-import { getStore, SETTINGS_SCREEN_ID, setProjectOpener, setSettingsOpener, setStore } from "./client/runtime";
+import { getStore, SETTINGS_SCREEN_ID, setProjectOpener, setSettingsOpener, setStore, setTerminalCreator, setTerminalOpener } from "./client/runtime";
 import { SettingsScreen } from "./client/settings-screen";
 import { RECENT_SCREEN_ID, RecentSidebarItem } from "./client/sidebar-item";
 import { RecentSidebarView, SIDEBAR_VIEW_ID } from "./client/sidebar-view";
@@ -23,6 +23,10 @@ export default function contribute(client: PluginClientContext) {
   // Paseo 0.16 opens its new-workspace screen for a project; older apps lack projects.ref.
   const projects = client.paseo?.projects as { ref?: unknown } | undefined;
   setProjectOpener(typeof projects?.ref === "function" ? (ref) => client.paseo.projects.ref(ref).open() : null);
+  // Terminals: created through the host's API, their tab opened by Paseo's reference (0.16 and later).
+  const terminals = client.paseo?.terminals as { ref?: unknown } | undefined;
+  setTerminalOpener(typeof terminals?.ref === "function" ? (ref) => client.paseo.terminals.ref(ref).focus() : null);
+  setTerminalCreator(async (hostId, workspaceId) => (await getPaseoClient(hostId).workspaces.ref(workspaceId).terminals.create()).id);
 
   const cleanups = [
     client.addScreen({ id: RECENT_SCREEN_ID, title: "Recent Chats", Component: RecentScreen }),
@@ -65,5 +69,7 @@ export default function contribute(client: PluginClientContext) {
     setStore(null);
     setSettingsOpener(null);
     setProjectOpener(null);
+    setTerminalOpener(null);
+    setTerminalCreator(null);
   };
 }

@@ -8,7 +8,7 @@ import { useFontScale } from "./font-scale";
 import { HeaderControls, RecentPanel } from "./recent-panel";
 import { useSidebarViewShown } from "./sidebar-view-state";
 import { GO_SCREEN_ID, useRecents } from "./use-recents";
-import { NavigationContext, useNewWorkspace, type PaseoNavigation } from "./navigation";
+import { NavigationContext, useNewWorkspace, useWorkspaceCreators, type PaseoNavigation } from "./navigation";
 import { attachVerticalDrag } from "./web";
 
 export const RECENT_SCREEN_ID = "recent";
@@ -93,13 +93,10 @@ export function RecentSidebarItem({ theme, layout, currentScreen, openScreen }: 
   // The ⋮ menus open and start workspaces: this item has no navigation, so it opens workspaces through the go
   // screen; a new workspace opens Paseo's own new-workspace screen for the project.
   const newWorkspace = useNewWorkspace();
-  const navigation = useMemo<PaseoNavigation>(
-    () => ({
-      openWorkspace: (hostId, workspaceId) => openScreen({ screenId: GO_SCREEN_ID, params: { workspaceId, serverId: hostId } }),
-      newWorkspace,
-    }),
-    [openScreen, newWorkspace],
-  );
+  const openWorkspace = (hostId: string, workspaceId: string) =>
+    openScreen({ screenId: GO_SCREEN_ID, params: { workspaceId, serverId: hostId } });
+  const creators = useWorkspaceCreators(openWorkspace);
+  const navigation: PaseoNavigation = { openWorkspace, newWorkspace, ...creators };
 
   if (viewShown) return null;
   const target = { openScreen };

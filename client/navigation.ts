@@ -3,14 +3,20 @@
 // on Paseo's own new-workspace screen (useNewWorkspace).
 // Where no provider is set (pills, older apps) the menus leave these items out.
 import * as pluginClient from "@getpaseo/plugin/client";
-import type { ProjectRef } from "@getpaseo/plugin/client";
-import { createContext, useContext } from "react";
-import { getProjectOpener } from "./runtime";
+import type { ProjectRef, TerminalRef } from "@getpaseo/plugin/client";
+import { createContext, useContext, useEffect, useRef } from "react";
+import { Platform } from "react-native";
+import { getProjectOpener, getTerminalCreator, getTerminalOpener } from "./runtime";
+import { sendPaseoShortcut } from "./web";
 
 export interface PaseoNavigation {
   openWorkspace(hostId: string, workspaceId: string): void;
   /** Starts a new workspace in a project; a rejection is shown as a toast by the menu. */
   newWorkspace(hostId: string, projectId: string): void | Promise<void>;
+  /** Opens a new terminal tab in the workspace (useWorkspaceCreators). */
+  newTerminal?: (hostId: string, workspaceId: string) => Promise<void>;
+  /** Opens a new agent tab in the workspace; absent where it cannot (phones). */
+  newAgent?: ((hostId: string, workspaceId: string) => void) | null;
 }
 
 export const NavigationContext = createContext<PaseoNavigation | null>(null);
@@ -55,3 +61,45 @@ export function useNewWorkspace(): (hostId: string, projectId: string) => void {
 // Only Paseo 0.16 has useProjects; through the namespace it is just absent in older apps.
 const useProjectRefs: () => readonly ProjectRef[] =
   typeof (pluginClient as { useProjects?: unknown }).useProjects === "function" ? () => pluginClient.useProjects() : () => [];
+
+/**
+ * "New terminal" and "New agent" for a workspace, for any surface. A terminal is created in the workspace and
+ * its tab opened once Paseo lists it. A new agent opens the workspace and sends Paseo's own New agent tab
+ * shortcut (Ctrl+Shift+A), since plugins get no call for that tab: desktop and web only, so it is null elsewhere.
+ */
+export function useWorkspaceCreators(openWorkspace: (hostId: string, workspaceId: string) => void): {
+  newTerminal: (hostId: string, workspaceId: string) => Promise<void>;
+  newAgent: ((hostId: string, workspaceId: string) => void) | null;
+} {
+  const terminals = useTerminalRefs();
+  const pending = useRef<{ hostId: string; id: string; until: number } | null>(null);
+  // The terminal's tab opens once Paseo lists it (the reference has to be Paseo's own).
+  useEffect(() => {
+    const wanted = pending.current;
+    if (!wanted || Date.now() > wanted.until) return;
+    const ref = terminals.find((candidate) => candidate.hostId === wanted.hostId && candidate.id === wanted.id);
+    const open = getTerminalOpener();
+    if (!ref || !open) return;
+    pending.current = null;
+    open(ref);
+  }, [terminals]);
+  return {
+    async newTerminal(hostId, workspaceId) {
+      const create = getTerminalCreator();
+      if (!create || !getTerminalOpener()) throw new Error("This version of Paseo cannot open a terminal from a plugin.");
+      pending.current = { hostId, id: await create(hostId, workspaceId), until: Date.now() + 10_000 };
+    },
+    newAgent:
+      Platform.OS === "web"
+        ? (hostId, workspaceId) => {
+            openWorkspace(hostId, workspaceId);
+            // Once the workspace is the one on screen, which takes a moment.
+            setTimeout(() => sendPaseoShortcut("A", "KeyA", true), 400);
+          }
+        : null,
+  };
+}
+
+// Only Paseo 0.16 has useTerminals; through the namespace it is just absent in older apps.
+const useTerminalRefs: () => readonly TerminalRef[] =
+  typeof (pluginClient as { useTerminals?: unknown }).useTerminals === "function" ? () => pluginClient.useTerminals() : () => [];
