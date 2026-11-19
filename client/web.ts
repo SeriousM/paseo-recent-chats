@@ -533,7 +533,25 @@ export function onChatInteraction(handler: () => void): () => void {
     marked.__recentChatsInteraction = true;
     handler();
   };
+  // The click that brings the window back to the front is not an interaction with the chat. Returning by
+  // keyboard (Alt+Tab) brings no click, so the next real one counts again shortly after the window is back.
+  let returning = false;
+  let settle: ReturnType<typeof setTimeout> | undefined;
+  const away = () => {
+    if (settle !== undefined) clearTimeout(settle);
+    returning = true;
+  };
+  const back = () => {
+    if (settle !== undefined) clearTimeout(settle);
+    settle = setTimeout(() => {
+      returning = false;
+    }, 400);
+  };
   const pointer = (event: DomPointerEvent) => {
+    if (returning) {
+      returning = false;
+      return;
+    }
     const target = event.target as { closest?(selector: string): unknown } | null;
     if (target?.closest?.('[data-testid="agent-chat-scroll"]')) once(event);
   };
@@ -545,9 +563,14 @@ export function onChatInteraction(handler: () => void): () => void {
     if (editable && (event.key.length === 1 || event.key === "Enter" || event.key === "Backspace")) once(event);
   };
   window.addEventListener("pointerdown", pointer, true);
+  window.addEventListener("blur", away as never);
+  window.addEventListener("focus", back as never);
   document.addEventListener("keydown", key, true);
   return () => {
     window.removeEventListener("pointerdown", pointer, true);
+    window.removeEventListener("blur", away as never);
+    window.removeEventListener("focus", back as never);
+    if (settle !== undefined) clearTimeout(settle);
     document.removeEventListener("keydown", key, true);
   };
 }
