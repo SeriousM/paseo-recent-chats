@@ -103,10 +103,19 @@ function HostIcon(props: PluginButtonIconProps) {
   return <Icon name="Server" size={props.size} color={tint?.text ?? props.theme.colors.foregroundMuted} />;
 }
 
+/**
+ * The chat whose title field the next Inbox popup opens with (Alt+R), for a second. Read, not taken: Paseo can
+ * draw the popup more than once (a stray copy, see hideStrayPopup), and every copy has to see it.
+ */
+let pendingRename: { key: string; at: number } | null = null;
+const takePendingRename = (): string | null => (pendingRename && Date.now() - pendingRename.at < 1000 ? pendingRename.key : null);
+
 function createInboxContent(client: PluginClientContext) {
   return function InboxContent(props: PluginButtonContentProps) {
     const { theme, layout, close } = props;
     const { store, snapshot, result } = useRecents();
+    // Alt+R: this chat's title field opens at once (when the chat is listed).
+    const [renameKey] = useState(() => takePendingRename());
     const target = { openScreen: (input: { screenId: string; params?: Record<string, string> }) => client.openScreen(input) };
     const [hostsOpen, setHostsOpen] = useState(false);
     const touch = useTouchInput();
@@ -209,6 +218,7 @@ function createInboxContent(client: PluginClientContext) {
           footer="first"
           showSettingsButton
           selectedKey={selected}
+          renameKey={renameKey}
           onVisibleRows={setVisible}
           onShowAll={() => {
             close();
@@ -286,6 +296,16 @@ export function registerPills(client: PluginClientContext): () => void {
 
   // Alt+I opens (or closes) the Inbox pill's list of the chat on screen.
   const stopAltI = onAltKey("KeyI", () => pressComposerPill(INBOX_TITLE));
+
+  // Alt+R renames the chat on screen: the Inbox popup opens with that chat's title field.
+  const stopAltR = onAltKey("KeyR", () => {
+    const key = currentOpenChat();
+    if (!key) return false;
+    pendingRename = { key, at: Date.now() };
+    if (pressComposerPill(INBOX_TITLE)) return true;
+    pendingRename = null;
+    return false;
+  });
 
   // Keys open chats the way Paseo does when the sidebar view offers it, else through the go screen.
   const keyTarget = (): OpenTarget => {
@@ -472,6 +492,7 @@ export function registerPills(client: PluginClientContext): () => void {
     unsubscribe();
     stopAltL();
     stopAltI();
+    stopAltR();
     stopAltP();
     stopBackForward();
     for (const stop of stopAltDigits) stop();

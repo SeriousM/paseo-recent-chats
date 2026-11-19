@@ -621,6 +621,8 @@ export function onListKeys(handler: (key: "up" | "down" | "pageUp" | "pageDown" 
   if (Platform.OS !== "web" || typeof document === "undefined") return () => {};
   const key = (event: DomKeyEvent) => {
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isTerminal(event.target)) return;
+    // A title field open in the list (Alt+R) keeps its own Enter and arrows.
+    if ((event.target as { tagName?: string } | null)?.tagName === "INPUT") return;
     const names = { ArrowUp: "up", ArrowDown: "down", PageUp: "pageUp", PageDown: "pageDown", Home: "home", End: "end", Enter: "enter" } as const;
     const name = names[event.key as keyof typeof names] ?? null;
     if (!name || !handler(name)) return;

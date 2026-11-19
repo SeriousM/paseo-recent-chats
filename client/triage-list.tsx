@@ -469,6 +469,8 @@ export interface RowViewProps {
   number?: number;
   /** Chosen with the arrow keys in a popup's list: framed in the accent colour. */
   selected?: boolean;
+  /** Opens the title field as soon as the row appears (Alt+R). */
+  renameNow?: boolean;
 }
 
 /** A chat's row, followed by its sub-agents that ask you something, each indented under it. */
@@ -511,6 +513,7 @@ function ChatRow({
   narrow = false,
   number,
   selected = false,
+  renameNow = false,
 }: RowViewProps & {
   /** A sub-agent listed under its parent: no pin, read or Later buttons, no renaming. */
   nested?: boolean;
@@ -592,6 +595,9 @@ function ChatRow({
   };
   useEffect(() => cancelHover, []);
   const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (renameNow && onRename) setEditing(true);
+  }, [renameNow, onRename]);
   const rowNode = useRef<View>(null);
   // The row chosen with the arrow keys is scrolled into view, so the choice stays visible (web and desktop).
   useEffect(() => {
@@ -1152,6 +1158,8 @@ export interface TriageListProps {
   showSettingsButton?: boolean;
   /** The row chosen with the arrow keys (the Inbox popup). */
   selectedKey?: string | null;
+  /** The row whose title field opens at once (Alt+R in the Inbox popup). */
+  renameKey?: string | null;
   /** Told the rows on screen, in order (not folded away), so the arrow keys can step through them. */
   onVisibleRows?: (keys: readonly string[]) => void;
 }
@@ -1177,6 +1185,7 @@ export function TriageList({
   searching = false,
   showSettingsButton = false,
   selectedKey = null,
+  renameKey = null,
   onVisibleRows,
 }: TriageListProps) {
   const folded = useCollapsed();
@@ -1433,6 +1442,7 @@ export function TriageList({
                 onRename={onRename}
                 number={numberOf.get(row.key)}
                 selected={row.key === selectedKey}
+                renameNow={row.key === renameKey}
               />
               </View>
               )}
