@@ -98,3 +98,6 @@ export function shortCount(count: number): string {
   if (count < 1_000_000) return `${Math.round(count / 100) / 10}k`.replace(/\.0k$/, "k");
   return `${Math.round(count / 100_000) / 10}M`.replace(/\.0M$/, "M");
 }
+
+/** The colour names a project or workspace can take: Paseo's host palette. */
+export const TREE_COLORS = Object.keys(HOST_PALETTE);

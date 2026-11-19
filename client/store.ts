@@ -859,7 +859,8 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
             outdated: outdated.has(host.serverId),
           };
         }),
-        prefs: { ...prefs, treePins: prefs.treePins.length },
+        // Counts only: the keys carry project names.
+        prefs: { ...prefs, treePins: prefs.treePins.length, treeStyles: Object.keys(prefs.treeStyles).length },
         prefsLoaded,
         prefsError,
         snapshot: {

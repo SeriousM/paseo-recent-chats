@@ -91,6 +91,14 @@ export const prefsSettings = defineSettings({
      * `workspace:<host>:<workspace id>`. Chats are pinned through the read marks, as in every list.
      */
     treePins: z.array(z.string()).default([]),
+    /**
+     * Own icon and colour of projects and workspaces, keyed like treePins (`project:<host>:<name>`,
+     * `workspace:<host>:<workspace id>`). `icon` is a Lucide icon name, `emoji` wins over it; `color` is a
+     * name from Paseo's host palette.
+     */
+    treeStyles: z
+      .record(z.string(), z.object({ color: z.string().optional(), icon: z.string().optional(), emoji: z.string().optional() }))
+      .default({}),
     /** Projects view: group the tree by host. Off: one list of projects, each with its host's tag. */
     projectsGroupByHost: z.boolean().default(true),
     /** Project keys (`<host>:<project>`) in the order dragged in the Projects view; the rest follow by name. */

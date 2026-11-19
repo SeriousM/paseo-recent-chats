@@ -11,6 +11,7 @@ import type { Prefs } from "../shared/settings";
 import { PREVIEW_HOST_COLORS, PREVIEW_TREE_ROWS, PREVIEW_WORKSPACES } from "./preview-data";
 import { useOpenChat } from "./open-chat";
 import { useNumberedChats } from "./numbered";
+import { TreeIcon, TreeStyleEditor, treeColor, useTreeStyle } from "./tree-style";
 import {
   buildTree,
   emptyItems,
@@ -973,6 +974,9 @@ function ProjectNode({
   const key = `${prefix}project:${project.key}`;
   const folded = toggled.has(key);
   const nav = usePaseoNavigation();
+  const styleKey = `project:${project.key}`;
+  const look = useTreeStyle(styleKey);
+  const [styling, setStyling] = useState(false);
   const menu = useRowMenu(theme, compact, project.name, () => {
     const store = getStore();
     const chats = project.workspaces.flatMap((workspace) => [...workspace.chats, ...workspace.older]);
@@ -981,6 +985,7 @@ function ProjectNode({
       [nav && projectId ? { label: "New workspace", icon: "Plus", onPress: () => nav.newWorkspace(hostId, projectId) } : null],
       [
         { label: pinned ? "Unpin project" : "Pin project", icon: pinned ? "PinOff" : "Pin", onPress: () => togglePin(`project:${project.key}`) },
+        { label: "Icon and color\u2026", icon: "Palette", onPress: () => setStyling(true) },
         chats.some((row) => row.bucket === "unread")
           ? { label: "Mark all chats read", icon: "CheckCheck", onPress: () => store.markRead(chats.filter((row) => row.bucket === "unread").map((row) => row.key)) }
           : null,
@@ -1006,7 +1011,8 @@ function ProjectNode({
     accessibilityState: { expanded: !folded },
     onPress: () => toggleNode(key),
   };
-  const folder = <Icon name="Folder" size={13} color={theme.colors.foregroundMuted} />;
+  const tint = treeColor(look, theme);
+  const folder = <TreeIcon style={look} fallback="Folder" color={tint ?? theme.colors.foregroundMuted} size={13} />;
   return (
     <View style={{ marginTop: 4 }}>
       <Pressable ref={menu.row} style={{ flexDirection: "row", alignItems: "center", paddingRight: 6, paddingVertical: compact ? 5 : 0 }}>
@@ -1036,7 +1042,7 @@ function ProjectNode({
               fontWeight: "600",
               letterSpacing: 0.6,
               textTransform: "uppercase",
-              color: busy ? theme.colors.foreground : theme.colors.foregroundMuted,
+              color: tint ?? (busy ? theme.colors.foreground : theme.colors.foregroundMuted),
             }}
           >
             {project.name}
@@ -1052,6 +1058,9 @@ function ProjectNode({
         ) : null}
         {menu.button}
       </Pressable>
+      {styling ? (
+        <TreeStyleEditor theme={theme} compact={compact} name={project.name} styleKey={styleKey} initial={look} fallbackIcon="Folder" onClose={() => setStyling(false)} />
+      ) : null}
       {folded ? null : <View style={{ paddingLeft: 12 }}>{children}</View>}
     </View>
   );
@@ -1336,6 +1345,10 @@ function WorkspaceNode({
   const [editing, setEditing] = useState(false);
   const workspaceId = workspace.workspaceId;
   const nav = usePaseoNavigation();
+  const styleKey = `workspace:${workspace.key}`;
+  const look = useTreeStyle(styleKey);
+  const tint = treeColor(look, theme);
+  const [styling, setStyling] = useState(false);
   const all = [...workspace.chats, ...workspace.older];
   const menu = useRowMenu(theme, compact, name, () => {
     const store = getStore();
@@ -1354,6 +1367,7 @@ function WorkspaceNode({
         workspaceId
           ? { label: pinned ? "Unpin workspace" : "Pin workspace", icon: pinned ? "PinOff" : "Pin", onPress: () => togglePin(`workspace:${workspace.key}`) }
           : null,
+        workspaceId ? { label: "Icon and color\u2026", icon: "Palette", onPress: () => setStyling(true) } : null,
         all.some((row) => row.bucket === "unread")
           ? { label: "Mark as read", icon: "Check", onPress: () => store.markRead(all.filter((row) => row.bucket === "unread").map((row) => row.key)) }
           : null,
@@ -1430,10 +1444,12 @@ function WorkspaceNode({
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          {/* White while something happens in it (running, asking, unseen); grey like its chats otherwise. */}
+          {/* An own icon only when one is chosen: plain workspaces keep their grip alone. */}
+          {look?.icon || look?.emoji ? <TreeIcon style={look} fallback="Folder" color={tint ?? theme.colors.foregroundMuted} size={13} /> : null}
+          {/* Its own colour; else white while something happens in it (running, asking, unseen), grey otherwise. */}
           <Text
             numberOfLines={1}
-            style={{ flex: 1, fontSize: fs(13), color: workspace.led === "idle" ? theme.colors.foregroundMuted : theme.colors.foreground }}
+            style={{ flex: 1, fontSize: fs(13), color: tint ?? (workspace.led === "idle" ? theme.colors.foregroundMuted : theme.colors.foreground) }}
           >
             {name}
           </Text>
@@ -1461,6 +1477,9 @@ function WorkspaceNode({
         ) : null}
         {editing ? null : menu.button}
       </Pressable>
+      {styling ? (
+        <TreeStyleEditor theme={theme} compact={compact} name={name} styleKey={styleKey} initial={look} fallbackIcon="Folder" onClose={() => setStyling(false)} />
+      ) : null}
       {folded ? null : (
         <View style={{ paddingLeft: 12 }}>
           {branch ? (
