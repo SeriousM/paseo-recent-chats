@@ -994,6 +994,9 @@ export function HostFilter({
             accessibilityLabel={`Show chats of ${host.label}`}
             accessibilityState={{ checked: on }}
             onPress={() => onToggle(host.id)}
+            // Long press: only this host (works in both views and on touch screens; Alt+F on desktop).
+            onLongPress={() => getStore().updatePrefs({ hiddenHosts: hosts.map((other) => other.id).filter((id) => id !== host.id) })}
+            accessibilityHint="Long press to show only this host"
             style={{
               minHeight: compact ? 36 : 24,
               paddingHorizontal: 10,
