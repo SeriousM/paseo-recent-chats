@@ -1334,7 +1334,13 @@ function WorkspaceNode({
     const newest = [...all].sort((a, b) => b.sortAt - a.sortAt)[0];
     const running = all.some((row) => row.bucket === "running");
     return [
-      [nav && workspaceId ? { label: "Open workspace", icon: "ExternalLink", onPress: () => nav.openWorkspace(workspace.hostId, workspaceId) } : null],
+      [
+        nav && workspaceId ? { label: "Open workspace", icon: "ExternalLink", onPress: () => nav.openWorkspace(workspace.hostId, workspaceId) } : null,
+        nav?.newAgent && workspaceId ? { label: "New agent", icon: "Bot", onPress: () => nav.newAgent?.(workspace.hostId, workspaceId) } : null,
+        nav?.newTerminal && workspaceId
+          ? { label: "New terminal", icon: "SquareTerminal", onPress: () => nav.newTerminal?.(workspace.hostId, workspaceId) }
+          : null,
+      ],
       [
         workspaceId ? { label: "Rename", icon: "Pencil", onPress: () => setEditing(true) } : null,
         workspaceId
