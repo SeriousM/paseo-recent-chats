@@ -109,8 +109,6 @@ export interface RecentsStore {
   reloadChat(key: string): Promise<void>;
   /** Opens a folder on a host as a workspace, which adds its project; resolves to the workspace id. */
   addProject(hostId: string, path: string): Promise<string | null>;
-  /** Creates a worktree workspace of a project, branched off its default branch; resolves to its id. */
-  newWorktree(hostId: string, projectId: string): Promise<string | null>;
   /** Asks every reachable host's copy to check for a plugin update now. One entry per host. */
   checkForUpdates(): Promise<UpdateCheck[]>;
   /** What this store sees, for a bug report: hosts, their data, settings and errors. No chat titles or paths. */
@@ -837,10 +835,6 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     },
     async addProject(hostId, path) {
       const workspace = await hostApi(hostId).workspaces.open({ cwd: path });
-      return workspace.current()?.id ?? null;
-    },
-    async newWorktree(hostId, projectId) {
-      const workspace = await hostApi(hostId).workspaces.create({ source: { kind: "worktree", projectId } });
       return workspace.current()?.id ?? null;
     },
     diagnostics() {

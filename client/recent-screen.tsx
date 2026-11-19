@@ -2,7 +2,7 @@ import type { PluginScreenProps } from "@getpaseo/plugin/client";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useEffect, useMemo, useState } from "react";
 import { searchRows } from "./fuzzy";
-import { NavigationContext, type PaseoNavigation } from "./navigation";
+import { NavigationContext, useNewWorkspace, type PaseoNavigation } from "./navigation";
 import { RecentPanel } from "./recent-panel";
 import { SearchBox } from "./search-box";
 import { PHONE_ROW_ONLY } from "./sidebar-item";
@@ -16,20 +16,13 @@ import { useTouchInput } from "./input";
  * list, Projects and Triage, as the sidebar shows it elsewhere.
  */
 function PhoneScreen({ theme, layout, navigation }: PluginScreenProps) {
-  const { store } = useRecents();
   const fs = useFontScale();
+  const newWorkspace = useNewWorkspace();
   const paseoNavigation = useMemo<PaseoNavigation | null>(() => {
     const openWorkspace = navigation?.openWorkspace;
     if (!openWorkspace) return null;
-    const open = (hostId: string, workspaceId: string) => openWorkspace({ workspaceId, serverId: hostId });
-    return {
-      openWorkspace: open,
-      async newWorkspace(hostId, projectId) {
-        const workspaceId = await store.newWorktree(hostId, projectId);
-        if (workspaceId) open(hostId, workspaceId);
-      },
-    };
-  }, [navigation, store]);
+    return { openWorkspace: (hostId, workspaceId) => openWorkspace({ workspaceId, serverId: hostId }), newWorkspace };
+  }, [navigation, newWorkspace]);
   return (
     <View style={{ flex: 1, minHeight: 0, backgroundColor: theme.colors.surface0 }}>
       <NavigationContext.Provider value={paseoNavigation}>

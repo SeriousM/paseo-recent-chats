@@ -1,7 +1,11 @@
 // Opening workspaces and starting new ones from the ⋮ menus. The 0.16 sidebar view uses Paseo's own
-// navigation; the sidebar item creates the workspace itself and opens it through the go screen.
+// navigation; the sidebar item and the phone screen open workspaces through the go screen and start new ones
+// on Paseo's own new-workspace screen (useNewWorkspace).
 // Where no provider is set (pills, older apps) the menus leave these items out.
+import * as pluginClient from "@getpaseo/plugin/client";
+import type { ProjectRef } from "@getpaseo/plugin/client";
 import { createContext, useContext } from "react";
+import { getProjectOpener } from "./runtime";
 
 export interface PaseoNavigation {
   openWorkspace(hostId: string, workspaceId: string): void;
@@ -32,3 +36,22 @@ export function publishDirectOpener(open: DirectOpener): () => void {
 }
 
 export const directOpener = (): DirectOpener | undefined => (globalThis as unknown as Record<string, DirectOpener | undefined>)[OPENER_KEY];
+
+/**
+ * "New workspace" for any surface: opens Paseo's own new-workspace screen for the project, filled in for it,
+ * the way Ctrl+N does. Paseo picks a worktree or the folder itself, so projects that are not git repositories
+ * work too. Throws (shown as a toast by the menu) where the app cannot open it.
+ */
+export function useNewWorkspace(): (hostId: string, projectId: string) => void {
+  const refs = useProjectRefs();
+  return (hostId, projectId) => {
+    const ref = refs.find((candidate) => candidate.hostId === hostId && candidate.id === projectId);
+    const open = getProjectOpener();
+    if (!ref || !open) throw new Error("This version of Paseo cannot open a new workspace from a plugin.");
+    open(ref);
+  };
+}
+
+// Only Paseo 0.16 has useProjects; through the namespace it is just absent in older apps.
+const useProjectRefs: () => readonly ProjectRef[] =
+  typeof (pluginClient as { useProjects?: unknown }).useProjects === "function" ? () => pluginClient.useProjects() : () => [];
