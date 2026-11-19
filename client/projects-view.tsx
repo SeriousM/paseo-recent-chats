@@ -483,6 +483,7 @@ export function ProjectsView({
   };
 
   const pinnedFolded = toggled.has("pinned");
+  const treeFolded = toggled.has("tree");
   /** Collapse, Expand and Active for one section: "" the tree, "pinned/" the Pinned section. */
   const foldButtons = (hosts: readonly TreeHost[], prefix: string) =>
     FOLD_ACTIONS.map(([action, icon, label]) => (
