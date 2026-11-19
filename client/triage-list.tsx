@@ -1066,7 +1066,6 @@ export function HostHeading({
       {unread > 0 ? (
         <Text style={{ fontSize: fs(11), color: theme.colors.foregroundMuted }}>{`${unread} unread`}</Text>
       ) : null}
-      {onToggleCollapsed ? <CollapseChevron theme={theme} collapsed={collapsed ?? false} /> : null}
     </>
   );
   const style = { flexDirection: "row" as const, alignItems: "center" as const, gap: 8, paddingHorizontal: 8, paddingTop: 10, paddingBottom: 2 };
@@ -1110,15 +1109,6 @@ function HeadingRow({
     >
       {children}
     </Pressable>
-  );
-}
-
-/** Chevron on the right of a heading: down while the group is open, right while it is folded. */
-function CollapseChevron({ theme, collapsed }: { theme: PluginTheme; collapsed: boolean }) {
-  return (
-    <View style={{ marginLeft: "auto", padding: 2 }}>
-      <Icon name={collapsed ? "ChevronRight" : "ChevronDown"} size={14} color={theme.colors.foregroundMuted} />
-    </View>
   );
 }
 
