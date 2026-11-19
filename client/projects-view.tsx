@@ -124,7 +124,6 @@ export function ViewModeBar({
   searchOpen,
   onSearch,
   onAddProject,
-  addingProject = false,
   extra,
 }: {
   theme: PluginTheme;
@@ -140,9 +139,8 @@ export function ViewModeBar({
   onSearch(): void;
   /** Placed at the end of the row, after the search button (the sidebar view's back, forward, counts and cog). */
   extra?: ReactNode;
-  /** Projects view: opens the form that adds a project. */
+  /** Projects view: opens Paseo's Open project picker. */
   onAddProject?: () => void;
-  addingProject?: boolean;
 }) {
   const mode = useViewMode();
   const fs = useFontScale();
@@ -218,14 +216,8 @@ export function ViewModeBar({
       ) : null}
       <View style={{ flex: 1 }} />
       {onAddProject ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add a project"
-          accessibilityState={{ expanded: addingProject }}
-          onPress={onAddProject}
-          style={toggle(addingProject)}
-        >
-          <Icon name="FolderPlus" size={13} color={tone(addingProject)} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Open or create a project" onPress={onAddProject} style={toggle(false)}>
+          <Icon name="FolderPlus" size={13} color={tone(false)} />
         </Pressable>
       ) : null}
       <Pressable

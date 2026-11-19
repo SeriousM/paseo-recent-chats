@@ -677,3 +677,20 @@ export function hideStrayPopup(node: unknown, onStray: (stray: boolean) => void)
     for (const timer of timers) clearTimeout(timer);
   };
 }
+
+/**
+ * Opens Paseo's own "Open project" picker (Ctrl+O, Cmd+O on a Mac): it searches folders on the host, browses
+ * them and can create a new folder. Plugins get no call for it, so the shortcut is sent to the window. Returns
+ * whether it could be sent (web and desktop only).
+ */
+export function openPaseoProjectPicker(): boolean {
+  if (Platform.OS !== "web" || typeof document === "undefined") return false;
+  const KeyboardEventCtor = (globalThis as unknown as { KeyboardEvent?: new (type: string, init: object) => object }).KeyboardEvent;
+  const target = globalThis as unknown as { dispatchEvent?(event: object): boolean };
+  if (!KeyboardEventCtor || typeof target.dispatchEvent !== "function") return false;
+  const mac = /Mac/.test(readUserAgent() ?? "");
+  target.dispatchEvent(
+    new KeyboardEventCtor("keydown", { key: "o", code: "KeyO", ctrlKey: !mac, metaKey: mac, bubbles: true, cancelable: true }),
+  );
+  return true;
+}
