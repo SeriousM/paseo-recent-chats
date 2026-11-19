@@ -55,3 +55,26 @@ describe("filtering the projects tree", () => {
     expect(filterTree(tree, "  ")).toEqual(tree);
   });
 });
+
+describe("empty items", () => {
+  const withEmpty = buildTree([row("plugin changes")], [{ id: "h1", label: "desk" }], {
+    now: NOW,
+    inactiveWindowDays: 14,
+    activeOnly: false,
+    chatsPerWorkspace: 1,
+    pinnedWorkspaces: new Set(),
+    empty: {
+      workspaces: [{ hostId: "h1", id: "w9", projectId: "p1", treeProject: "RecentChatsPaseoPlugin", title: "Spare", branch: "spare" }],
+      projects: [{ hostId: "h1", id: "p2", treeProject: "AzureDevOpsDeploymentCenterWeb" }],
+    },
+  });
+
+  it("finds a project without workspaces and a workspace without chats by name", () => {
+    expect(shape(filterTree(withEmpty, "azuredevops"))).toEqual(["AzureDevOpsDeploymentCenterWeb: "]);
+    expect(shape(filterTree(withEmpty, "spare"))).toEqual(["RecentChatsPaseoPlugin: Spare[]"]);
+  });
+
+  it("leaves them out when only a chat matches", () => {
+    expect(shape(filterTree(withEmpty, "plugin changes"))).toEqual(["RecentChatsPaseoPlugin: Plan recent chats[plugin changes]"]);
+  });
+});

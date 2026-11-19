@@ -324,8 +324,29 @@ export function ProjectsView({
     [rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder],
   );
   const pinned = useMemo(() => filterTree(pinnedTree(full, pinnedProjects), query), [full, pinnedProjects, query]);
-  // Searching looks through everything, also what "active only" and "+N older" hide.
-  const shownTree = useMemo(() => (searching ? filterTree(cleanup ? tree : full, query) : tree), [searching, cleanup, full, tree, query]);
+  // Searching looks through everything, also what "active only" and "+N older" hide, and finds workspaces
+  // without chats and projects without workspaces by name, so their menus (new agent, new workspace) are there.
+  const searchBase = useMemo(
+    () =>
+      searching && !cleanup
+        ? buildTree(rows, listed, {
+            now: Date.now(),
+            inactiveWindowDays: prefs.inactiveWindowDays,
+            activeOnly: false,
+            chatsPerWorkspace: Number.MAX_SAFE_INTEGER,
+            pinnedWorkspaces,
+            pinnedProjects,
+            projectOrder: prefs.projectOrder,
+            workspaceOrder: prefs.workspaceOrder,
+            empty: emptyItems(rows, { workspaces: snapshot.workspaces, projects: snapshot.projects }),
+          })
+        : null,
+    [searching, cleanup, rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder, snapshot.workspaces, snapshot.projects],
+  );
+  const shownTree = useMemo(
+    () => (searching ? filterTree(cleanup ? tree : (searchBase ?? full), query) : tree),
+    [searching, cleanup, searchBase, full, tree, query],
+  );
   // Workspaces "Last N days" keeps out of the tree (also those folded away as quiet projects), said under the filters.
   const hiddenByWindow = useMemo(() => {
     if (cleanup || !mode.activeOnly) return 0;
