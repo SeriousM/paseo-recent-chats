@@ -546,8 +546,20 @@ export function ProjectsView({
               Pin a project, workspace or chat to keep it here, with what is around it.
             </Text>
           )}
+          {/* While searching the tree always shows: the results are in it. */}
           {searching ? null : (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 6, paddingTop: 2 }}>
+              {/* Folds the whole tree below (and its notes) away, leaving Needs you and Pinned. Kept on this device. */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={treeFolded ? "Show the projects" : "Hide the projects"}
+                accessibilityState={{ expanded: !treeFolded }}
+                onPress={() => toggleNode("tree")}
+                hitSlop={4}
+                style={({ pressed }) => ({ paddingHorizontal: 4, paddingVertical: compact ? 8 : 3, opacity: pressed ? 0.6 : 1 })}
+              >
+                <Icon name={treeFolded ? "ChevronRight" : "ChevronDown"} size={12} color={theme.colors.foregroundMuted} />
+              </Pressable>
               {/* Hides workspaces with nothing newer than the inactive window (Settings, Sections, Inactive, Window). */}
               {cleanup
                 ? null
@@ -573,10 +585,10 @@ export function ProjectsView({
                 () => updateViewMode({ staleOnly: !staleOnly, emptyOnly: false }),
               )}
               <View style={{ flex: 1 }} />
-              {foldButtons(full, "")}
+              {treeFolded ? null : foldButtons(full, "")}
             </View>
           )}
-          {hiddenByWindow > 0 && !searching ? (
+          {hiddenByWindow > 0 && !searching && !treeFolded ? (
             <Text style={{ fontSize: fs(11.5), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: 2 }}>
               {`Last ${prefs.inactiveWindowDays}d hides ${hiddenByWindow} workspace${hiddenByWindow === 1 ? "" : "s"} \u00B7 `}
               <Text accessibilityRole="button" onPress={() => updateViewMode({ activeOnly: false })} style={{ color: theme.colors.accent }}>
@@ -584,21 +596,21 @@ export function ProjectsView({
               </Text>
             </Text>
           ) : null}
-          {staleOnly && !searching ? (
+          {staleOnly && !searching && !treeFolded ? (
             <Text style={{ fontSize: fs(11.5), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: 4 }}>
               {staleRows.length === 0
                 ? `No chat has been idle for more than ${prefs.staleDays} days.`
                 : `${staleRows.length} chat${staleRows.length > 1 ? "s" : ""} idle for more than ${prefs.staleDays} days. Archive them from their \u22EE menu, or a whole workspace from its own.`}
             </Text>
           ) : null}
-          {emptyOnly && empty && !searching ? (
+          {emptyOnly && empty && !searching && !treeFolded ? (
             <Text style={{ fontSize: fs(11.5), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: 4 }}>
               {empty.workspaces.length + empty.projects.length === 0
                 ? "Every workspace has a chat and every project a workspace."
                 : `${plural(empty.workspaces.length, "workspace")} without chats, ${plural(empty.projects.length, "project")} without workspaces. Archive a workspace from its \u22EE menu.`}
             </Text>
           ) : null}
-          {renderHosts(shownTree, "", false)}
+          {treeFolded && !searching ? null : renderHosts(shownTree, "", false)}
           {searching && shownTree.length === 0 && pinned.length === 0 && urgent.length === 0 ? (
             <Text style={{ fontSize: fs(12), color: theme.colors.foregroundMuted, padding: 12 }}>Nothing matches.</Text>
           ) : null}
