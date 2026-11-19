@@ -882,6 +882,14 @@ function HostNode({
       [
         // The Hosts dropdown switches it on again.
         store.getSnapshot().hosts.length >= 2 ? { label: "Hide this host", icon: "EyeOff", onPress: () => store.toggleHost(host.hostId) } : null,
+        // Like Alt+F, for touch screens: only this host is listed; Alt+F or the line under the first row shows all.
+        store.getSnapshot().hosts.length >= 2
+          ? {
+              label: "Show only this host",
+              icon: "Focus",
+              onPress: () => store.updatePrefs({ hiddenHosts: store.getSnapshot().hosts.map((other) => other.id).filter((id) => id !== host.hostId) }),
+            }
+          : null,
         copyText ? { label: "Copy host name", icon: "Copy", onPress: () => copyText?.(host.label) } : null,
       ],
     ];
