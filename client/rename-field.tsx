@@ -27,15 +27,24 @@ export function RenameField({
   const input = useRef<TextInput>(null);
   /** Set once the field has taken the focus itself; earlier blurs (the double-click's last click) do not cancel. */
   const armed = useRef(false);
-  // autoFocus alone loses to a double-click, whose last click lands after the field appears: focus and
-  // select the whole title once that click is over.
+  // autoFocus alone loses to a double-click, whose last click lands after the field appears, and to a popup
+  // that moves the focus into itself as it opens (Alt+R in the Inbox popup): focus and select the whole title
+  // a few times while those settle, unless the field already has the focus.
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const focusField = () => {
+      const node = input.current as unknown as { isFocused?(): boolean } | null;
+      if (node?.isFocused?.()) return;
       input.current?.focus();
       input.current?.setSelection(0, initial.length);
+    };
+    const timers = [50, 150, 300, 500].map((delay) => setTimeout(focusField, delay));
+    const arm = setTimeout(() => {
       armed.current = true;
-    }, 50);
-    return () => clearTimeout(timer);
+    }, 550);
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+      clearTimeout(arm);
+    };
   }, [initial]);
   // Pressing ✓ or ✕ takes the focus from the field before the press lands: those must not count as
   // leaving the field.
