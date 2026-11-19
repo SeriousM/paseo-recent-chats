@@ -331,6 +331,21 @@ export function registerPills(client: PluginClientContext): () => void {
     return true;
   });
 
+  // Alt+F focuses on the host of the chat on screen (every other host switched off in the host filter), and
+  // back to all hosts. Any host already switched off counts as focused: the next press shows them all.
+  const stopAltF = onAltKey("KeyF", () => {
+    const snapshot = store.getSnapshot();
+    if (snapshot.prefs.hiddenHosts.length > 0) {
+      store.updatePrefs({ hiddenHosts: [] });
+      return true;
+    }
+    const key = currentOpenChat();
+    if (!key || snapshot.hosts.length < 2) return false;
+    const hostId = key.slice(0, key.indexOf(":"));
+    store.updatePrefs({ hiddenHosts: snapshot.hosts.map((host) => host.id).filter((id) => id !== hostId) });
+    return true;
+  });
+
   // Alt+Shift+1 … 9 open the first to ninth chat of Needs you as the list on screen numbers them; the numbers
   // show while Alt+Shift is held. Alt+1 … 9 and Ctrl+1 … 9 are Paseo's (tabs and workspaces), which takes them
   // before a plugin sees them.
@@ -494,6 +509,7 @@ export function registerPills(client: PluginClientContext): () => void {
     stopAltI();
     stopAltR();
     stopAltP();
+    stopAltF();
     stopBackForward();
     for (const stop of stopAltDigits) stop();
     stopNumbersShown();
