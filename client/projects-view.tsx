@@ -11,7 +11,7 @@ import type { Prefs } from "../shared/settings";
 import { PREVIEW_HOST_COLORS, PREVIEW_TREE_ROWS, PREVIEW_WORKSPACES } from "./preview-data";
 import { useOpenChat } from "./open-chat";
 import { useNumberedChats } from "./numbered";
-import { TreeIcon, TreeStyleEditor, treeColor, useTreeStyle } from "./tree-style";
+import { setTreeStyle, TreeIcon, TreeStyleEditor, treeColor, useTreeStyle, type TreeStyle } from "./tree-style";
 import {
   buildTree,
   emptyItems,
@@ -909,7 +909,7 @@ function HostNode({
             drag ? (
               <View style={{ paddingLeft: 4, paddingBottom: 2 }}>
                 <DragHandle drag={drag} label={host.label}>
-                  <Icon name="GripVertical" size={12} color={theme.colors.foregroundMuted} />
+                  <Icon name="Server" size={12} color={theme.colors.foregroundMuted} />
                 </DragHandle>
               </View>
             ) : undefined
@@ -975,8 +975,10 @@ function ProjectNode({
   const folded = toggled.has(key);
   const nav = usePaseoNavigation();
   const styleKey = `project:${project.key}`;
-  const look = useTreeStyle(styleKey);
-  const [styling, setStyling] = useState(false);
+  // While the editor is open the row shows its draft; Cancel drops it.
+  const [draft, setDraft] = useState<TreeStyle | null>(null);
+  const saved = useTreeStyle(styleKey);
+  const look = draft ?? saved;
   const menu = useRowMenu(theme, compact, project.name, () => {
     const store = getStore();
     const chats = project.workspaces.flatMap((workspace) => [...workspace.chats, ...workspace.older]);
@@ -985,7 +987,7 @@ function ProjectNode({
       [nav && projectId ? { label: "New workspace", icon: "Plus", onPress: () => nav.newWorkspace(hostId, projectId) } : null],
       [
         { label: pinned ? "Unpin project" : "Pin project", icon: pinned ? "PinOff" : "Pin", onPress: () => togglePin(`project:${project.key}`) },
-        { label: "Icon and color\u2026", icon: "Palette", onPress: () => setStyling(true) },
+        { label: "Icon and color\u2026", icon: "Palette", onPress: () => setDraft(saved ?? {}) },
         chats.some((row) => row.bucket === "unread")
           ? { label: "Mark all chats read", icon: "CheckCheck", onPress: () => store.markRead(chats.filter((row) => row.bucket === "unread").map((row) => row.key)) }
           : null,
@@ -1058,9 +1060,7 @@ function ProjectNode({
         ) : null}
         {menu.button}
       </Pressable>
-      {styling ? (
-        <TreeStyleEditor theme={theme} compact={compact} name={project.name} styleKey={styleKey} initial={look} fallbackIcon="Folder" onClose={() => setStyling(false)} />
-      ) : null}
+      {draft ? <StyleEditorFor theme={theme} compact={compact} styleKey={styleKey} draft={draft} setDraft={setDraft} fallbackIcon="Folder" /> : null}
       {folded ? null : <View style={{ paddingLeft: 12 }}>{children}</View>}
     </View>
   );
@@ -1346,9 +1346,11 @@ function WorkspaceNode({
   const workspaceId = workspace.workspaceId;
   const nav = usePaseoNavigation();
   const styleKey = `workspace:${workspace.key}`;
-  const look = useTreeStyle(styleKey);
+  // While the editor is open the row shows its draft; Cancel drops it.
+  const [draft, setDraft] = useState<TreeStyle | null>(null);
+  const saved = useTreeStyle(styleKey);
+  const look = draft ?? saved;
   const tint = treeColor(look, theme);
-  const [styling, setStyling] = useState(false);
   const all = [...workspace.chats, ...workspace.older];
   const menu = useRowMenu(theme, compact, name, () => {
     const store = getStore();
@@ -1367,7 +1369,7 @@ function WorkspaceNode({
         workspaceId
           ? { label: pinned ? "Unpin workspace" : "Pin workspace", icon: pinned ? "PinOff" : "Pin", onPress: () => togglePin(`workspace:${workspace.key}`) }
           : null,
-        workspaceId ? { label: "Icon and color\u2026", icon: "Palette", onPress: () => setStyling(true) } : null,
+        workspaceId ? { label: "Icon and color\u2026", icon: "Palette", onPress: () => setDraft(saved ?? {}) } : null,
         all.some((row) => row.bucket === "unread")
           ? { label: "Mark as read", icon: "Check", onPress: () => store.markRead(all.filter((row) => row.bucket === "unread").map((row) => row.key)) }
           : null,
@@ -1392,7 +1394,9 @@ function WorkspaceNode({
       ],
     ];
   });
-  const grip = <Icon name="GripVertical" size={12} color={theme.colors.foregroundMuted} />;
+  // The workspace's icon, also its drag handle: its own, else one for its kind (a worktree or the folder itself).
+  const workspaceIcon = info?.kind === "worktree" ? "GitFork" : "FolderOpen";
+  const grip = <TreeIcon style={look} fallback={workspaceIcon} color={tint ?? theme.colors.foregroundMuted} size={12} />;
   return (
     <View style={{ marginBottom: 2 }}>
       <Pressable
@@ -1444,8 +1448,6 @@ function WorkspaceNode({
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          {/* An own icon only when one is chosen: plain workspaces keep their grip alone. */}
-          {look?.icon || look?.emoji ? <TreeIcon style={look} fallback="Folder" color={tint ?? theme.colors.foregroundMuted} size={13} /> : null}
           {/* Its own colour; else white while something happens in it (running, asking, unseen), grey otherwise. */}
           <Text
             numberOfLines={1}
@@ -1477,9 +1479,7 @@ function WorkspaceNode({
         ) : null}
         {editing ? null : menu.button}
       </Pressable>
-      {styling ? (
-        <TreeStyleEditor theme={theme} compact={compact} name={name} styleKey={styleKey} initial={look} fallbackIcon="Folder" onClose={() => setStyling(false)} />
-      ) : null}
+      {draft ? <StyleEditorFor theme={theme} compact={compact} styleKey={styleKey} draft={draft} setDraft={setDraft} fallbackIcon={workspaceIcon} /> : null}
       {folded ? null : (
         <View style={{ paddingLeft: 12 }}>
           {branch ? (
@@ -1501,5 +1501,41 @@ function WorkspaceNode({
         </View>
       )}
     </View>
+  );
+}
+
+/** The style editor of a project or workspace, writing its draft back to the row that shows it. */
+function StyleEditorFor({
+  theme,
+  compact,
+  styleKey,
+  draft,
+  setDraft,
+  fallbackIcon,
+}: {
+  theme: PluginTheme;
+  compact: boolean;
+  styleKey: string;
+  draft: TreeStyle;
+  setDraft(style: TreeStyle | null): void;
+  fallbackIcon: string;
+}) {
+  return (
+    <TreeStyleEditor
+      theme={theme}
+      compact={compact}
+      value={draft}
+      fallbackIcon={fallbackIcon}
+      onChange={setDraft}
+      onDone={() => {
+        setTreeStyle(styleKey, draft);
+        setDraft(null);
+      }}
+      onCancel={() => setDraft(null)}
+      onReset={() => {
+        setTreeStyle(styleKey, null);
+        setDraft(null);
+      }}
+    />
   );
 }
