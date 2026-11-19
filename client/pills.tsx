@@ -6,7 +6,7 @@ import type {
   PluginClientContext,
 } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/ui";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Pressable, View } from "react-native";
 import type { PaseoAgentListResult } from "./paseo-types";
 import { getStore } from "./runtime";
@@ -107,15 +107,33 @@ function HostIcon(props: PluginButtonIconProps) {
  * The chat whose title field the next Inbox popup opens with (Alt+R), for a second. Read, not taken: Paseo can
  * draw the popup more than once (a stray copy, see hideStrayPopup), and every copy has to see it.
  */
-let pendingRename: { key: string; at: number } | null = null;
-const takePendingRename = (): string | null => (pendingRename && Date.now() - pendingRename.at < 1000 ? pendingRename.key : null);
+let pendingRename: { key: string; at: number; id: number } | null = null;
+const renameListeners = new Set<() => void>();
+function requestRename(key: string | null): void {
+  pendingRename = key ? { key, at: Date.now(), id: (pendingRename?.id ?? 0) + 1 } : null;
+  for (const listener of [...renameListeners]) listener();
+}
+/**
+ * The rename asked for within the last second, live: Paseo keeps the popup's content mounted between
+ * openings, so it has to follow each new request, not only the one present when it first appeared.
+ */
+function usePendingRename(): { key: string; id: number } | null {
+  const current = useSyncExternalStore(
+    (listener) => {
+      renameListeners.add(listener);
+      return () => void renameListeners.delete(listener);
+    },
+    () => pendingRename,
+  );
+  return current && Date.now() - current.at < 1000 ? current : null;
+}
 
 function createInboxContent(client: PluginClientContext) {
   return function InboxContent(props: PluginButtonContentProps) {
     const { theme, layout, close } = props;
     const { store, snapshot, result } = useRecents();
     // Alt+R: this chat's title field opens at once (when the chat is listed).
-    const [renameKey] = useState(() => takePendingRename());
+    const rename = usePendingRename();
     const target = { openScreen: (input: { screenId: string; params?: Record<string, string> }) => client.openScreen(input) };
     const [hostsOpen, setHostsOpen] = useState(false);
     const touch = useTouchInput();
@@ -218,7 +236,7 @@ function createInboxContent(client: PluginClientContext) {
           footer="first"
           showSettingsButton
           selectedKey={selected}
-          renameKey={renameKey}
+          rename={rename}
           onVisibleRows={setVisible}
           onShowAll={() => {
             close();
@@ -301,9 +319,9 @@ export function registerPills(client: PluginClientContext): () => void {
   const stopAltR = onAltKey("KeyR", () => {
     const key = currentOpenChat();
     if (!key) return false;
-    pendingRename = { key, at: Date.now() };
+    requestRename(key);
     if (pressComposerPill(INBOX_TITLE)) return true;
-    pendingRename = null;
+    requestRename(null);
     return false;
   });
 
