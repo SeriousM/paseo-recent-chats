@@ -905,14 +905,19 @@ function HostNode({
           unread={host.need}
           collapsed={folded}
           onToggleCollapsed={() => toggleNode(foldKey)}
+          // The host's icon always shows; it is a drag handle only when there are hosts to reorder.
           before={
-            drag ? (
-              <View style={{ paddingLeft: 4, paddingBottom: 2 }}>
+            <View style={{ paddingLeft: 4, paddingBottom: 2 }}>
+              {drag ? (
                 <DragHandle drag={drag} label={host.label}>
                   <Icon name="Server" size={12} color={theme.colors.foregroundMuted} />
                 </DragHandle>
-              </View>
-            ) : undefined
+              ) : (
+                <View style={{ padding: 3 }}>
+                  <Icon name="Server" size={12} color={theme.colors.foregroundMuted} />
+                </View>
+              )}
+            </View>
           }
           after={menu.button ? <View style={{ paddingRight: 6 }}>{menu.button}</View> : undefined}
         />
