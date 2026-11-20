@@ -438,6 +438,75 @@ function scrollPaneToBottom(pane: DomElement): void {
   if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => (end(), requestAnimationFrame(end)));
 }
 
+// The prompt the last Alt+↑/↓ went to. A prompt near the end cannot scroll up to the top of the chat, so
+// Paseo keeps the one before it active; without this the next Alt+↓ would go to that same prompt again.
+const promptMemo = () =>
+  ((globalThis as Record<string, unknown>)["__paseoRecentChats.promptJump.v1"] ??= { rail: null, index: -1 }) as {
+  rail: DomElement | null;
+  index: number;
+};
+
+/**
+ * Jumps the chat on screen to the previous or next of your own messages (or its start or end), as Alt+↑/↓,
+ * Alt+Home and Alt+End do; see attachPromptJumpKeys. Returns false when there is no chat to move in.
+ */
+export function jumpPrompt(key: "ArrowUp" | "ArrowDown" | "Home" | "End"): boolean {
+  if (Platform.OS !== "web" || typeof document === "undefined" || typeof document.querySelectorAll !== "function") return false;
+  const memo = promptMemo();
+  const rails = Array.from(document.querySelectorAll(OUTLINE_RAIL)).filter((rail) => rail.offsetParent !== null);
+  const panes = rails.map((rail) => ({ rail, pane: chatPaneOf(rail) }));
+  const chosen = panes.find(({ pane }) => pane?.contains(document.activeElement)) ?? panes[0];
+  const scrolls = Array.from(document.querySelectorAll('[data-testid="agent-chat-scroll"]')).filter((el) => el.offsetParent !== null);
+  const focusedPane = scrolls.find((el) => el.parentElement?.contains(document.activeElement))?.parentElement ?? scrolls[0]?.parentElement;
+  const pane = chosen?.pane ?? focusedPane ?? null;
+  if (!pane) return false;
+  // Alt+End: straight to the end of the chat. Alt+Home: to its first message (the top without the outline).
+  if (key === "End") {
+    memo.index = -1;
+    scrollPaneToBottom(pane);
+    return true;
+  }
+  const ticks = chosen ? Array.from(chosen.rail.querySelectorAll(OUTLINE_TICK)) : [];
+  if (key === "Home") {
+    if (chosen && ticks[0]) {
+      memo.rail = chosen.rail;
+      memo.index = 0;
+      ticks[0].click();
+    } else {
+      const scroll = pane.querySelector('[data-testid="agent-chat-scroll"]');
+      if (scroll) scroll.scrollTop = 0;
+    }
+    return true;
+  }
+  const down = key === "ArrowDown";
+  if (!chosen) {
+    // Fewer than two prompts, or the pane is too narrow for the outline: only "to the bottom" is left.
+    if (down) scrollPaneToBottom(pane);
+    return true;
+  }
+  // An inactive tick's pill is 10 px wide and the active one's 18, so the widest pill marks the active prompt.
+  const widths = ticks.map((tick) => tick.firstElementChild?.offsetWidth ?? 0);
+  const widest = Math.max(...widths);
+  const highlighted = widest > Math.min(...widths) ? widths.indexOf(widest) : -1;
+  // No active prompt (above the first one, or the outline not caught up after a jump): where the last jump
+  // went, else the top or the end of the chat by the scroll position.
+  const scroll = pane.querySelector('[data-testid="agent-chat-scroll"]');
+  const fallback = memo.rail === chosen.rail && memo.index >= 0 ? memo.index : scroll && scroll.scrollTop < 40 ? -1 : ticks.length - 1;
+  const active = highlighted >= 0 ? highlighted : fallback;
+  const current = memo.rail === chosen.rail && memo.index - 1 === active ? memo.index : active;
+  const next = current + (down ? 1 : -1);
+  if (next >= ticks.length) {
+    memo.index = -1;
+    scrollPaneToBottom(chosen.pane ?? pane);
+    return true;
+  }
+  const index = Math.max(0, next);
+  memo.rail = chosen.rail;
+  memo.index = index;
+  ticks[index]?.click();
+  return true;
+}
+
 /**
  * Alt+↑ / Alt+↓ jump to the previous or next of your own messages in the chat on screen, like a press on
  * Paseo's chat outline (the ticks at the right edge). Past the newest message Alt+↓ scrolls to the bottom.
@@ -448,12 +517,6 @@ function scrollPaneToBottom(pane: DomElement): void {
  */
 export function attachPromptJumpKeys(): () => void {
   if (Platform.OS !== "web" || typeof document === "undefined" || typeof document.querySelectorAll !== "function") return () => {};
-  // The prompt the last Alt+↑/↓ went to. A prompt near the end cannot scroll up to the top of the chat, so
-  // Paseo keeps the one before it active; without this the next Alt+↓ would go to that same prompt again.
-  const memo = ((globalThis as Record<string, unknown>)["__paseoRecentChats.promptJump.v1"] ??= { rail: null, index: -1 }) as {
-    rail: DomElement | null;
-    index: number;
-  };
   const key = (event: DomKeyEvent) => {
     if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown" && event.key !== "End" && event.key !== "Home") return;
@@ -461,60 +524,10 @@ export function attachPromptJumpKeys(): () => void {
     if (movesByWord(event.target) || target?.closest?.(".cm-editor")) return;
     const marked = event as DomKeyEvent & { __recentChatsPrompt?: boolean };
     if (marked.__recentChatsPrompt) return;
-    const rails = Array.from(document.querySelectorAll(OUTLINE_RAIL)).filter((rail) => rail.offsetParent !== null);
-    const panes = rails.map((rail) => ({ rail, pane: chatPaneOf(rail) }));
-    const chosen = panes.find(({ pane }) => pane?.contains(document.activeElement)) ?? panes[0];
-    const scrolls = Array.from(document.querySelectorAll('[data-testid="agent-chat-scroll"]')).filter((el) => el.offsetParent !== null);
-    const focusedPane = scrolls.find((el) => el.parentElement?.contains(document.activeElement))?.parentElement ?? scrolls[0]?.parentElement;
-    const pane = chosen?.pane ?? focusedPane ?? null;
-    if (!pane) return;
+    if (!jumpPrompt(event.key)) return;
     marked.__recentChatsPrompt = true;
     event.preventDefault();
     event.stopPropagation();
-    // Alt+End: straight to the end of the chat. Alt+Home: to its first message (the top without the outline).
-    if (event.key === "End") {
-      memo.index = -1;
-      scrollPaneToBottom(pane);
-      return;
-    }
-    const ticks = chosen ? Array.from(chosen.rail.querySelectorAll(OUTLINE_TICK)) : [];
-    if (event.key === "Home") {
-      if (chosen && ticks[0]) {
-        memo.rail = chosen.rail;
-        memo.index = 0;
-        ticks[0].click();
-      } else {
-        const scroll = pane.querySelector('[data-testid="agent-chat-scroll"]');
-        if (scroll) scroll.scrollTop = 0;
-      }
-      return;
-    }
-    const down = event.key === "ArrowDown";
-    if (!chosen) {
-      // Fewer than two prompts, or the pane is too narrow for the outline: only "to the bottom" is left.
-      if (down) scrollPaneToBottom(pane);
-      return;
-    }
-    // An inactive tick's pill is 10 px wide and the active one's 18, so the widest pill marks the active prompt.
-    const widths = ticks.map((tick) => tick.firstElementChild?.offsetWidth ?? 0);
-    const widest = Math.max(...widths);
-    const highlighted = widest > Math.min(...widths) ? widths.indexOf(widest) : -1;
-    // No active prompt (above the first one, or the outline not caught up after a jump): where the last jump
-    // went, else the top or the end of the chat by the scroll position.
-    const scroll = pane.querySelector('[data-testid="agent-chat-scroll"]');
-    const fallback = memo.rail === chosen.rail && memo.index >= 0 ? memo.index : scroll && scroll.scrollTop < 40 ? -1 : ticks.length - 1;
-    const active = highlighted >= 0 ? highlighted : fallback;
-    const current = memo.rail === chosen.rail && memo.index - 1 === active ? memo.index : active;
-    const next = current + (down ? 1 : -1);
-    if (next >= ticks.length) {
-      memo.index = -1;
-      scrollPaneToBottom(chosen.pane ?? pane);
-      return;
-    }
-    const index = Math.max(0, next);
-    memo.rail = chosen.rail;
-    memo.index = index;
-    ticks[index]?.click();
   };
   document.addEventListener("keydown", key, true);
   return () => document.removeEventListener("keydown", key, true);

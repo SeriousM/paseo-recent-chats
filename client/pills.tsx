@@ -17,7 +17,7 @@ import { limitsOf, openChat, openChatByKey, useRecents, type OpenTarget } from "
 import { directOpener } from "./navigation";
 import { moveInHistory } from "./chat-history";
 import { currentOpenChat, reportOpenChat } from "./open-chat";
-import { hideStrayPopup, onAltKey, onAltShiftHeld, onBackForward, onListKeys, pressComposerPill, watchShown } from "./web";
+import { hideStrayPopup, jumpPrompt, onAltKey, onAltShiftHeld, onBackForward, onListKeys, pressComposerPill, watchShown } from "./web";
 import { isLater } from "./overlay";
 import { browsedChat, endBrowsing } from "./browse";
 import { currentLinger } from "./linger";
@@ -406,11 +406,11 @@ export function registerPills(client: PluginClientContext): () => void {
         };
       case "host":
         return {
-          title: "The host this chat runs on",
+          title: "The host this chat runs on. Press (or Alt+\u2191) to jump to your previous message in this chat",
           icon: HostIcon,
           label: lastHostLabel,
           visible: lastVisible.host,
-          behavior: { kind: "action", onPress: () => client.openScreen({ screenId: RECENT_SCREEN_ID }) },
+          behavior: { kind: "action", onPress: () => void jumpPrompt("ArrowUp") },
         };
     }
   }

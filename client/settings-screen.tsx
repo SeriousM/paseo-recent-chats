@@ -26,7 +26,7 @@ const PILL_SETTINGS: Record<PillId, { label: string; hint: string; key: "showInb
     key: "showInboxPill",
   },
   later: { label: "Later pill", hint: "Marks the current chat unread.", key: "showLaterPill" },
-  host: { label: "Host pill", hint: "The host the chat runs on, in the colour you gave it in Paseo.", key: "showHostPill" },
+  host: { label: "Host pill", hint: "The host the chat runs on, in the colour you gave it in Paseo. A press jumps to your previous message (desktop and web).", key: "showHostPill" },
 };
 
 /** The Projects tree's switches, in the order they are shown. */
