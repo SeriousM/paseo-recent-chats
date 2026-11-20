@@ -126,6 +126,11 @@ export const prefsSettings = defineSettings({
       .default(() => ({ branch: true, mainBranch: true, kind: true, diff: true, hostTag: true, age: true, agent: false })),
     /** Hosts switched off in the host filter (serverIds). A host not listed here is shown, so new hosts start on. */
     hiddenHosts: z.array(z.string()).default([]),
+    /**
+     * serverId -> the colour name given to the host in Paseo. Only desktop and web apps can read it (from the
+     * app's own host list); they copy it here so phones, which cannot, show the same colours.
+     */
+    hostColorNames: z.record(z.string(), z.string()).default({}),
   }),
 });
 

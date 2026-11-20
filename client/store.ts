@@ -336,7 +336,8 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
       })),
       storageHosts: [...docs.keys()].map(label),
       outdatedHosts: [...outdated].map(label),
-      hostColors,
+      // This device's own reading wins; the synced copy fills in where it has none (phones).
+      hostColors: { ...prefs.hostColorNames, ...hostColors },
       loading,
       errors,
     };
@@ -377,6 +378,9 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
 
   function reconcile() {
     hostColors = readHostColorNames();
+    // Colours read here are shared through the synced settings, for phones that cannot read them.
+    const known = prefs.hostColorNames;
+    if (Object.entries(hostColors).some(([id, name]) => known[id] !== name)) updatePrefs({ hostColorNames: { ...known, ...hostColors } });
     for (const [hostId, entry] of observers) {
       if (!hosts.some((host) => host.serverId === hostId && host.status === "online")) {
         entry.observer.stop();

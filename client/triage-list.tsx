@@ -749,7 +749,8 @@ function ChatRow({
             fontSize: isTitle ? fontSize : smallFont,
             fontFamily: mono ? MONO : undefined,
             // White while the chat waits for you (unread); grey once read, also the open chat held in Needs you.
-            color: isTitle && row.bucket === "unread" && row.led !== "idle" ? theme.colors.foreground : theme.colors.foregroundMuted,
+            // Only the chat's own unread light counts: not a sub-agent's question, not its own running.
+            color: isTitle && row.bucket === "unread" && !["idle", "running"].includes(row.ownLed ?? row.led) ? theme.colors.foreground : theme.colors.foregroundMuted,
           },
         ]}
       >
