@@ -673,7 +673,7 @@ function ChatRow({
   latestMenu.current = openMenu;
   useEffect(() => onContextMenu(rowNode.current, () => latestMenu.current?.(null)), []);
   const renderToken = (token: RowToken): ReactElement | null => {
-    if (token.id === "led") return <LedDot key="led" led={row.led} released={row.released} failed={row.failed} theme={theme} />;
+    if (token.id === "led") return <LedDot key="led" led={row.ownLed ?? row.led} released={row.released} failed={row.failed} theme={theme} />;
     if (token.id === "host" && !showHost) return null;
     const text = tokenText(row, token);
     const mono = tokenMono(token);

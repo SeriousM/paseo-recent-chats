@@ -528,9 +528,15 @@ describe("sub-agents that ask you something", () => {
     const sub = chat("s", { status: "running", parentAgentId: "p", pendingPermissions: 1, attention: attention(2) });
     const result = buildTriage([parent, sub], {}, limits, NOW);
     expect(ids(result.rows)).toEqual(["p"]);
-    expect(result.rows[0]).toMatchObject({ bucket: "unread", led: "permission", sortAt: ago(2 * MIN) });
+    expect(result.rows[0]).toMatchObject({ bucket: "unread", led: "permission", ownLed: "running", sortAt: ago(2 * MIN) });
     expect(result.rows[0]?.children?.map((row) => [row.agentId, row.led])).toEqual([["s", "permission"]]);
     expect(result.counts.unread).toBe(1);
+  });
+
+  it("show a resting parent with its own light, not the question's", () => {
+    const parent = chat("p", { status: "idle" });
+    const sub = chat("s", { status: "running", parentAgentId: "p", pendingPermissions: 1, attention: attention(2) });
+    expect(buildTriage([parent, sub], {}, limits, NOW).rows[0]).toMatchObject({ led: "permission", ownLed: "idle" });
   });
 
   it("stand on their own when the parent is not listed", () => {

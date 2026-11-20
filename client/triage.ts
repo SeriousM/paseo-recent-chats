@@ -77,6 +77,11 @@ export interface TriageRow {
   sortAt: number;
   /** Sub-agents of this chat that ask you something, listed under it. */
   children?: TriageRow[];
+  /**
+   * The chat's own light, when it differs from `led`: a chat whose sub-agent asks you something sits in Needs
+   * you with the question's light (it counts and sorts as waiting), but its row shows what it does itself.
+   */
+  ownLed?: Led;
 }
 
 export interface TriageResult {
@@ -274,7 +279,10 @@ function triageOne(
     // the turn before: a running chat shows as running, and turns unread again when this turn ends. Only a
     // chat that waits for a permission needs you while it runs.
     if (state && !(chat.status === "running" && !state.blocked)) {
-      row = { ...base, bucket: "unread", pinned: isPinned, led: state.led, sortAt: state.sortAt };
+      // Waiting only because a sub-agent asks: the row's light is the chat's own (running, its own unread
+      // light, or resting), the question's light is on the sub-agent's row under it.
+      const own = asking ? (chat.status === "running" ? "running" : (unreadState(chat, overlay[key], limits, now)?.led ?? "idle")) : undefined;
+      row = { ...base, bucket: "unread", pinned: isPinned, led: state.led, sortAt: state.sortAt, ...(own ? { ownLed: own } : null) };
       unread.push(row);
     } else if (linger?.key === key && linger.status === chat.status && chat.status !== "running") {
       // Held only while it rests: a chat that asked during its turn and was answered keeps running, so it
