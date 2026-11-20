@@ -330,6 +330,9 @@ declare const document: {
   removeEventListener(type: "keydown" | "keyup", listener: (event: DomKeyEvent) => void, capture: boolean): void;
   querySelectorAll(selector: string): ArrayLike<DomElement>;
   activeElement: unknown;
+  getElementById(id: string): { remove(): void } | null;
+  createElement(tag: "style"): { id: string; textContent: string };
+  head: { appendChild(node: unknown): void };
 };
 
 /**
@@ -445,6 +448,30 @@ const promptMemo = () =>
   rail: DomElement | null;
   index: number;
 };
+
+const OWN_MESSAGE_STYLE_ID = "paseo-recent-chats-own-messages";
+
+/**
+ * Tints the bubbles of your own messages in every chat (web and desktop), or takes the tint away. Paseo marks
+ * them as "user-message"; one that another agent sent starts with a "Sent by" button and keeps Paseo's colour.
+ * Works on what Paseo draws, like the prompt jump: it does nothing once Paseo changes that.
+ */
+export function setOwnMessageTint(on: boolean): void {
+  if (Platform.OS !== "web" || typeof document === "undefined" || typeof document.createElement !== "function") return;
+  const existing = document.getElementById(OWN_MESSAGE_STYLE_ID);
+  if (!on) {
+    existing?.remove();
+    return;
+  }
+  if (existing) return;
+  const style = document.createElement("style");
+  style.id = OWN_MESSAGE_STYLE_ID;
+  const tint = "rgba(56, 139, 253, 0.28)";
+  style.textContent =
+    `[data-testid="user-message"] > div:not(:has(> [role="button"])) > div:first-child` +
+    ` { background-image: linear-gradient(${tint}, ${tint}) !important; box-shadow: inset 0 0 0 1px rgba(56, 139, 253, 0.55) !important; }`;
+  document.head.appendChild(style);
+}
 
 /**
  * Jumps the chat on screen to the previous or next of your own messages (or its start or end), as Alt+↑/↓,

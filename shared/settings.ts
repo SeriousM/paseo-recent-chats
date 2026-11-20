@@ -69,6 +69,8 @@ export const prefsSettings = defineSettings({
     showLaterPill: z.boolean().default(true),
     /** A pill with the chat's host, in the host's colour. Off by default. */
     showHostPill: z.boolean().default(false),
+    /** Desktop and web: your own messages in a chat get a tinted bubble, so they are easy to find when scrolling. */
+    colorOwnMessages: z.boolean().default(true),
     /** Order of this plugin's composer pills; ones a newer version adds and this list lacks follow. */
     pillOrder: z.preprocess(knownOnly(PILL_IDS, (id) => id), z.array(z.enum(PILL_IDS))).default([...PILL_IDS]),
     /** What each list row shows, in which order and how long. See shared/layout.ts. */

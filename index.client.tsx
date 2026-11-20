@@ -8,7 +8,7 @@ import { RECENT_SCREEN_ID, RecentSidebarItem } from "./client/sidebar-item";
 import { RecentSidebarView, SIDEBAR_VIEW_ID } from "./client/sidebar-view";
 import { createStore } from "./client/store";
 import { GO_SCREEN_ID } from "./client/use-recents";
-import { attachPromptJumpKeys, onChatInteraction } from "./client/web";
+import { attachPromptJumpKeys, onChatInteraction, setOwnMessageTint } from "./client/web";
 import { browsedChat, endBrowsing } from "./client/browse";
 import { currentOpenChat } from "./client/open-chat";
 
@@ -54,6 +54,13 @@ export default function contribute(client: PluginClientContext) {
     }),
     registerPills(client),
     attachPromptJumpKeys(),
+    // Your own message bubbles, tinted while the setting is on (desktop and web).
+    (() => {
+      const apply = () => setOwnMessageTint(getStore().getSnapshot().prefs.colorOwnMessages);
+      apply();
+      const stop = getStore().subscribe(apply);
+      return () => (stop(), setOwnMessageTint(false));
+    })(),
     // A chat that was opened while it waited for you is marked read once you do something in it (see browse.ts).
     onChatInteraction(() => {
       const key = browsedChat();

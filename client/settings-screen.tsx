@@ -73,7 +73,7 @@ const RESET_KEYS: Record<Exclude<TabId, "version">, readonly (keyof Prefs)[]> = 
     "tooltipTransparency",
   ],
   projects: ["projectsGroupByHost", "chatsPerWorkspace", "staleDays", "projectsShow"],
-  sidebar: ["sidebarHeightPhone", "sidebarHeightDesktop", "showInboxPill", "showLaterPill", "showHostPill", "pillOrder", "laterBehavior"],
+  sidebar: ["sidebarHeightPhone", "sidebarHeightDesktop", "showInboxPill", "showLaterPill", "showHostPill", "pillOrder", "laterBehavior", "colorOwnMessages"],
 };
 
 /** Window width from which the List and Projects tabs put their preview beside the options. */
@@ -444,6 +444,12 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
               onValueChange={(next) => change({ laterBehavior: next })}
             />
           </Dimmed>
+          <SettingsSwitch
+            label="Colour my messages"
+            hint="Your own messages in a chat get a blue bubble, so you find them when scrolling. Desktop and web."
+            value={prefs.colorOwnMessages}
+            onValueChange={(next) => change({ colorOwnMessages: next })}
+          />
         </SettingsCard>
       </SettingsSection>
 
