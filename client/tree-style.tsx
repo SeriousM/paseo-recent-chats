@@ -112,7 +112,7 @@ export function TreeStyleEditor({
       <TextInput
         value={value.emoji ?? ""}
         onChangeText={(text) => onChange({ ...value, emoji: Array.from(text.trim()).slice(0, 2).join("") || undefined })}
-        placeholder="Or type an emoji (for example \u{1F680})"
+        placeholder={"Or type an emoji (for example \u{1F680})"}
         placeholderTextColor={theme.colors.foregroundMuted}
         style={{ height: compact ? 40 : 30, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface0, color: theme.colors.foreground, fontSize: fs(13) }}
       />
