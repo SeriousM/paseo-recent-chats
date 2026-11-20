@@ -188,6 +188,29 @@ describe("chats in the snapshot", () => {
     store.dispose();
   });
 
+  it("counts the running sub-agents it leaves out on their parent", async () => {
+    const parent = { labels: { "paseo.parent-agent-id": "main" } };
+    fake.hostData.set(
+      "a",
+      data([
+        agent("main"),
+        agent("busy1", { ...parent, status: "running" }),
+        agent("busy2", { ...parent, status: "running" }),
+        agent("done", { ...parent, status: "idle" }),
+        agent("asks", { ...parent, status: "running", pendingPermissions: [{}] as never }),
+      ]),
+    );
+    const { store } = storeOn("a");
+    store.setHosts([host("a")]);
+    store.retain();
+    await settle();
+    const chats = store.getSnapshot().chats;
+    // The asking one is listed under its parent, so it is not counted.
+    expect(chats.find((chat) => chat.agentId === "main")?.runningSubAgents).toBe(2);
+    expect(chats.map((chat) => chat.agentId).sort()).toEqual(["asks", "main"]);
+    store.dispose();
+  });
+
   it("hides the chats of a host that is switched off, but keeps it in the filter", async () => {
     fake.hostData.set("a", data([agent("a1")]));
     fake.hostData.set("b", data([agent("b1")]));

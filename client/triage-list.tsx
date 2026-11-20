@@ -739,12 +739,13 @@ function ChatRow({
         </View>
       );
     }
-    return (
+    const subs = isTitle ? (row.runningSubAgents ?? 0) : 0;
+    const textNode = (
       <Text
         key={token.id}
         numberOfLines={1}
         style={[
-          fixed,
+          subs > 0 ? { flexShrink: 1, minWidth: 0 } : fixed,
           {
             fontSize: isTitle ? fontSize : smallFont,
             fontFamily: mono ? MONO : undefined,
@@ -756,6 +757,19 @@ function ChatRow({
       >
         {text}
       </Text>
+    );
+    if (subs === 0) return textNode;
+    // Running sub-agents that are not listed: a blue "+N" after the title.
+    return (
+      <View key={token.id} style={[fixed, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
+        {textNode}
+        <Text
+          accessibilityLabel={`${subs} running sub-agent${subs === 1 ? "" : "s"}`}
+          style={{ fontSize: smallFont, fontWeight: "600", color: ledColor(theme, "running") }}
+        >
+          {`+${subs}`}
+        </Text>
+      </View>
     );
   };
 

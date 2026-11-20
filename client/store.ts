@@ -295,9 +295,19 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
           },
         ]),
       );
+      // Sub-agents are left out, except one that asks you something: it blocks its parent, so it shows under it.
+      // The running ones that are left out are counted on their parent's row.
+      const runningSubs = new Map<string, number>();
       for (const agent of data.agents) {
-        // Sub-agents are left out, except one that asks you something: it blocks its parent, so it shows under it.
-        if (!isDelegated(agent.labels) || asksYou(agent)) chats.push(toChat(host, agent, names));
+        if (!isDelegated(agent.labels) || asksYou(agent) || agent.status !== "running" || agent.archivedAt) continue;
+        const parent = agent.labels?.[PARENT_AGENT_LABEL]?.trim() ?? "";
+        runningSubs.set(parent, (runningSubs.get(parent) ?? 0) + 1);
+      }
+      for (const agent of data.agents) {
+        if (isDelegated(agent.labels) && !asksYou(agent)) continue;
+        const chat = toChat(host, agent, names);
+        const subs = runningSubs.get(agent.id);
+        chats.push(subs ? { ...chat, runningSubAgents: subs } : chat);
       }
       for (const workspace of data.workspaces) {
         if (workspace.internal || workspace.background) continue;

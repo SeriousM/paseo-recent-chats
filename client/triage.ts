@@ -35,6 +35,8 @@ export interface ChatInput {
   failed?: boolean;
   /** Set on sub-agents (only those that ask you something are passed in): the agent that started it. */
   parentAgentId?: string;
+  /** Sub-agents of this chat that are running and not listed (they do not ask you anything). */
+  runningSubAgents?: number;
 }
 
 export type OverlayEntry = {
@@ -77,6 +79,8 @@ export interface TriageRow {
   sortAt: number;
   /** Sub-agents of this chat that ask you something, listed under it. */
   children?: TriageRow[];
+  /** Sub-agents of this chat that are running and not listed; the row shows them as a blue "+N". */
+  runningSubAgents?: number;
   /**
    * The chat's own light, when it differs from `led`: a chat whose sub-agent asks you something sits in Needs
    * you with the question's light (it counts and sorts as waiting), but its row shows what it does itself.
@@ -232,6 +236,7 @@ function rowBase(chat: ChatInput) {
     provider: chat.provider,
     released: chat.status === "closed",
     failed: chat.status === "error" || chat.failed === true,
+    ...(chat.runningSubAgents ? { runningSubAgents: chat.runningSubAgents } : null),
   };
 }
 
