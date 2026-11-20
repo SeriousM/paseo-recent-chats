@@ -3,19 +3,9 @@
 // input is a trackpad gets desktop sizes (as Paseo 0.16.1 does). Phones and tablets in Paseo's apps are touch.
 import { useSyncExternalStore } from "react";
 import { Platform } from "react-native";
+import { mediaQuery } from "./web";
 
-interface MediaQueryList {
-  matches: boolean;
-  addEventListener?(type: "change", listener: () => void): void;
-  removeEventListener?(type: "change", listener: () => void): void;
-}
-
-declare const window: { matchMedia?(query: string): MediaQueryList } | undefined;
-
-const query = (): MediaQueryList | null =>
-  Platform.OS === "web" && typeof window !== "undefined" && typeof window?.matchMedia === "function"
-    ? window.matchMedia("(pointer: coarse)")
-    : null;
+const query = () => mediaQuery("(pointer: coarse)");
 
 function subscribe(listener: () => void): () => void {
   const list = query();

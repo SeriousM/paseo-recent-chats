@@ -725,3 +725,15 @@ export function sendPaseoShortcut(key: string, code: string, shift: boolean): bo
   );
   return true;
 }
+
+interface DomMediaQueryList {
+  matches: boolean;
+  addEventListener?(type: "change", listener: () => void): void;
+  removeEventListener?(type: "change", listener: () => void): void;
+}
+
+/** The browser's answer to a CSS media query, such as "(pointer: coarse)"; null off the web. */
+export function mediaQuery(query: string): DomMediaQueryList | null {
+  const win = globalThis as unknown as { matchMedia?(query: string): DomMediaQueryList };
+  return Platform.OS === "web" && typeof win.matchMedia === "function" ? win.matchMedia(query) : null;
+}
