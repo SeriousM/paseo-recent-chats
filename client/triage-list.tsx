@@ -469,9 +469,10 @@ export interface RowViewProps {
   number?: number;
   /** Chosen with the arrow keys in a popup's list: framed in the accent colour. */
   selected?: boolean;
-  /** Opens the title field as soon as the row appears (Alt+R). */
   /** Opens the title field when this changes to a new request id (Alt+R); undefined for none. */
   renameNow?: number;
+  /** The title field closed (saved or cancelled). */
+  onRenameEnd?: () => void;
 }
 
 /** A chat's row, followed by its sub-agents that ask you something, each indented under it. */
@@ -515,6 +516,7 @@ function ChatRow({
   number,
   selected = false,
   renameNow,
+  onRenameEnd,
 }: RowViewProps & {
   /** A sub-agent listed under its parent: no pin, read or Later buttons, no renaming. */
   nested?: boolean;
@@ -596,10 +598,17 @@ function ChatRow({
   };
   useEffect(() => cancelHover, []);
   const [editing, setEditing] = useState(false);
-  useEffect(() => {
-    if (renameNow !== undefined && onRename) setEditing(true);
-  }, [renameNow, onRename]);
   const rowNode = useRef<View>(null);
+  useEffect(() => {
+    if (renameNow === undefined || !onRename) return;
+    setEditing(true);
+    // A row further down the popup's list is scrolled to, once the popup has its size (web and desktop).
+    const timer = setTimeout(
+      () => (rowNode.current as unknown as { scrollIntoView?(options: object): void } | null)?.scrollIntoView?.({ block: "nearest" }),
+      100,
+    );
+    return () => clearTimeout(timer);
+  }, [renameNow, onRename]);
   // The row chosen with the arrow keys is scrolled into view, so the choice stays visible (web and desktop).
   useEffect(() => {
     if (!selected) return;
@@ -841,7 +850,10 @@ function ChatRow({
           compact={compact}
           initial={row.title ?? ""}
           onSave={(next) => onRename(row.key, next)}
-          onClose={() => setEditing(false)}
+          onClose={() => {
+            setEditing(false);
+            onRenameEnd?.();
+          }}
         />
       ) : (
       <View style={styles.body}>
@@ -1200,7 +1212,18 @@ export function TriageList({
   const folded = useCollapsed();
   // Highlighted wherever the list is shown: the chat whose composer is on screen.
   const openKey = useOpenChat();
-  const shown = rows ?? result.rows;
+  // Alt+R on a chat the list leaves out (past a section's limit, or in a folded section or host): it is listed,
+  // and unfolded, until its title field closes.
+  const [renaming, setRenaming] = useState<string | null>(null);
+  useEffect(() => {
+    if (rename) setRenaming(rename.key);
+  }, [rename?.id]);
+  const shown = useMemo(() => {
+    const base = rows ?? result.rows;
+    if (!renaming || base.some((row) => row.key === renaming) || !result.all.some((row) => row.key === renaming)) return base;
+    const keys = new Set(base.map((row) => row.key));
+    return result.all.filter((row) => keys.has(row.key) || row.key === renaming);
+  }, [rows, result, renaming]);
   const { prefs, hostCount, hosts, hostColors: hostColorNames, loading, errors } = snapshot;
   const grouped = prefs.groupByHost && !searching;
   const showHost = hostCount > 1 && !grouped;
@@ -1430,7 +1453,7 @@ export function TriageList({
                   <Text style={styles.heading}>{HEADINGS[section]}</Text>
                 </HeadingRow>
               ) : null}
-              {hostFolded || sectionFolded ? null : (
+              {(hostFolded || sectionFolded) && row.key !== renaming ? null : (
               <View style={headings ? styles.section : null}>
               <TriageRowView
                 row={row}
@@ -1452,6 +1475,7 @@ export function TriageList({
                 number={numberOf.get(row.key)}
                 selected={row.key === selectedKey}
                 renameNow={row.key === rename?.key ? rename.id : undefined}
+                onRenameEnd={row.key === renaming ? () => setRenaming(null) : undefined}
               />
               </View>
               )}
