@@ -106,13 +106,20 @@ function HostIcon(props: PluginButtonIconProps) {
 
 /**
  * The chat whose title field the next Inbox popup opens with (Alt+R), for a second. Read, not taken: Paseo can
- * draw the popup more than once (a stray copy, see hideStrayPopup), and every copy has to see it.
+ * draw the popup more than once (a stray copy, see hideStrayPopup), and every copy has to see it. Shared on
+ * globalThis: the copy of the plugin that takes Alt+R is often not the one of the chat's host, whose pill
+ * opens the popup. The shape is a contract between plugin versions: change it together with the key.
  */
-let pendingRename: { key: string; at: number; id: number } | null = null;
-const renameListeners = new Set<() => void>();
+interface RenameRequest {
+  pending: { key: string; at: number; id: number } | null;
+  listeners: Set<() => void>;
+}
+const renameShared = (): RenameRequest =>
+  ((globalThis as Record<string, unknown>)["__paseoRecentChats.renameRequest.v1"] ??= { pending: null, listeners: new Set() }) as RenameRequest;
 function requestRename(key: string | null): void {
-  pendingRename = key ? { key, at: Date.now(), id: (pendingRename?.id ?? 0) + 1 } : null;
-  for (const listener of [...renameListeners]) listener();
+  const shared = renameShared();
+  shared.pending = key ? { key, at: Date.now(), id: (shared.pending?.id ?? 0) + 1 } : null;
+  for (const listener of [...shared.listeners]) listener();
 }
 /**
  * The rename asked for within the last second, live: Paseo keeps the popup's content mounted between
@@ -121,10 +128,11 @@ function requestRename(key: string | null): void {
 function usePendingRename(): { key: string; id: number } | null {
   const current = useSyncExternalStore(
     (listener) => {
-      renameListeners.add(listener);
-      return () => void renameListeners.delete(listener);
+      const { listeners } = renameShared();
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
     },
-    () => pendingRename,
+    () => renameShared().pending,
   );
   return current && Date.now() - current.at < 1000 ? current : null;
 }
