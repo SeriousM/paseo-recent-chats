@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { onEscapeKey } from "./web";
 import { useFontScale } from "./font-scale";
+import { trace } from "./trace";
 
 /** In place of a row's text while its chat is renamed. Enter or ✓ saves; Escape, ✕ or leaving the field cancels. */
 export function RenameField({
@@ -36,7 +37,9 @@ export function RenameField({
       if (node?.isFocused?.()) return;
       input.current?.focus();
       input.current?.setSelection(0, initial.length);
+      trace("renameField.focus", { mounted: Boolean(input.current), focused: Boolean(node?.isFocused?.()) });
     };
+    trace("renameField.open");
     const timers = [50, 150, 300, 500].map((delay) => setTimeout(focusField, delay));
     const arm = setTimeout(() => {
       armed.current = true;
@@ -88,6 +91,7 @@ export function RenameField({
             if (event.nativeEvent.key === "Escape") onClose();
           }}
           onBlur={() => {
+            trace("renameField.blur", { armed: armed.current, closes: armed.current && !pressingButton.current && !saving });
             if (armed.current && !pressingButton.current && !saving) onClose();
           }}
           style={{

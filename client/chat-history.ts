@@ -39,11 +39,33 @@ export function visit(history: ChatHistory, key: string, now: number): ChatHisto
   return { entries, index: entries.length - 1, arriving: null };
 }
 
-/** The history after going `by` steps (-1 back, 1 forward) at `now`, with the chat to open; null at either end. */
-export function step(history: ChatHistory, by: -1 | 1, now: number): { history: ChatHistory; key: string } | null {
-  const index = history.index + by;
-  const key = history.entries[index];
-  return key === undefined ? null : { history: { ...history, index, arriving: { key, until: now + ARRIVE_MS } }, key };
+/**
+ * The history after going `by` steps (-1 back, 1 forward) at `now`, with the chat to open; null at either end.
+ * Chats that are `gone` (archived, closed) are passed over and dropped from the history.
+ */
+export function step(
+  history: ChatHistory,
+  by: -1 | 1,
+  now: number,
+  gone: (key: string) => boolean = () => false,
+): { history: ChatHistory; key: string } | null {
+  const kept: string[] = [];
+  let index = -1;
+  history.entries.forEach((entry, at) => {
+    if (at === history.index) index = kept.length;
+    // The chat on screen stays even when gone, so the step is counted from it.
+    if (at === history.index || !gone(entry)) kept.push(entry);
+  });
+  // Consecutive repeats left after dropping are folded, keeping the position on the current entry.
+  const entries: string[] = [];
+  let current = -1;
+  kept.forEach((entry, at) => {
+    if (entries[entries.length - 1] !== entry) entries.push(entry);
+    if (at === index) current = entries.length - 1;
+  });
+  const target = current + by;
+  const key = entries[target];
+  return key === undefined ? null : { history: { entries, index: target, arriving: { key, until: now + ARRIVE_MS } }, key };
 }
 
 interface Shared {
@@ -73,8 +95,8 @@ function set(next: ChatHistory): void {
 export const recordOpenChat = (key: string): void => set(visit(shared().history, key, Date.now()));
 
 /** Moves back or forward and returns the chat key to open, or null when there is none. */
-export function moveInHistory(by: -1 | 1): string | null {
-  const next = step(shared().history, by, Date.now());
+export function moveInHistory(by: -1 | 1, gone?: (key: string) => boolean): string | null {
+  const next = step(shared().history, by, Date.now(), gone);
   if (!next) return null;
   set(next.history);
   return next.key;

@@ -35,7 +35,7 @@ export function HistoryButtons({
   const history = useChatHistory();
   const size = useTouchInput() ? 36 : 24;
   const go = (by: -1 | 1) => {
-    const key = moveInHistory(by);
+    const key = moveInHistory(by, store.isChatGone);
     if (!key) return;
     onNavigate?.();
     openChatByKey(store, result.all, key, target);

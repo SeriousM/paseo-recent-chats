@@ -39,4 +39,14 @@ describe("chat visit history", () => {
     expect(history.entries[0]).toBe("k10");
     expect(history.index).toBe(49);
   });
+
+  it("passes over closed chats and drops them, folding the repeats this leaves", () => {
+    // A, B, C, D, then A; C and D are closed. Back from A goes to B, then to A.
+    const history = visitAll(["a", "b", "c", "d", "a"]);
+    const gone = (key: string) => key === "c" || key === "d";
+    const back = step(history, -1, T, gone);
+    expect(back).toMatchObject({ key: "b", history: { entries: ["a", "b", "a"], index: 1 } });
+    expect(step(back!.history, -1, T, gone)?.key).toBe("a");
+    expect(step(visitAll(["c", "a"]), -1, T, gone)).toBeNull();
+  });
 });

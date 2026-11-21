@@ -11,6 +11,7 @@ import type { StoreSnapshot } from "./store";
 import { hostGroupKey, sectionGroupKey, toggleCollapsed, useCollapsed } from "./collapsed";
 import { useOpenChat } from "./open-chat";
 import { RenameField } from "./rename-field";
+import { trace } from "./trace";
 import { onContextMenu } from "./web";
 import { useFontScale } from "./font-scale";
 import type { Section } from "../shared/sections";
@@ -600,13 +601,16 @@ function ChatRow({
   const [editing, setEditing] = useState(false);
   const rowNode = useRef<View>(null);
   useEffect(() => {
-    if (renameNow === undefined || !onRename) return;
+    if (renameNow === undefined) return;
+    trace("row.renameNow", { key: row.key, id: renameNow, canRename: Boolean(onRename) });
+    if (!onRename) return;
     setEditing(true);
     // A row further down the popup's list is scrolled to, once the popup has its size (web and desktop).
-    const timer = setTimeout(
-      () => (rowNode.current as unknown as { scrollIntoView?(options: object): void } | null)?.scrollIntoView?.({ block: "nearest" }),
-      100,
-    );
+    const timer = setTimeout(() => {
+      const node = rowNode.current as unknown as { scrollIntoView?(options: object): void; offsetParent?: unknown; offsetTop?: number } | null;
+      trace("row.scroll", { key: row.key, mounted: Boolean(node), onScreen: Boolean(node?.offsetParent), top: node?.offsetTop });
+      node?.scrollIntoView?.({ block: "nearest" });
+    }, 100);
     return () => clearTimeout(timer);
   }, [renameNow, onRename]);
   // The row chosen with the arrow keys is scrolled into view, so the choice stays visible (web and desktop).
@@ -1224,6 +1228,17 @@ export function TriageList({
     const keys = new Set(base.map((row) => row.key));
     return result.all.filter((row) => keys.has(row.key) || row.key === renaming);
   }, [rows, result, renaming]);
+  useEffect(() => {
+    if (!renaming) return;
+    const row = shown.find((candidate) => candidate.key === renaming);
+    trace("list.renaming", {
+      key: renaming,
+      listed: Boolean(row),
+      inRows: (rows ?? result.rows).some((candidate) => candidate.key === renaming),
+      section: row ? (row.pinned ? "pinned" : row.bucket) : undefined,
+      folded: [...folded],
+    });
+  }, [renaming, shown]);
   const { prefs, hostCount, hosts, hostColors: hostColorNames, loading, errors } = snapshot;
   const grouped = prefs.groupByHost && !searching;
   const showHost = hostCount > 1 && !grouped;

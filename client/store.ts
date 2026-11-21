@@ -105,6 +105,8 @@ export interface RecentsStore {
   archiveChat(key: string): Promise<void>;
   /** Archives a workspace and everything in it on its host. */
   archiveWorkspace(hostId: string, workspaceId: string): Promise<void>;
+  /** True when the chat's host is loaded and no longer has it (archived, or its tab closed); false when unsure. */
+  isChatGone(key: string): boolean;
   /** Reopens a chat's session on its host (a running turn is interrupted). */
   reloadChat(key: string): Promise<void>;
   /** Asks every reachable host's copy to check for a plugin update now. One entry per host. */
@@ -777,7 +779,15 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
     started = false;
   }
 
+  function isChatGone(key: string): boolean {
+    const data = hostData.get(keyHost(key));
+    if (!data || data.loading || data.error) return false;
+    const agentId = key.slice(key.indexOf(":") + 1);
+    return !data.agents.some((agent) => agent.id === agentId);
+  }
+
   return {
+    isChatGone,
     subscribe(listener) {
       listeners.add(listener);
       return () => void listeners.delete(listener);
