@@ -12,7 +12,6 @@ import { Dimmed, ResetTabButton, Segmented, TabBar } from "./settings-tabs";
 import { Slider } from "./slider";
 import { sameLayout } from "./row-layout";
 import { useRecents } from "./use-recents";
-import { traceLog } from "./trace";
 import { updateViewMode, useViewMode } from "./view-mode";
 import type { UpdateCheck } from "./store";
 import { copyText } from "./row-menu";
@@ -143,7 +142,6 @@ export function SettingsScreen({ theme, layout: screen }: PluginSurfaceProps) {
           viewMode: { ...mode, toggled: mode.toggled.length, legacyPins: mode.legacyPins.length },
         },
         ...store.diagnostics(),
-        trace: traceLog(),
       },
       null,
       2,

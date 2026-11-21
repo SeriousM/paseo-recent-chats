@@ -26,7 +26,6 @@ import { RECENT_SCREEN_ID } from "./sidebar-item";
 import { HistoryButtons } from "./recent-panel";
 import { PILL_IDS, pillsInOrder, type PillId } from "../shared/settings";
 import { useTouchInput } from "./input";
-import { trace } from "./trace";
 
 /** The Inbox pill's title, which is also how Alt+I finds it on screen. */
 const INBOX_TITLE = "Recent Chats inbox";
@@ -162,21 +161,6 @@ function createInboxContent(client: PluginClientContext) {
     const stray = useRef(false);
     // Before the first paint, so the stray copy is never seen.
     useLayoutEffect(() => hideStrayPopup(root.current, (value) => (stray.current = value)), []);
-    useEffect(() => {
-      if (!rename) return;
-      const dom = root.current as unknown as { offsetParent?: unknown; offsetHeight?: number } | null;
-      trace("inbox.rename", {
-        key: rename.key,
-        id: rename.id,
-        stray: stray.current,
-        onScreen: dom?.offsetParent !== null && dom?.offsetParent !== undefined,
-        height: dom?.offsetHeight,
-        own,
-        inAll: result.all.some((row) => row.key === rename.key),
-        inRows: result.rows.some((row) => row.key === rename.key),
-        rows: result.rows.length,
-      });
-    }, [rename?.id]);
     useEffect(
       () =>
         onListKeys((key) => {
@@ -342,14 +326,9 @@ export function registerPills(client: PluginClientContext): () => void {
   // Alt+R renames the chat on screen: the Inbox popup opens with that chat's title field.
   const stopAltR = onAltKey("KeyR", () => {
     const key = currentOpenChat();
-    if (!key) {
-      trace("altR.noOpenChat");
-      return false;
-    }
+    if (!key) return false;
     requestRename(key);
-    const pressed = pressComposerPill(INBOX_TITLE);
-    trace("altR", { key, pillPressed: pressed });
-    if (pressed) return true;
+    if (pressComposerPill(INBOX_TITLE)) return true;
     requestRename(null);
     return false;
   });
@@ -364,7 +343,6 @@ export function registerPills(client: PluginClientContext): () => void {
   // (also in focus mode, with the sidebar hidden).
   const stopBackForward = onBackForward((by) => {
     const key = moveInHistory(by, store.isChatGone);
-    trace("history.step", { by, key });
     if (!key) return;
     const snapshot = store.getSnapshot();
     const rows = buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), { linger: currentLinger() }).all;
