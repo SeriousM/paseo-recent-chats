@@ -17,7 +17,7 @@ const LABELS: Record<Section, string> = {
 
 /** What each section sorts its chats on. */
 const SORT_HINTS: Record<Section, string> = {
-  pinned: "By when it was pinned. Always listed in full.",
+  pinned: "By the age its row shows: when it finished, started waiting or last got a message. Always listed in full.",
   unread: "By when it started waiting.",
   running: "By when its turn started.",
   inactive: "By its last message.",

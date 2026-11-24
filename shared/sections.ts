@@ -5,7 +5,7 @@ export type Section = (typeof SECTIONS)[number];
 /** Order of the chats inside a section, by the time the section sorts on. */
 export type SortDirection = "oldest" | "newest";
 export const DEFAULT_SECTION_SORT: Readonly<Record<Section, SortDirection>> = {
-  pinned: "oldest",
+  pinned: "newest",
   unread: "oldest",
   running: "oldest",
   inactive: "newest",

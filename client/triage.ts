@@ -68,7 +68,7 @@ export interface TriageRow {
   title: string | null;
   provider: string;
   bucket: Bucket;
-  /** Pinned chats form their own section, in the order they were pinned. `bucket` and `led` still show their state. */
+  /** Pinned chats form their own section, by the age their rows show. `bucket` and `led` still show their state. */
   pinned: boolean;
   led: Led;
   /** Paseo released the agent from memory (status "closed"); it loads again when the chat is opened. */
@@ -250,7 +250,7 @@ function triageOne(
   const unread: TriageRow[] = [];
   const running: TriageRow[] = [];
   const inactive: TriageRow[] = [];
-  const pinned: { row: TriageRow; at: number }[] = [];
+  const pinned: TriageRow[] = [];
 
   // Sub-agents that ask you something are listed under their parent, which then waits for you as well.
   // One whose parent is not listed (archived, another host) stands on its own.
@@ -313,7 +313,7 @@ function triageOne(
       };
       inactive.push(row);
     }
-    if (pinnedAt !== undefined) pinned.push({ row, at: pinnedAt });
+    if (isPinned) pinned.push(row);
   }
 
   const sign = (section: Section): 1 | -1 => (sectionSort[section] === "oldest" ? 1 : -1);
@@ -321,11 +321,8 @@ function triageOne(
   running.sort((a, b) => compare(a, b, sign("running")));
   inactive.sort((a, b) => compare(a, b, sign("inactive")));
 
-  pinned.sort(
-    (a, b) =>
-      (a.at - b.at) * sign("pinned") || a.row.hostId.localeCompare(b.row.hostId) || a.row.agentId.localeCompare(b.row.agentId),
-  );
-  const pinnedRows = pinned.map((entry) => entry.row);
+  // Pinned sorts on the age its rows show (`sortAt`), so a chat that just finished moves to the top.
+  const pinnedRows = pinned.sort((a, b) => compare(a, b, sign("pinned")));
 
   // Caps and the inactive window apply to chats that are not pinned; a pinned chat is always listed.
   const loose = (rows: TriageRow[]) => rows.filter((row) => !row.pinned);

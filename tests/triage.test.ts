@@ -83,8 +83,8 @@ describe("section order", () => {
 
   it("sorts inside each section in the chosen direction, and the limit keeps the first", () => {
     const waiting = [chat("u-old", { attention: attention(30) }), chat("u-mid", { attention: attention(20) }), chat("u-new", { attention: attention(10) }), chat("u-newest", { attention: attention(1) })];
-    const pins: Overlay = { "h1:p1": { pinnedAt: ago(5 * MIN) }, "h1:p2": { pinnedAt: ago(1 * MIN) } };
-    const result = buildTriage([...waiting, chat("p1"), chat("p2")], pins, limits, NOW, {
+    const pins: Overlay = { "h1:p1": { pinnedAt: ago(1 * MIN) }, "h1:p2": { pinnedAt: ago(5 * MIN) } };
+    const result = buildTriage([...waiting, chat("p1", { lastUserMessageAt: ago(60) }), chat("p2", { lastUserMessageAt: ago(5) })], pins, limits, NOW, {
       sectionSort: { pinned: "newest", unread: "newest", running: "oldest", inactive: "newest" },
     });
     expect(ids(result.rows)).toEqual(["p2", "p1", "u-newest", "u-new", "u-mid"]);
@@ -93,7 +93,7 @@ describe("section order", () => {
 
   it("fills a missing section direction with its default", () => {
     expect(prefsSettings.schema.parse({ sectionSort: { unread: "newest" } }).sectionSort).toEqual({
-      pinned: "oldest",
+      pinned: "newest",
       unread: "newest",
       running: "oldest",
       inactive: "newest",
@@ -429,17 +429,26 @@ describe("pinned chats", () => {
     expect(result.worstUnread).toBe("permission");
   });
 
-  it("orders pinned chats by when they were pinned, oldest pin first", () => {
+  it("orders pinned chats by the age their rows show, newest first whenever they were pinned", () => {
     const overlay: Overlay = { ...pin("h1:b", 5), ...pin("h1:a", 50), ...pin("h1:c", 20) };
-    const result = buildTriage([chat("a"), chat("b"), chat("c")], overlay, limits, NOW);
-    expect(ids(result.rows)).toEqual(["a", "c", "b"]);
+    const result = buildTriage(
+      [
+        chat("a", { lastUserMessageAt: ago(90) }),
+        chat("b", { attention: { reason: "finished", at: ago(2) } }),
+        chat("c", { status: "running", startedAt: ago(30) }),
+      ],
+      overlay,
+      limits,
+      NOW,
+    );
+    expect(ids(result.rows)).toEqual(["b", "c", "a"]);
   });
 
   it("does not count against the caps and ignores the inactive window", () => {
     const old = chat("old", { lastUserMessageAt: ago(40 * DAY) });
     const unreadChats = [1, 2, 3, 4].map((n) => chat(`u${n}`, { attention: attention(100 - n) }));
     const result = buildTriage([old, ...unreadChats], { ...pin("h1:old", 2), ...pin("h1:u1", 1) }, limits, NOW);
-    expect(ids(result.rows)).toEqual(["old", "u1", "u2", "u3", "u4"]);
+    expect(ids(result.rows)).toEqual(["u1", "old", "u2", "u3", "u4"]);
     expect(result.hidden.unread).toBe(0);
     expect(result.rows.filter((row) => row.bucket === "unread" && !row.pinned)).toHaveLength(3);
   });

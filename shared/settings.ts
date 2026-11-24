@@ -45,7 +45,7 @@ export const prefsSettings = defineSettings({
       })
       .default(() => [...SECTIONS]),
     /**
-     * Order of the chats inside each section. Pinned sorts on when it was pinned, Needs you on when it
+     * Order of the chats inside each section. Pinned sorts on the age its rows show, Needs you on when it
      * started waiting, Running on when its turn started, Inactive on its last message. Limits keep the first.
      */
     sectionSort: z
