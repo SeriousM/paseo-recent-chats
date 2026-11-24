@@ -473,6 +473,30 @@ export function setOwnMessageTint(on: boolean): void {
   document.head.appendChild(style);
 }
 
+const TERMINAL_TAB = '[data-testid^="workspace-tab-terminal_"][aria-selected="true"]';
+
+/**
+ * Calls `onSelected` with a terminal's id each time its tab becomes the selected one on screen (web and
+ * desktop). Plugins are not told which terminal is shown, so this reads Paseo's tab row (its test ids), twice
+ * a second; it does nothing once Paseo changes that. Returns a cleanup.
+ */
+export function watchSelectedTerminals(onSelected: (terminalId: string) => void): () => void {
+  if (Platform.OS !== "web" || typeof document === "undefined" || typeof document.querySelectorAll !== "function") return () => {};
+  let selected = new Set<string>();
+  const check = () => {
+    const now = new Set<string>();
+    for (const tab of Array.from(document.querySelectorAll(TERMINAL_TAB))) {
+      if (tab.offsetParent === null) continue;
+      const id = (tab as unknown as { getAttribute(name: string): string | null }).getAttribute("data-testid")?.slice("workspace-tab-terminal_".length);
+      if (id) now.add(id);
+    }
+    for (const id of now) if (!selected.has(id)) onSelected(id);
+    selected = now;
+  };
+  const timer = setInterval(check, 500);
+  return () => clearInterval(timer);
+}
+
 /**
  * Jumps the chat on screen to the previous or next of your own messages (or its start or end), as Alt+↑/↓,
  * Alt+Home and Alt+End do; see attachPromptJumpKeys. Returns false when there is no chat to move in.

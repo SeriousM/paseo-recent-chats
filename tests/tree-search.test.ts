@@ -78,3 +78,28 @@ describe("empty items", () => {
     expect(shape(filterTree(withEmpty, "plugin changes"))).toEqual(["RecentChatsPaseoPlugin: Plan recent chats[plugin changes]"]);
   });
 });
+
+describe("terminals", () => {
+  const term = (id: string, workspaceId: string, title: string) => ({ key: `h1:terminal:${id}`, hostId: "h1", id, workspaceId, title });
+  const workspaces = [{ hostId: "h1", id: "w9", projectId: "p9", treeProject: "Ops", title: "Shell only", branch: "" }];
+  const withTerminals = buildTree([row("plugin changes")], [{ id: "h1", label: "desk" }], {
+    now: NOW,
+    inactiveWindowDays: 14,
+    activeOnly: true,
+    chatsPerWorkspace: 1,
+    pinnedWorkspaces: new Set(),
+    terminals: [term("t1", "w1", "dev server"), term("t2", "w9", "d8402e39 logs")],
+    workspaces,
+  });
+  const terminalsShape = (hosts: ReturnType<typeof filterTree>) =>
+    hosts.flatMap((host) => host.projects.flatMap((project) => project.workspaces.map((ws) => `${project.name}/${ws.name}: ${ws.terminals.map((t) => t.title).join(", ")}`)));
+
+  it("are listed under their workspace; a workspace with only terminals is listed and counts as active", () => {
+    expect(terminalsShape(withTerminals)).toEqual(["Ops/Shell only: d8402e39 logs", "RecentChatsPaseoPlugin/Plan recent chats: dev server"]);
+  });
+
+  it("are found by their title, with their parents only", () => {
+    expect(terminalsShape(filterTree(withTerminals, "d8402e39"))).toEqual(["Ops/Shell only: d8402e39 logs"]);
+    expect(shape(filterTree(withTerminals, "dev server"))).toEqual(["RecentChatsPaseoPlugin: Plan recent chats[]"]);
+  });
+});

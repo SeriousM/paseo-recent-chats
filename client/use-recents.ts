@@ -7,6 +7,7 @@ import { followOpenChat, holdOpened, useLinger } from "./linger";
 import { useOpenChat } from "./open-chat";
 import type { Prefs } from "../shared/settings";
 import { recordOpenChat } from "./chat-history";
+import { isTerminalGone, isTerminalKey, openTerminalByKey } from "./terminals";
 import { endBrowsing, startBrowsing } from "./browse";
 
 export const GO_SCREEN_ID = "go";
@@ -87,6 +88,11 @@ export function openChat(store: RecentsStore, row: TriageRow, target: OpenTarget
 
 /** Opens the chat with `key` from the visit history: like a row when it is listed, else by its key. */
 export function openChatByKey(store: RecentsStore, rows: readonly TriageRow[], key: string, target: OpenTarget): void {
+  // Back and forward also step through terminals (see terminals.tsx).
+  if (isTerminalKey(key)) {
+    openTerminalByKey(key);
+    return;
+  }
   const row = rows.find((candidate) => candidate.key === key);
   if (row) {
     openChat(store, row, target);
@@ -98,3 +104,9 @@ export function openChatByKey(store: RecentsStore, rows: readonly TriageRow[], k
   if (target.navigation) target.navigation.openAgent({ agentId, serverId: hostId });
   else target.openScreen?.({ screenId: GO_SCREEN_ID, params: { agentId, serverId: hostId } });
 }
+
+/** For back and forward: the chat or terminal is no longer there (archived, closed); false when unsure. */
+export const isEntryGone =
+  (store: RecentsStore) =>
+  (key: string): boolean =>
+    isTerminalKey(key) ? isTerminalGone(key) : store.isChatGone(key);

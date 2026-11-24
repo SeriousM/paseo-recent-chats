@@ -13,7 +13,7 @@ import { getStore } from "./runtime";
 import { HostFilter, isDark, ledColor, TriageList } from "./triage-list";
 import { hostColors } from "./format";
 import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
-import { limitsOf, openChat, openChatByKey, useRecents, type OpenTarget } from "./use-recents";
+import { isEntryGone, limitsOf, openChat, openChatByKey, useRecents, type OpenTarget } from "./use-recents";
 import { directOpener } from "./navigation";
 import { moveInHistory } from "./chat-history";
 import { currentOpenChat, reportOpenChat } from "./open-chat";
@@ -342,7 +342,7 @@ export function registerPills(client: PluginClientContext): () => void {
   // The mouse's back and forward buttons and Alt+← / Alt+→ step through the visited chats, whatever is on screen
   // (also in focus mode, with the sidebar hidden).
   const stopBackForward = onBackForward((by) => {
-    const key = moveInHistory(by, store.isChatGone);
+    const key = moveInHistory(by, isEntryGone(store));
     if (!key) return;
     const snapshot = store.getSnapshot();
     const rows = buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), { linger: currentLinger() }).all;

@@ -13,10 +13,12 @@ import { openPluginSettings } from "./runtime";
 import { SearchBox } from "./search-box";
 import type { TriageRow } from "./triage";
 import { CardLayer, HostFilter, ledColor, TriageList, type TriageListProps } from "./triage-list";
-import { openChat, openChatByKey, useRecents, type OpenTarget } from "./use-recents";
+import { isEntryGone, openChat, openChatByKey, useRecents, type OpenTarget } from "./use-recents";
 import { resolvedView, updateViewMode, useViewMode } from "./view-mode";
 import { attachWheelScroll, excludeFromWindowDrag, openPaseoProjectPicker } from "./web";
 import { useTouchInput } from "./input";
+import { TerminalSearchList } from "./terminal-rows";
+import { TerminalFeed } from "./terminals";
 
 // The search box stays open (or closed) until the search button is pressed again, also across remounts.
 let searchOpen = false;
@@ -35,7 +37,7 @@ export function HistoryButtons({
   const history = useChatHistory();
   const size = useTouchInput() ? 36 : 24;
   const go = (by: -1 | 1) => {
-    const key = moveInHistory(by, store.isChatGone);
+    const key = moveInHistory(by, isEntryGone(store));
     if (!key) return;
     onNavigate?.();
     openChatByKey(store, result.all, key, target);
@@ -250,9 +252,22 @@ export function RecentPanel({
             }}
           />
         ) : (
-          <TriageList {...listProps} footer="none" />
+          <>
+            <TriageList {...listProps} footer="none" />
+            {searching ? (
+              <TerminalSearchList
+                theme={theme}
+                compact={touch}
+                query={searchText}
+                hiddenHosts={hiddenHosts.map((host) => host.id)}
+                workspaces={snapshot.workspaces}
+                onOpen={() => setQuery("")}
+              />
+            ) : null}
+          </>
         )}
       </ScrollView>
+      <TerminalFeed />
       {/* Outside the scroll area, so the chips, Mark all read and All chats stay at the bottom of the list. */}
       {projects || searching ? null : <TriageList {...listProps} footer="only" />}
     </View>

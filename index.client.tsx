@@ -8,7 +8,9 @@ import { RECENT_SCREEN_ID, RecentSidebarItem } from "./client/sidebar-item";
 import { RecentSidebarView, SIDEBAR_VIEW_ID } from "./client/sidebar-view";
 import { createStore } from "./client/store";
 import { GO_SCREEN_ID } from "./client/use-recents";
-import { attachPromptJumpKeys, onChatInteraction, setOwnMessageTint } from "./client/web";
+import { attachPromptJumpKeys, onChatInteraction, setOwnMessageTint, watchSelectedTerminals } from "./client/web";
+import { currentTerminals } from "./client/terminals";
+import { recordOpenChat } from "./client/chat-history";
 import { browsedChat, endBrowsing } from "./client/browse";
 import { currentOpenChat } from "./client/open-chat";
 
@@ -54,6 +56,11 @@ export default function contribute(client: PluginClientContext) {
     }),
     registerPills(client),
     attachPromptJumpKeys(),
+    // A terminal tab that becomes the selected one is a visit, for back and forward (desktop and web).
+    watchSelectedTerminals((id) => {
+      const terminal = currentTerminals().find((candidate) => candidate.id === id);
+      if (terminal) recordOpenChat(terminal.key);
+    }),
     // Your own message bubbles, tinted while the setting is on (desktop and web).
     (() => {
       const apply = () => setOwnMessageTint(getStore().getSnapshot().prefs.colorOwnMessages);

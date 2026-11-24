@@ -34,6 +34,8 @@ import { hostColors, shortCount } from "./format";
 import { CardLayer, HostHeading, isDark, ledColor, TipButton, TriageRowView, useMenuOpener, type RowViewProps } from "./triage-list";
 import { scoreRow } from "./fuzzy";
 import { filterTree } from "./tree-search";
+import { TerminalRow } from "./terminal-rows";
+import { useTerminalList } from "./terminals";
 import { getStore, openPluginSettings } from "./runtime";
 import { currentViewMode, flip, resolvedView, toggleNode, updateViewMode, useViewMode } from "./view-mode";
 import { attachVerticalDrag, onContextMenu } from "./web";
@@ -288,9 +290,15 @@ export function ProjectsView({
   // Cleanup: only workspaces without chats and projects without workspaces (exclusive with Stale).
   const emptyOnly = !staleOnly && mode.emptyOnly === true;
   const cleanup = staleOnly || emptyOnly;
+  // Terminals of the hosts listed: under their workspace, all the time (not in the Stale and Empty cleanups).
+  const allTerminals = useTerminalList();
+  const terminals = useMemo(() => {
+    const shownHosts = new Set(listed.map((host) => host.id));
+    return allTerminals.filter((terminal) => shownHosts.has(terminal.hostId));
+  }, [allTerminals, listed]);
   const empty = useMemo(
-    () => (emptyOnly ? emptyItems(rows, { workspaces: snapshot.workspaces, projects: snapshot.projects }) : undefined),
-    [emptyOnly, rows, snapshot.workspaces, snapshot.projects],
+    () => (emptyOnly ? emptyItems(rows, { workspaces: snapshot.workspaces, projects: snapshot.projects }, terminals) : undefined),
+    [emptyOnly, rows, snapshot.workspaces, snapshot.projects, terminals],
   );
   const tree = useMemo(
     () =>
@@ -304,8 +312,10 @@ export function ProjectsView({
         projectOrder: prefs.projectOrder,
         workspaceOrder: prefs.workspaceOrder,
         empty,
+        terminals: cleanup ? [] : terminals,
+        workspaces: snapshot.workspaces,
       }),
-    [staleRows, listed, prefs.inactiveWindowDays, staleOnly, emptyOnly, cleanup, mode.activeOnly, prefs.chatsPerWorkspace, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder, empty],
+    [staleRows, listed, prefs.inactiveWindowDays, staleOnly, emptyOnly, cleanup, mode.activeOnly, prefs.chatsPerWorkspace, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder, empty, terminals, snapshot.workspaces],
   );
   const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
   // Everything, unfiltered: the base of the Pinned section and of search.
@@ -320,8 +330,10 @@ export function ProjectsView({
         pinnedProjects,
         projectOrder: prefs.projectOrder,
         workspaceOrder: prefs.workspaceOrder,
+        terminals,
+        workspaces: snapshot.workspaces,
       }),
-    [rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder],
+    [rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder, terminals, snapshot.workspaces],
   );
   const pinned = useMemo(() => filterTree(pinnedTree(full, pinnedProjects), query), [full, pinnedProjects, query]);
   // Searching looks through everything, also what "active only" and "+N older" hide, and finds workspaces
@@ -338,10 +350,12 @@ export function ProjectsView({
             pinnedProjects,
             projectOrder: prefs.projectOrder,
             workspaceOrder: prefs.workspaceOrder,
-            empty: emptyItems(rows, { workspaces: snapshot.workspaces, projects: snapshot.projects }),
+            empty: emptyItems(rows, { workspaces: snapshot.workspaces, projects: snapshot.projects }, terminals),
+            terminals,
+            workspaces: snapshot.workspaces,
           })
         : null,
-    [searching, cleanup, rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder, snapshot.workspaces, snapshot.projects],
+    [searching, cleanup, rows, listed, prefs.inactiveWindowDays, pinnedWorkspaces, pinnedProjects, prefs.projectOrder, prefs.workspaceOrder, snapshot.workspaces, snapshot.projects, terminals],
   );
   const shownTree = useMemo(
     () => (searching ? filterTree(cleanup ? tree : (searchBase ?? full), query) : tree),
@@ -1517,6 +1531,9 @@ function WorkspaceNode({
             </View>
           ) : null}
           {chats.map(renderChat)}
+          {workspace.terminals.map((terminal) => (
+            <TerminalRow key={terminal.key} theme={theme} compact={compact} terminal={terminal} />
+          ))}
           {workspace.older.length > 0 ? (
             <Pressable accessibilityRole="button" onPress={() => toggleNode(`${prefix}older:${workspace.key}`)}>
               <Text style={{ fontSize: fs(11.5), color: theme.colors.accent, paddingHorizontal: 10, paddingVertical: compact ? 10 : 2 }}>

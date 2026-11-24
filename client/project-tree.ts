@@ -21,6 +21,17 @@ export interface TreeWorkspace {
   chats: TriageRow[];
   /** The rest, behind "+N older". */
   older: TriageRow[];
+  /** Its terminals, listed after the chats. */
+  terminals: TreeTerminal[];
+}
+
+/** A terminal of a workspace; `key` is the one back/forward records (see terminals.tsx). */
+export interface TreeTerminal {
+  key: string;
+  hostId: string;
+  id: string;
+  workspaceId: string;
+  title: string;
 }
 
 export interface TreeProject {
@@ -58,6 +69,10 @@ export interface TreeOptions {
   workspaceOrder?: readonly string[];
   /** Workspaces and projects listed without chats (the Empty filter, see emptyItems). */
   empty?: EmptyItems;
+  /** Terminals, listed under their workspace; a workspace with terminals is listed (and active) without chats. */
+  terminals?: readonly TreeTerminal[];
+  /** Names of workspaces, for one that has terminals and no chats. */
+  workspaces?: EmptyItems["workspaces"];
 }
 
 interface EmptyItems {
@@ -65,9 +80,12 @@ interface EmptyItems {
   projects: readonly { hostId: string; id: string; treeProject: string }[];
 }
 
-/** For the Empty filter: workspaces no chat is in, and projects no workspace is in. */
-export function emptyItems(rows: readonly TriageRow[], all: EmptyItems): EmptyItems {
-  const withChats = new Set(rows.map((row) => `${row.hostId}:${row.workspaceId}`));
+/** For the Empty filter: workspaces no chat or terminal is in, and projects no workspace is in. */
+export function emptyItems(rows: readonly TriageRow[], all: EmptyItems, terminals: readonly TreeTerminal[] = []): EmptyItems {
+  const withChats = new Set([
+    ...rows.map((row) => `${row.hostId}:${row.workspaceId}`),
+    ...terminals.map((terminal) => `${terminal.hostId}:${terminal.workspaceId}`),
+  ]);
   const withWorkspaces = new Set(all.workspaces.map((workspace) => `${workspace.hostId}:${workspace.projectId}`));
   return {
     workspaces: all.workspaces.filter((workspace) => !withChats.has(`${workspace.hostId}:${workspace.id}`)),
@@ -146,11 +164,28 @@ export function buildTree(
     }
   }
 
+  // Terminals join their workspace; one without chats joins by its name, like an empty workspace.
+  const terminalsOf = new Map<string, TreeTerminal[]>();
+  for (const terminal of options.terminals ?? []) {
+    const key = `${terminal.hostId}:${terminal.workspaceId}`;
+    const list = terminalsOf.get(key);
+    if (list) list.push(terminal);
+    else terminalsOf.set(key, [terminal]);
+    const known = [...grouped.get(terminal.hostId)?.values() ?? []].some((workspaces) => workspaces.has(key));
+    const info = known ? undefined : options.workspaces?.find((w) => w.hostId === terminal.hostId && w.id === terminal.workspaceId);
+    if (info) {
+      emptyInfo.set(key, info);
+      workspacesOf(info.hostId, info.treeProject).set(key, []);
+    }
+  }
+  for (const list of terminalsOf.values()) list.sort((a, b) => names.compare(a.title, b.title));
+
   const toWorkspace = (key: string, list: TriageRow[]): TreeWorkspace => {
     const info = emptyInfo.get(key);
+    const terminals = terminalsOf.get(key) ?? [];
     if (list.length === 0 && info) {
       const pinned = options.pinnedWorkspaces.has(key);
-      return { key, hostId: info.hostId, workspaceId: info.id, name: info.title, branch: info.branch, led: "idle", pinned, lastAt: 0, chats: [], older: [] };
+      return { key, hostId: info.hostId, workspaceId: info.id, name: info.title, branch: info.branch, led: "idle", pinned, lastAt: 0, chats: [], older: [], terminals };
     }
     const sorted = [...list].sort((a, b) => LED_RANK[a.led] - LED_RANK[b.led] || b.sortAt - a.sortAt);
     const chats: TriageRow[] = [];
@@ -172,6 +207,7 @@ export function buildTree(
       lastAt: Math.max(...list.map((row) => row.sortAt)),
       chats,
       older,
+      terminals,
     };
   };
 
@@ -194,7 +230,8 @@ export function buildTree(
       for (const workspace of all) need += [...workspace.chats, ...workspace.older].filter(needsYou).length;
       const key = `${id}:${name}`;
       const projectPinned = options.pinnedProjects?.has(key) ?? false;
-      const shown = options.activeOnly && !projectPinned ? all.filter((w) => w.pinned || w.chats.some(live)) : all;
+      // A workspace with terminals open counts as active.
+      const shown = options.activeOnly && !projectPinned ? all.filter((w) => w.pinned || w.terminals.length > 0 || w.chats.some(live)) : all;
       const projectId = projectIds.get(key);
       if (shown.length > 0 || all.length === 0) projects.push({ key, name, projectId, workspaces: shown });
       else quiet.push({ key, name, projectId, workspaces: all });
