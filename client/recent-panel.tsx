@@ -183,7 +183,7 @@ export function RecentPanel({
         onSearch={toggleSearch}
         // Paseo's own Open project picker (Ctrl+O): it browses folders on the host and can create one. Only where
         // the shortcut can be sent (desktop and web); phones have Paseo's own button in the drawer.
-        onAddProject={projects && Platform.OS === "web" ? () => void openPaseoProjectPicker() : undefined}
+        onAddProject={Platform.OS === "web" ? () => void openPaseoProjectPicker() : undefined}
         extra={headerExtra}
       />
       {/* Hosts switched off in the filter: said here, so a missing host's chats do not look lost. */}
