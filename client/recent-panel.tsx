@@ -6,6 +6,7 @@ import { Icon, ScrollView } from "@getpaseo/plugin/client/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, Text, View, type ScrollView as NativeScrollView } from "react-native";
 import { moveInHistory, useChatHistory } from "./chat-history";
+import { useOpenChat } from "./open-chat";
 import { useFontScale } from "./font-scale";
 import { scoreRow } from "./fuzzy";
 import { ProjectsView, ViewModeBar } from "./projects-view";
@@ -15,7 +16,7 @@ import type { TriageRow } from "./triage";
 import { CardLayer, HostFilter, ledColor, TriageList, type TriageListProps } from "./triage-list";
 import { isEntryGone, openChat, openChatByKey, useRecents, type OpenTarget } from "./use-recents";
 import { resolvedView, updateViewMode, useViewMode } from "./view-mode";
-import { attachWheelScroll, excludeFromWindowDrag, openPaseoProjectPicker } from "./web";
+import { attachWheelScroll, excludeFromWindowDrag, isAwayFromChats, openPaseoProjectPicker } from "./web";
 import { useTouchInput } from "./input";
 import { TerminalSearchList } from "./terminal-rows";
 import { TerminalFeed } from "./terminals";
@@ -35,9 +36,11 @@ export function HistoryButtons({
 }) {
   const { store, result } = useRecents();
   const history = useChatHistory();
+  // Re-checked whenever the open chat changes: on a plugin panel, back returns to the chat left last.
+  const away = useOpenChat() === null && isAwayFromChats();
   const size = useTouchInput() ? 36 : 24;
   const go = (by: -1 | 1) => {
-    const key = moveInHistory(by, isEntryGone(store));
+    const key = moveInHistory(by, isEntryGone(store), isAwayFromChats());
     if (!key) return;
     onNavigate?.();
     openChatByKey(store, result.all, key, target);
@@ -57,7 +60,7 @@ export function HistoryButtons({
   );
   return (
     <>
-      {button(-1, history.index > 0)}
+      {button(-1, history.index > 0 || (away && history.index >= 0))}
       {button(1, history.index < history.entries.length - 1)}
     </>
   );

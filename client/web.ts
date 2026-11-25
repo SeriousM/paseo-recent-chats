@@ -1,6 +1,7 @@
 // The only module that touches a DOM global. Every export is gated on Platform.OS === "web".
 import { Platform } from "react-native";
 import { parseHostColorNames } from "./format";
+import { currentOpenChat } from "./open-chat";
 
 declare const localStorage: {
   getItem(key: string): string | null;
@@ -476,6 +477,24 @@ export function setOwnMessageTint(on: boolean): void {
 const TERMINAL_TAB = '[data-testid^="workspace-tab-terminal_"][aria-selected="true"]';
 
 /**
+ * For back and forward: neither a chat nor a terminal is on screen (a plugin panel, settings), so back
+ * returns to the chat left last instead of the one before it. Desktop and web; elsewhere a chat counts as shown.
+ */
+export const isAwayFromChats = (): boolean => Platform.OS === "web" && currentOpenChat() === null && selectedTerminalIds().length === 0;
+
+/** Ids of the terminals whose tab is selected and on screen (web and desktop); empty elsewhere. */
+export function selectedTerminalIds(): string[] {
+  if (Platform.OS !== "web" || typeof document === "undefined" || typeof document.querySelectorAll !== "function") return [];
+  const ids: string[] = [];
+  for (const tab of Array.from(document.querySelectorAll(TERMINAL_TAB))) {
+    if (tab.offsetParent === null) continue;
+    const id = (tab as unknown as { getAttribute(name: string): string | null }).getAttribute("data-testid")?.slice("workspace-tab-terminal_".length);
+    if (id) ids.push(id);
+  }
+  return ids;
+}
+
+/**
  * Calls `onSelected` with a terminal's id each time its tab becomes the selected one on screen (web and
  * desktop). Plugins are not told which terminal is shown, so this reads Paseo's tab row (its test ids), twice
  * a second; it does nothing once Paseo changes that. Returns a cleanup.
@@ -484,12 +503,7 @@ export function watchSelectedTerminals(onSelected: (terminalId: string) => void)
   if (Platform.OS !== "web" || typeof document === "undefined" || typeof document.querySelectorAll !== "function") return () => {};
   let selected = new Set<string>();
   const check = () => {
-    const now = new Set<string>();
-    for (const tab of Array.from(document.querySelectorAll(TERMINAL_TAB))) {
-      if (tab.offsetParent === null) continue;
-      const id = (tab as unknown as { getAttribute(name: string): string | null }).getAttribute("data-testid")?.slice("workspace-tab-terminal_".length);
-      if (id) now.add(id);
-    }
+    const now = new Set(selectedTerminalIds());
     for (const id of now) if (!selected.has(id)) onSelected(id);
     selected = now;
   };

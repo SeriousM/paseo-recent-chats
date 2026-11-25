@@ -17,7 +17,7 @@ import { isEntryGone, limitsOf, openChat, openChatByKey, useRecents, type OpenTa
 import { directOpener } from "./navigation";
 import { moveInHistory } from "./chat-history";
 import { currentOpenChat, reportOpenChat } from "./open-chat";
-import { hideStrayPopup, jumpPrompt, onAltKey, onAltShiftHeld, onBackForward, onListKeys, pressComposerPill, watchShown } from "./web";
+import { hideStrayPopup, isAwayFromChats, jumpPrompt, onAltKey, onAltShiftHeld, onBackForward, onListKeys, pressComposerPill, watchShown } from "./web";
 import { isLater } from "./overlay";
 import { browsedChat, endBrowsing } from "./browse";
 import { currentLinger } from "./linger";
@@ -342,7 +342,7 @@ export function registerPills(client: PluginClientContext): () => void {
   // The mouse's back and forward buttons and Alt+← / Alt+→ step through the visited chats, whatever is on screen
   // (also in focus mode, with the sidebar hidden).
   const stopBackForward = onBackForward((by) => {
-    const key = moveInHistory(by, isEntryGone(store));
+    const key = moveInHistory(by, isEntryGone(store), isAwayFromChats());
     if (!key) return;
     const snapshot = store.getSnapshot();
     const rows = buildTriage(snapshot.chats, snapshot.overlay, limitsOf(snapshot.prefs), Date.now(), { linger: currentLinger() }).all;

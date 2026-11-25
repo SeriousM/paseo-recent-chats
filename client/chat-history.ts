@@ -41,13 +41,15 @@ export function visit(history: ChatHistory, key: string, now: number): ChatHisto
 
 /**
  * The history after going `by` steps (-1 back, 1 forward) at `now`, with the chat to open; null at either end.
- * Chats that are `gone` (archived, closed) are passed over and dropped from the history.
+ * Chats that are `gone` (archived, closed) are passed over and dropped from the history. `away`: no chat or
+ * terminal is on screen (a plugin panel, settings), so back returns to the chat at the current position.
  */
 export function step(
   history: ChatHistory,
   by: -1 | 1,
   now: number,
   gone: (key: string) => boolean = () => false,
+  away = false,
 ): { history: ChatHistory; key: string } | null {
   const kept: string[] = [];
   let index = -1;
@@ -63,7 +65,7 @@ export function step(
     if (entries[entries.length - 1] !== entry) entries.push(entry);
     if (at === index) current = entries.length - 1;
   });
-  const target = current + by;
+  const target = away && by < 0 && current >= 0 && !gone(entries[current]!) ? current : current + by;
   const key = entries[target];
   return key === undefined ? null : { history: { entries, index: target, arriving: { key, until: now + ARRIVE_MS } }, key };
 }
@@ -95,8 +97,8 @@ function set(next: ChatHistory): void {
 export const recordOpenChat = (key: string): void => set(visit(shared().history, key, Date.now()));
 
 /** Moves back or forward and returns the chat key to open, or null when there is none. */
-export function moveInHistory(by: -1 | 1, gone?: (key: string) => boolean): string | null {
-  const next = step(shared().history, by, Date.now(), gone);
+export function moveInHistory(by: -1 | 1, gone?: (key: string) => boolean, away = false): string | null {
+  const next = step(shared().history, by, Date.now(), gone, away);
   if (!next) return null;
   set(next.history);
   return next.key;

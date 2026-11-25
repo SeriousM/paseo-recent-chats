@@ -50,3 +50,17 @@ describe("chat visit history", () => {
     expect(step(visitAll(["c", "a"]), -1, T, gone)).toBeNull();
   });
 });
+
+describe("away from chats (a plugin panel on screen)", () => {
+  it("back returns to the chat left last, forward still goes ahead", () => {
+    const history = visitAll(["a", "b", "c"]);
+    expect(step(history, -1, T, undefined, true)?.key).toBe("c");
+    const back = step(history, -1, T)!.history;
+    expect(step(back, -1, T, undefined, true)?.key).toBe("b");
+    expect(step(back, 1, T, undefined, true)?.key).toBe("c");
+  });
+
+  it("skips the chat left last when it is gone", () => {
+    expect(step(visitAll(["a", "b", "c"]), -1, T, (key) => key === "c", true)?.key).toBe("b");
+  });
+});
