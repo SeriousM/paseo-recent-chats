@@ -121,12 +121,15 @@ export function LedDot({
   size = 12,
   released = false,
   failed = false,
+  subAgentsRunning = false,
 }: {
   led: Led;
   theme: PluginTheme;
   size?: number;
   released?: boolean;
   failed?: boolean;
+  /** Its turn ended but sub-agents still run: a small blue dot on the symbol, as it is not really done. */
+  subAgentsRunning?: boolean;
 }) {
   const color = ledColor(theme, led);
   const spin = useLoop(led === "running", RING_PERIOD_MS, (value) =>
@@ -184,9 +187,27 @@ export function LedDot({
       </View>
     );
   }
+  const dot = Math.max(5, Math.round(size * 0.5));
   return (
-    <View style={[box, led === "idle" ? { opacity: 0.7 } : null]}>
-      <Icon icon={{ svg }} size={size} color={color} />
+    <View style={box}>
+      <View style={led === "idle" ? { opacity: 0.7 } : null}>
+        <Icon icon={{ svg }} size={size} color={color} />
+      </View>
+      {subAgentsRunning ? (
+        <View
+          style={{
+            position: "absolute",
+            top: -dot / 3,
+            right: -dot / 3,
+            width: dot,
+            height: dot,
+            borderRadius: dot / 2,
+            borderWidth: 1,
+            borderColor: theme.colors.surface0,
+            backgroundColor: ledColor(theme, "running"),
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -685,7 +706,17 @@ function ChatRow({
   latestMenu.current = openMenu;
   useEffect(() => onContextMenu(rowNode.current, () => latestMenu.current?.(null)), []);
   const renderToken = (token: RowToken): ReactElement | null => {
-    if (token.id === "led") return <LedDot key="led" led={row.ownLed ?? row.led} released={row.released} failed={row.failed} theme={theme} />;
+    if (token.id === "led")
+      return (
+        <LedDot
+          key="led"
+          led={row.ownLed ?? row.led}
+          released={row.released}
+          failed={row.failed}
+          subAgentsRunning={(row.runningSubAgents ?? 0) > 0}
+          theme={theme}
+        />
+      );
     if (token.id === "host" && !showHost) return null;
     const text = tokenText(row, token);
     const mono = tokenMono(token);
