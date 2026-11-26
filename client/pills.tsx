@@ -27,6 +27,7 @@ import { RECENT_SCREEN_ID } from "./sidebar-item";
 import { HistoryButtons } from "./recent-panel";
 import { PILL_IDS, pillsInOrder, type PillId } from "../shared/settings";
 import { useTouchInput } from "./input";
+import { trace } from "./trace";
 
 /** The Inbox pill's title, which is also how Alt+I finds it on screen. */
 const INBOX_TITLE = "Recent Chats inbox";
@@ -318,6 +319,7 @@ export function registerPills(client: PluginClientContext): () => void {
   // be running at all (nothing of its host on screen), and then the change was never saved.
   const ownChatOnScreen = (): string | null => {
     const key = currentOpenChat();
+    trace("ownChatOnScreen", { key, selfId });
     return key && selfId !== null && keyHost(key) === selfId ? key : null;
   };
 
@@ -362,7 +364,9 @@ export function registerPills(client: PluginClientContext): () => void {
   const stopAltP = onAltKey("KeyP", () => {
     const key = ownChatOnScreen();
     if (!key) return false;
-    store.setPinned(key, store.getSnapshot().overlay[key]?.pinnedAt === undefined);
+    const pin = store.getSnapshot().overlay[key]?.pinnedAt === undefined;
+    trace("altP", { key, pin });
+    store.setPinned(key, pin);
     return true;
   });
 

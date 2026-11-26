@@ -10,6 +10,7 @@ import { createPeerDirectory, type Peer, type PeerDirectory } from "./peers";
 import { chatKey, isDelegated, keyHost, PARENT_AGENT_LABEL, type ChatInput, type Overlay, type OverlayEntry } from "./triage";
 import { clearDevicePrefs, readDevicePrefs, readHostColorNames } from "./web";
 import { agentLabel } from "./format";
+import { trace } from "./trace";
 import { DEFAULT_PREFS, parseStoredPrefs, withNormalizedLayout } from "./prefs";
 import { currentHiddenHosts, setHiddenHosts, subscribeHiddenHosts, toggleHiddenHost } from "./host-filter";
 import { overlaySettings, prefsSettings, type Prefs } from "../shared/settings";
@@ -605,6 +606,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
           .map(([hostId]) => hostId);
         let saved = true;
         for (const hostId of owners) saved = (await writeDoc(hostId, batch, keys)) && saved;
+        trace("overlay.flush", { selfId, keys, owners: [...owners], saved });
         if (saved) for (const hostId of holders) await writeDoc(hostId, batch, keys);
         inFlight = [];
         // A batch that could not be saved stays visible until the next read shows what the hosts hold.
@@ -618,6 +620,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
   }
 
   function mutate(op: OverlayOp) {
+    trace("overlay.mutate", { selfId, keys: op.keys, started });
     pendingOps.push(op);
     overlay = op.apply(overlay);
     emitNow();

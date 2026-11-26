@@ -2,6 +2,7 @@
 import { Platform } from "react-native";
 import { parseHostColorNames } from "./format";
 import { currentOpenChat } from "./open-chat";
+import { trace } from "./trace";
 
 declare const localStorage: {
   getItem(key: string): string | null;
@@ -663,8 +664,13 @@ export function onAltKey(code: string, handler: () => boolean, shift = false): (
   const key = (event: DomKeyEvent) => {
     const keyed = event as DomKeyEvent & { code?: string; __recentChatsAltKey?: boolean };
     if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey !== shift || keyed.code !== code) return;
-    if (keyed.__recentChatsAltKey || movesByWord(event.target)) return;
-    if (!handler()) return;
+    if (keyed.__recentChatsAltKey || movesByWord(event.target)) {
+      trace("altKey.skipped", { code, taken: keyed.__recentChatsAltKey === true });
+      return;
+    }
+    const taken = handler();
+    trace("altKey", { code, taken });
+    if (!taken) return;
     keyed.__recentChatsAltKey = true;
     event.preventDefault();
     event.stopPropagation();

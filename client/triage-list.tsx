@@ -638,6 +638,9 @@ function ChatRow({
         const at = anchor ?? rowNode.current;
         if (!at) return;
         const store = getStore();
+        // The keys act on the chat on screen (desktop and web); shown here so they can be found.
+        const keys = Platform.OS === "web" && !compact;
+        const shortcut = (combo: string) => (keys ? { hint: combo } : null);
         openMenuAt(at, {
           theme,
           compact,
@@ -648,13 +651,13 @@ function ChatRow({
               nav && row.workspaceId && !inTree
                 ? { label: "Open workspace", icon: "FolderOpen", onPress: () => nav.openWorkspace(row.hostId, row.workspaceId as string) }
                 : null,
-              onRename ? { label: "Rename", icon: "Pencil", onPress: () => setEditing(true) } : null,
+              onRename ? { label: "Rename", icon: "Pencil", onPress: () => setEditing(true), ...shortcut("Alt+R") } : null,
             ],
             [
-              { label: row.pinned ? "Unpin" : "Pin", icon: row.pinned ? "PinOff" : "Pin", onPress: () => onSetPinned(row.key, !row.pinned) },
+              { label: row.pinned ? "Unpin" : "Pin", icon: row.pinned ? "PinOff" : "Pin", onPress: () => onSetPinned(row.key, !row.pinned), ...shortcut("Alt+P") },
               row.bucket === "unread"
                 ? { label: "Mark as read", icon: "Check", onPress: () => onMarkRead([row.key]) }
-                : { label: "Later (mark unread)", icon: "Clock", onPress: () => onMarkUnread(row.key) },
+                : { label: "Later (mark unread)", icon: "Clock", onPress: () => onMarkUnread(row.key), ...shortcut("Alt+L") },
             ],
             [
               {
