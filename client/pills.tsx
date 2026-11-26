@@ -12,7 +12,7 @@ import type { PaseoAgentListResult } from "./paseo-types";
 import { getStore } from "./runtime";
 import { HostFilter, isDark, ledColor, TriageList } from "./triage-list";
 import { hostColors } from "./format";
-import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
+import { buildTriage, chatKey, keyHost, nextUp, type TriageResult } from "./triage";
 import { isEntryGone, limitsOf, openChat, openChatByKey, useRecents, type OpenTarget } from "./use-recents";
 import { directOpener } from "./navigation";
 import { moveInHistory } from "./chat-history";
@@ -313,9 +313,17 @@ export function registerPills(client: PluginClientContext): () => void {
     if (next) openChat(store, next, { openScreen: (input) => client.openScreen(input) });
   }
 
+  // Every host's copy listens for the keys; the first to take one wins. Marks and pins are taken only by the
+  // copy of the chat's own host: its store runs while the chat's pills show, a store of another copy may not
+  // be running at all (nothing of its host on screen), and then the change was never saved.
+  const ownChatOnScreen = (): string | null => {
+    const key = currentOpenChat();
+    return key && selfId !== null && keyHost(key) === selfId ? key : null;
+  };
+
   // Alt+L does the same for the chat open on screen (desktop and web).
   const stopAltL = onAltKey("KeyL", () => {
-    const key = currentOpenChat();
+    const key = ownChatOnScreen();
     if (!key) return false;
     toggleLater(key);
     return true;
@@ -352,7 +360,7 @@ export function registerPills(client: PluginClientContext): () => void {
 
   // Alt+P pins the chat on screen, or unpins it.
   const stopAltP = onAltKey("KeyP", () => {
-    const key = currentOpenChat();
+    const key = ownChatOnScreen();
     if (!key) return false;
     store.setPinned(key, store.getSnapshot().overlay[key]?.pinnedAt === undefined);
     return true;
