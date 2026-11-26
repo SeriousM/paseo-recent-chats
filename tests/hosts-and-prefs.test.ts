@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { DEFAULT_PREFS, parseStoredPrefs, toggleHiddenHost } from "../client/prefs";
+import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_PREFS, parseStoredPrefs } from "../client/prefs";
+import { toggleHiddenHost } from "../client/host-filter";
+
+vi.mock("../client/web", () => ({ readDeviceValue: () => null, writeDeviceValue: () => {} }));
 import { buildTriage, type ChatInput, type TriageLimits } from "../client/triage";
 import { pillsInOrder, prefsSettings } from "../shared/settings";
 
@@ -102,11 +105,10 @@ describe("grouping by host", () => {
 describe("stored preferences", () => {
   it("defaults: all hosts on, not grouped", () => {
     expect(DEFAULT_PREFS.groupByHost).toBe(false);
-    expect(DEFAULT_PREFS.hiddenHosts).toEqual([]);
   });
 
   it("round-trips through JSON", () => {
-    const changed = { ...DEFAULT_PREFS, groupByHost: true, hiddenHosts: ["x"], maxUnread: 9 };
+    const changed = { ...DEFAULT_PREFS, groupByHost: true, maxUnread: 9 };
     expect(parseStoredPrefs(JSON.stringify(changed))).toEqual(changed);
   });
 
@@ -115,7 +117,6 @@ describe("stored preferences", () => {
     const parsed = parseStoredPrefs(old);
     expect(parsed?.maxUnread).toBe(8);
     expect(parsed?.groupByHost).toBe(false);
-    expect(parsed?.hiddenHosts).toEqual([]);
     // Missing row items are added, switched off.
     expect(parsed?.layout.map((token) => token.id)).toEqual(["title", "host", "led", "project", "workspace", "branch", "agent", "age"]);
     expect(parsed?.layout.filter((token) => token.enabled).map((token) => token.id)).toEqual(["title"]);
@@ -126,7 +127,7 @@ describe("stored preferences", () => {
     expect(parseStoredPrefs("")).toBeNull();
     expect(parseStoredPrefs("{not json")).toBeNull();
     expect(parseStoredPrefs(JSON.stringify({ maxUnread: 0 }))).toBeNull();
-    expect(parseStoredPrefs(JSON.stringify({ hiddenHosts: "a" }))).toBeNull();
+    expect(parseStoredPrefs(JSON.stringify({ groupByHost: "a" }))).toBeNull();
   });
 });
 

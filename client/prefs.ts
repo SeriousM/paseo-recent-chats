@@ -19,14 +19,3 @@ export function parseStoredPrefs(raw: string | null): Prefs | null {
   }
 }
 
-/** Switch one host on or off in the filter. Ids of hosts that no longer exist are dropped. */
-export function toggleHiddenHost(
-  hidden: readonly string[],
-  hostId: string,
-  knownHostIds: readonly string[],
-): string[] {
-  const next = new Set(hidden.filter((id) => knownHostIds.includes(id)));
-  if (next.has(hostId)) next.delete(hostId);
-  else next.add(hostId);
-  return [...next];
-}

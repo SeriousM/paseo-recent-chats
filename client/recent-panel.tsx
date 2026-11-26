@@ -193,7 +193,7 @@ export function RecentPanel({
       {hiddenHosts.length > 0 && !hostsOpen ? (
         <Text style={{ fontSize: fs(11.5), color: theme.colors.foregroundMuted, paddingHorizontal: 12, paddingBottom: 4 }}>
           {`${hiddenHosts.map((host) => host.label).join(", ")} switched off \u00B7 `}
-          <Text accessibilityRole="button" onPress={() => store.updatePrefs({ hiddenHosts: [] })} style={{ color: theme.colors.accent }}>
+          <Text accessibilityRole="button" onPress={store.showAllHosts} style={{ color: theme.colors.accent }}>
             show all hosts
           </Text>
         </Text>

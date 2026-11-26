@@ -923,7 +923,7 @@ function HostNode({
           ? {
               label: "Show only this host",
               icon: "Focus",
-              onPress: () => store.updatePrefs({ hiddenHosts: store.getSnapshot().hosts.map((other) => other.id).filter((id) => id !== host.hostId) }),
+              onPress: () => store.showOnlyHost(host.hostId),
             }
           : null,
         copyText ? { label: "Copy host name", icon: "Copy", onPress: () => copyText?.(host.label) } : null,

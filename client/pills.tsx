@@ -16,6 +16,7 @@ import { buildTriage, chatKey, nextUp, type TriageResult } from "./triage";
 import { isEntryGone, limitsOf, openChat, openChatByKey, useRecents, type OpenTarget } from "./use-recents";
 import { directOpener } from "./navigation";
 import { moveInHistory } from "./chat-history";
+import { currentHiddenHosts } from "./host-filter";
 import { currentOpenChat, reportOpenChat } from "./open-chat";
 import { hideStrayPopup, isAwayFromChats, jumpPrompt, onAltKey, onAltShiftHeld, onBackForward, onListKeys, pressComposerPill, watchShown } from "./web";
 import { isLater } from "./overlay";
@@ -361,14 +362,14 @@ export function registerPills(client: PluginClientContext): () => void {
   // back to all hosts. Any host already switched off counts as focused: the next press shows them all.
   const stopAltF = onAltKey("KeyF", () => {
     const snapshot = store.getSnapshot();
-    if (snapshot.prefs.hiddenHosts.length > 0) {
-      store.updatePrefs({ hiddenHosts: [] });
+    if (currentHiddenHosts().length > 0) {
+      store.showAllHosts();
       return true;
     }
     const key = currentOpenChat();
     if (!key || snapshot.hosts.length < 2) return false;
     const hostId = key.slice(0, key.indexOf(":"));
-    store.updatePrefs({ hiddenHosts: snapshot.hosts.map((host) => host.id).filter((id) => id !== hostId) });
+    store.showOnlyHost(hostId);
     return true;
   });
 

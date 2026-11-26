@@ -10,7 +10,8 @@ import { createPeerDirectory, type Peer, type PeerDirectory } from "./peers";
 import { chatKey, isDelegated, keyHost, PARENT_AGENT_LABEL, type ChatInput, type Overlay, type OverlayEntry } from "./triage";
 import { clearDevicePrefs, readDevicePrefs, readHostColorNames } from "./web";
 import { agentLabel } from "./format";
-import { DEFAULT_PREFS, parseStoredPrefs, toggleHiddenHost, withNormalizedLayout } from "./prefs";
+import { DEFAULT_PREFS, parseStoredPrefs, withNormalizedLayout } from "./prefs";
+import { currentHiddenHosts, setHiddenHosts, subscribeHiddenHosts, toggleHiddenHost } from "./host-filter";
 import { overlaySettings, prefsSettings, type Prefs } from "../shared/settings";
 import type { Section } from "../shared/sections";
 import { renameChat, renameWorkspace } from "../shared/rename";
@@ -93,8 +94,12 @@ export interface RecentsStore {
   setPinned(key: string, pinned: boolean): void;
   /** Change view preferences. Applied at once, then saved to every host that runs this plugin. */
   updatePrefs(patch: Partial<Prefs>): void;
-  /** Switch one host on or off in the host filter. */
+  /** Switch one host on or off in the host filter (this device only). */
   toggleHost(hostId: string): void;
+  /** Shows only `hostId` in the host filter (this device only). */
+  showOnlyHost(hostId: string): void;
+  /** Switches every host back on in the host filter (this device only). */
+  showAllHosts(): void;
   /** Switch a section between oldest first and newest first. */
   toggleSort(section: Section): void;
   /** Sets a chat's title, through the plugin copy of the chat's own host. Rejects with a readable reason. */
@@ -276,8 +281,9 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
       return index < 0 ? Number.MAX_SAFE_INTEGER : index;
     };
     const online = hosts.filter((host) => host.status === "online").sort((a, b) => rank(a.serverId) - rank(b.serverId));
-    const hiddenOnline = online.filter((host) => prefs.hiddenHosts.includes(host.serverId));
-    const hidden = (id: string) => hiddenOnline.length < online.length && prefs.hiddenHosts.includes(id);
+    const hiddenHosts = currentHiddenHosts();
+    const hiddenOnline = online.filter((host) => hiddenHosts.includes(host.serverId));
+    const hidden = (id: string) => hiddenOnline.length < online.length && hiddenHosts.includes(id);
     for (const host of hosts) {
       if (host.status !== "online" || hidden(host.serverId)) continue;
       const data = hostData.get(host.serverId);
@@ -367,6 +373,9 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
   function scheduleEmit() {
     if (!emitTimer) emitTimer = setTimeout(emitNow, EMIT_DELAY_MS);
   }
+
+  // The host filter lives on this device (host-filter.ts); a change there, from any host's copy, re-lists.
+  const stopHiddenHosts = subscribeHiddenHosts(emitNow);
 
   function observeHost(hostId: string) {
     try {
@@ -832,7 +841,9 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
       mutate({ keys: [key], apply: (current) => (pinned ? pinChat(current, key, Date.now()) : unpinChat(current, key)) }),
     updatePrefs,
     toggleHost: (hostId) =>
-      updatePrefs({ hiddenHosts: toggleHiddenHost(prefs.hiddenHosts, hostId, hosts.map((host) => host.serverId)) }),
+      setHiddenHosts(toggleHiddenHost(currentHiddenHosts(), hostId, hosts.map((host) => host.serverId))),
+    showOnlyHost: (hostId) => setHiddenHosts(hosts.map((host) => host.serverId).filter((id) => id !== hostId)),
+    showAllHosts: () => setHiddenHosts([]),
     toggleSort: (section) =>
       updatePrefs({ sectionSort: { ...prefs.sectionSort, [section]: prefs.sectionSort[section] === "oldest" ? "newest" : "oldest" } }),
     async renameChat(key, title) {
@@ -865,7 +876,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
             serverId: host.serverId,
             label: host.label,
             status: host.status,
-            switchedOff: prefs.hiddenHosts.includes(host.serverId),
+            switchedOff: currentHiddenHosts().includes(host.serverId),
             data: data
               ? {
                   loading: data.loading,
@@ -911,6 +922,7 @@ export function createStore({ rpc, resolveSelf, directory = createPeerDirectory(
       );
     },
     dispose() {
+      stopHiddenHosts();
       if (stopTimer !== undefined) {
         clearTimeout(stopTimer);
         stopTimer = undefined;

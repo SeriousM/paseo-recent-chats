@@ -46,6 +46,8 @@ vi.mock("../client/web", () => ({
     fake.device.cleared += 1;
   },
   readHostColorNames: () => ({}),
+  readDeviceValue: () => null,
+  writeDeviceValue: () => {},
 }));
 
 import { createPeerDirectory, type PeerDirectory } from "../client/peers";
@@ -226,8 +228,10 @@ describe("chats in the snapshot", () => {
       { id: "b", label: "B", hidden: true },
     ]);
     expect(snapshot.hostCount).toBe(1);
+    // Kept on this device: nothing is written to the hosts.
     await vi.advanceTimersByTimeAsync(600);
-    expect(docs.prefs.writes.at(-1)).toMatchObject({ hiddenHosts: ["b"] });
+    expect(docs.prefs.writes.some((write) => "hiddenHosts" in (write as object))).toBe(false);
+    store.toggleHost("b");
     store.dispose();
   });
 
